@@ -1,0 +1,11 @@
+﻿__pycache__/
+*.py[cod]
+.env
+.venv
+venv/
+health_data.csv
+health_model.pkl
+*.pkl
+*.log
+.streamlit/
+.DS_Store
