@@ -96,16 +96,17 @@ def generate_health_data(n_patients=1000, days_per_patient=90):
                 # Final glucose calculation
                 glucose_level = baseline_glucose + glucose_delta
                 glucose_level = max(50, min(400, glucose_level))
-                
-                # Risk flag (>180 mg/dL)
+                glucose_level = round(glucose_level, 1)
+
+                # Risk flag (>180 mg/dL) based on rounded value
                 risk_flag = 1 if glucose_level > 180 else 0
-                
+
                 data.append({
                     'patient_id': patient_id,
                     'timestamp': timestamp,
                     'age': round(age, 1),
                     'diabetes_type': diabetes_type,
-                    'glucose_level': round(glucose_level, 1),
+                    'glucose_level': glucose_level,
                     'sport_intensity': round(sport_intensity, 1),
                     'meal_carbs': round(meal_carbs, 1),
                     'sleep_quality': round(sleep_quality, 1),
