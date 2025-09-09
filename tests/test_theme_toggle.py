@@ -1,4 +1,6 @@
+import pytest
 import streamlit as st
+
 from healthpulse_app import create_theme_toggle_button
 
 
@@ -19,3 +21,4 @@ def test_create_theme_toggle_button(monkeypatch):
 
     create_theme_toggle_button()
     assert st.session_state.theme == "light"
+
