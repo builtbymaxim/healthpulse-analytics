@@ -13,7 +13,7 @@ A comprehensive health analytics platform featuring AI-powered glucose predictio
 
 - **AI Glucose Prediction**: XGBoost model with 92.5% accuracy (R² = 0.925)
 - **Interactive Dashboard**: Modern Streamlit interface with premium styling
-- **Theme System**: Automatic light/dark mode with iOS-style toggle
+- **Theme System**: Automatic light/dark mode with a toggle button
 - **Advanced Analytics**: Correlation analysis, risk assessment, feature importance
 - **Patient Management**: Individual patient tracking and analysis
 - **Report Generation**: Professional clinical reports with download capability (JSON, HTML, PDF)

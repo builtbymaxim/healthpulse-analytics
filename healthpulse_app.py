@@ -28,7 +28,7 @@ BASE_CSS = """
 # Page config
 st.set_page_config(
     page_title="HealthPulse Analytics",
-    page_icon="🏥",
+    page_icon="healthpulse_logo.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -44,8 +44,6 @@ def init_theme():
         st.session_state.theme = get_default_theme()
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 'Overview'
-    if 'theme_toggle' not in st.session_state:
-        st.session_state.theme_toggle = st.session_state.theme == 'dark'
 
 def get_theme_colors():
     """Get color scheme based on current theme"""
@@ -93,6 +91,8 @@ def get_theme_colors():
 def apply_theme_css():
     """Apply theme-specific CSS"""
     colors = get_theme_colors()
+    upload_text = 'white' if st.session_state.theme == 'light' else colors['text_primary']
+    select_text = 'white' if st.session_state.theme == 'light' else colors['text_primary']
 
     st.markdown(BASE_CSS, unsafe_allow_html=True)
 
@@ -114,17 +114,6 @@ def apply_theme_css():
             backdrop-filter: blur(10px);
             margin: 1rem;
             max-width: 100%;
-        }}
-        
-        /* Theme toggle positioning */
-        div[data-testid="stToggle"] {{
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 1000;
-            background: {colors['primary'] if st.session_state.theme == 'light' else '#4A5568'};
-            border-radius: 30px;
-            padding: 0.25rem 0.5rem;
         }}
         
         /* Logo */
@@ -396,6 +385,16 @@ def apply_theme_css():
             border-color: {colors['primary']};
             box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
         }}
+
+        /* File uploader button */
+        div[data-testid="stFileUploader"] button {{
+            color: {upload_text} !important;
+        }}
+
+        /* Selectbox text */
+        div[data-testid="stSelectbox"] div[role="combobox"] {{
+            color: {select_text} !important;
+        }}
         
         /* Disclaimer */
         .disclaimer {{
@@ -502,17 +501,17 @@ def apply_theme_css():
     </style>
     """, unsafe_allow_html=True)
 
-def create_ios_theme_toggle():
-    """Create theme toggle switch"""
+def create_theme_toggle_button():
+    """Create theme toggle button"""
     def toggle_theme():
-        st.session_state.theme = "dark" if st.session_state.theme_toggle else "light"
+        st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
         st.rerun()
-    st.toggle(
-        "Dark Mode",
+    label = "Dark Mode" if st.session_state.theme == "light" else "Light Mode"
+    st.button(
+        label,
         key="theme_toggle",
-        value=st.session_state.theme == "dark",
-        on_change=toggle_theme,
-        label_visibility="hidden",
+        on_click=toggle_theme,
+        help="Toggle light/dark mode",
     )
 
 def create_logo():
@@ -560,12 +559,16 @@ def get_chart_theme():
             'xaxis': {
                 'gridcolor': colors['chart_grid'],
                 'linecolor': colors['text_muted'],
-                'tickcolor': colors['text_muted']
+                'tickcolor': colors['text_muted'],
+                'title': {'font': {'color': colors['text_primary']}},
+                'tickfont': {'color': colors['text_primary']}
             },
             'yaxis': {
                 'gridcolor': colors['chart_grid'],
                 'linecolor': colors['text_muted'],
-                'tickcolor': colors['text_muted']
+                'tickcolor': colors['text_muted'],
+                'title': {'font': {'color': colors['text_primary']}},
+                'tickfont': {'color': colors['text_primary']}
             }
         }
     }
@@ -1025,6 +1028,7 @@ def create_professional_patient_report(patient_data):
     <head>
         <meta charset="utf-8">
         <title>HealthPulse Patient Report</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
         <style>
             body {{ font-family: 'Arial', sans-serif; margin: 40px; color: #333; }}
             .header {{ border-bottom: 3px solid #28A745; padding-bottom: 20px; margin-bottom: 30px; }}
@@ -1041,22 +1045,22 @@ def create_professional_patient_report(patient_data):
     </head>
     <body>
         <div class="header">
-            <div class="logo">🏥 HealthPulse Analytics</div>
+            <div class="logo"><i class='fas fa-hospital'></i> HealthPulse Analytics</div>
             <div class="title">Patient Health Report</div>
-            <p><strong>Patient ID:</strong> {summary['patient_id']} | 
+            <p><strong>Patient ID:</strong> {summary['patient_id']} |
                <strong>Generated:</strong> {datetime.now().strftime('%B %d, %Y at %H:%M')}</p>
         </div>
         
         <div class="section">
-            <h3>📋 Patient Demographics</h3>
+            <h3><i class='fas fa-clipboard'></i> Patient Demographics</h3>
             <div class="metric">Age: {summary['age']:.0f} years</div>
             <div class="metric">Diabetes Type: {['Prediabetic', 'Type 1 Diabetes', 'Type 2 Diabetes'][summary['diabetes_type']]}</div>
             <div class="metric">Total Measurements: {summary['total_measurements']}</div>
             <div class="metric">Monitoring Period: {(summary['total_measurements']/4):.0f} days</div>
         </div>
-        
+
         <div class="section">
-            <h3>📊 Glucose Management Summary</h3>
+            <h3><i class='fas fa-chart-bar'></i> Glucose Management Summary</h3>
             <div class="metric">Average Glucose: {summary['avg_glucose']:.1f} mg/dL</div>
             <div class="metric">Glucose Range: {summary['min_glucose']:.1f} - {summary['max_glucose']:.1f} mg/dL</div>
             <div class="metric">Standard Deviation: {summary['glucose_std']:.1f} mg/dL</div>
@@ -1064,18 +1068,18 @@ def create_professional_patient_report(patient_data):
             <div class="metric {'risk-high' if summary['risk_episodes'] > 10 else ''}">Risk Episodes: {summary['risk_episodes']}</div>
             <div class="metric {'risk-high' if summary['risk_percentage'] > 15 else ''}">Risk Percentage: {summary['risk_percentage']:.1f}%</div>
         </div>
-        
+
         <div class="section">
-            <h3>💊 Treatment & Lifestyle Factors</h3>
+            <h3><i class='fas fa-pills'></i> Treatment & Lifestyle Factors</h3>
             <div class="metric">Average Physical Activity: {summary['avg_sport_intensity']:.1f}/10</div>
             <div class="metric">Average Sleep Quality: {summary['avg_sleep_quality']:.1f}/10</div>
             <div class="metric">Average Stress Level: {summary['avg_stress_level']:.1f}/10</div>
             <div class="metric">Average Daily Carbohydrates: {summary['avg_meal_carbs']:.1f}g</div>
             <div class="metric">Medication Adherence: {summary['medication_adherence']:.1%}</div>
         </div>
-        
+
         <div class="section">
-            <h3>🎯 Clinical Recommendations</h3>
+            <h3><i class='fas fa-bullseye'></i> Clinical Recommendations</h3>
             <ul>
                 <li><strong>Glucose Control:</strong> {'Excellent' if summary['time_in_range'] > 80 else 'Good' if summary['time_in_range'] > 60 else 'Needs Improvement'} - Time in range: {summary['time_in_range']:.1f}%</li>
                 <li><strong>Physical Activity:</strong> {'Adequate' if summary['avg_sport_intensity'] > 5 else 'Increase recommended'} - Current level: {summary['avg_sport_intensity']:.1f}/10</li>
@@ -1104,22 +1108,22 @@ def create_reports_page(df):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📊 Individual Patient Reports")
+        st.markdown("### <i class='fas fa-chart-bar'></i> Individual Patient Reports", unsafe_allow_html=True)
         patients = sorted(df['patient_id'].unique())
         selected_patient = st.selectbox("Select Patient for Report", patients, key="report_patient")
-        
+
         if st.button("Generate Patient Report", type="primary"):
             patient_data = df[df['patient_id'] == selected_patient]
             report_html, summary = create_professional_patient_report(patient_data)
-            
-            st.success("✅ Patient report generated successfully!")
+
+            st.success("Patient report generated successfully!")
             
             # Download buttons
             col_a, col_b = st.columns(2)
             
             with col_a:
                 st.download_button(
-                    label="📄 Download HTML Report",
+                    label="Download HTML Report",
                     data=report_html,
                     file_name=f"HealthPulse_Patient_{selected_patient}_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                     mime="text/html",
@@ -1179,19 +1183,19 @@ Report ID: HP-{summary['patient_id']}-{datetime.now().strftime('%Y%m%d%H%M')}
 """
                 
                 st.download_button(
-                    label="📝 Download Text Report",
+                    label="Download Text Report",
                     data=text_report,
                     file_name=f"HealthPulse_Patient_{selected_patient}_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                     mime="text/plain",
                     use_container_width=True
                 )
-            
+
             # Preview
-            st.markdown("### 👀 Report Preview")
+            st.markdown("### <i class='fas fa-eye'></i> Report Preview", unsafe_allow_html=True)
             st.components.v1.html(report_html, height=600, scrolling=True)
     
     with col2:
-        st.markdown("### 📈 Analytics Summary Reports")
+        st.markdown("### <i class='fas fa-chart-line'></i> Analytics Summary Reports", unsafe_allow_html=True)
         
         if st.button("Generate Analytics Summary", type="secondary"):
             # Create analytics summary
@@ -1250,18 +1254,18 @@ SYSTEM RECOMMENDATIONS
 Report generated by: HealthPulse Analytics Platform
 """
             
-            st.success("✅ Analytics summary generated!")
-            
+            st.success("Analytics summary generated!")
+
             st.download_button(
-                label="📊 Download Analytics Summary",
+                label="Download Analytics Summary",
                 data=analytics_data,
                 file_name=f"HealthPulse_Analytics_Summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                 mime="text/plain",
                 use_container_width=True
             )
-            
+
             # Show preview in expander
-            with st.expander("📋 Preview Analytics Summary"):
+            with st.expander("Preview Analytics Summary"):
                 st.text(analytics_data)
 
 def main():
@@ -1273,7 +1277,7 @@ def main():
     apply_theme_css()
     
     # Theme toggle
-    create_ios_theme_toggle()
+    create_theme_toggle_button()
     
     # Header
     create_premium_header()
