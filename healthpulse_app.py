@@ -502,7 +502,7 @@ def apply_theme_css():
     """, unsafe_allow_html=True)
 
 def create_theme_toggle_button():
-    """Create theme toggle button"""
+    """Render a button that flips between light and dark themes"""
     def toggle_theme():
         st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
         st.rerun()
