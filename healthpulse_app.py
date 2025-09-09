@@ -515,6 +515,10 @@ def create_ios_theme_toggle():
         label_visibility="hidden",
     )
 
+def create_theme_toggle_button():
+    """Wrapper for backward compatibility"""
+    create_ios_theme_toggle()
+
 def create_logo():
     """Create animated logo"""
     st.markdown("""
