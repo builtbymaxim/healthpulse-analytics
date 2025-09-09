@@ -16,9 +16,11 @@ A comprehensive health analytics platform featuring AI-powered glucose predictio
 - **Theme System**: Automatic light/dark mode with iOS-style toggle
 - **Advanced Analytics**: Correlation analysis, risk assessment, feature importance
 - **Patient Management**: Individual patient tracking and analysis
-- **Report Generation**: Professional clinical reports with download capability
+- **Report Generation**: Professional clinical reports with download capability (JSON, HTML, PDF)
 - **Risk Assessment**: Automated high-risk patient identification
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
+- **Optimized Data Generation**: Vectorised synthetic data creation for faster simulations
+- **Model Tuning**: Optional hyperparameter grid search for XGBoost
 
 ## Quick Start
 

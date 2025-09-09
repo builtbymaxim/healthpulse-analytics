@@ -105,33 +105,66 @@ def generate_patient_summary(patient_data):
     
     return summary
 
-def export_patient_report(patient_data, filepath=None):
-    """Export detailed patient report to JSON"""
+def export_patient_report(patient_data, filepath=None, format="json"):
+    """Export a detailed patient report.
+
+    Parameters
+    ----------
+    patient_data : pd.DataFrame
+        Data for a single patient.
+    filepath : str, optional
+        Destination path for the exported report.
+    format : str, default "json"
+        One of ``{"json", "pdf", "html"}``.
+    """
+
     summary = generate_patient_summary(patient_data)
-    
-    # Add recent trends
+
     recent_data = patient_data.tail(20)
-    summary['recent_trend'] = {
-        'avg_glucose_last_20': recent_data['glucose_level'].mean(),
-        'risk_episodes_last_20': recent_data['risk_flag'].sum(),
-        'glucose_trend': 'increasing' if recent_data['glucose_level'].iloc[-5:].mean() > recent_data['glucose_level'].iloc[:5].mean() else 'decreasing'
+    summary["recent_trend"] = {
+        "avg_glucose_last_20": recent_data["glucose_level"].mean(),
+        "risk_episodes_last_20": recent_data["risk_flag"].sum(),
+        "glucose_trend": "increasing"
+        if recent_data["glucose_level"].iloc[-5:].mean()
+        > recent_data["glucose_level"].iloc[:5].mean()
+        else "decreasing",
     }
-    
-    # Add recommendations
+
     last_reading = patient_data.iloc[-1]
-    summary['recommendations'] = get_lifestyle_recommendations(
-        last_reading['glucose_level'],
-        last_reading['sport_intensity'],
-        last_reading['meal_carbs'],
-        last_reading['sleep_quality'],
-        last_reading['stress_level']
+    summary["recommendations"] = get_lifestyle_recommendations(
+        last_reading["glucose_level"],
+        last_reading["sport_intensity"],
+        last_reading["meal_carbs"],
+        last_reading["sleep_quality"],
+        last_reading["stress_level"],
     )
-    
+
+    format = format.lower()
     if filepath:
-        with open(filepath, 'w') as f:
-            json.dump(summary, f, indent=2, default=str)
+        if format == "json":
+            with open(filepath, "w") as f:
+                json.dump(summary, f, indent=2, default=str)
+        elif format == "pdf":
+            try:
+                from fpdf import FPDF
+            except ImportError as exc:  # pragma: no cover - optional dependency
+                raise ImportError("fpdf is required for PDF export") from exc
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+            for key, value in summary.items():
+                pdf.multi_cell(0, 10, f"{key}: {value}")
+            pdf.output(filepath)
+        elif format == "html":
+            html = "<html><body><h1>Patient Report</h1><pre>" + json.dumps(
+                summary, indent=2, default=str
+            ) + "</pre></body></html>"
+            with open(filepath, "w") as f:
+                f.write(html)
+        else:
+            raise ValueError("Unsupported format. Choose from 'json', 'pdf', or 'html'.")
         logger.info(f"Patient report exported to {filepath}")
-    
+
     return summary
 
 def validate_model_inputs(age, diabetes_type, sport_intensity, meal_carbs, sleep_quality, stress_level, medication_adherence):

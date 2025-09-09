@@ -17,6 +17,14 @@ from ml_models import HealthPredictor
 from data_generator import generate_health_data
 from utils import *
 
+# Centralised style imports for the UI
+BASE_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+</style>
+"""
+
 # Page config
 st.set_page_config(
     page_title="HealthPulse Analytics",
@@ -85,11 +93,11 @@ def get_theme_colors():
 def apply_theme_css():
     """Apply theme-specific CSS"""
     colors = get_theme_colors()
-    
+
+    st.markdown(BASE_CSS, unsafe_allow_html=True)
+
     st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
         
         .stApp {{
             background: {colors['background']};
@@ -97,7 +105,7 @@ def apply_theme_css():
             color: {colors['text_primary']};
             transition: all 0.3s ease;
         }}
-        
+
         .main .block-container {{
             padding: 1rem;
             background: {colors['surface']};
