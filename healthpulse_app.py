@@ -36,6 +36,8 @@ def init_theme():
         st.session_state.theme = get_default_theme()
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 'Overview'
+    if 'theme_toggle' not in st.session_state:
+        st.session_state.theme_toggle = st.session_state.theme == 'dark'
 
 def get_theme_colors():
     """Get color scheme based on current theme"""
@@ -106,77 +108,15 @@ def apply_theme_css():
             max-width: 100%;
         }}
         
-        /* iOS-style Theme Toggle */
-        .theme-toggle-container {{
+        /* Theme toggle positioning */
+        div[data-testid="stToggle"] {{
             position: fixed;
             top: 1rem;
             right: 1rem;
             z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: {colors['card']};
-            padding: 0.5rem 1rem;
-            border-radius: 50px;
-            box-shadow: 0 4px 15px {colors['shadow']};
-            border: 1px solid {colors['border']};
-        }}
-        
-        .theme-switch {{
-            position: relative;
-            width: 60px;
-            height: 30px;
-        }}
-        
-        .theme-switch input {{
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }}
-        
-        .slider {{
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
             background: {colors['primary'] if st.session_state.theme == 'light' else '#4A5568'};
-            transition: 0.4s;
             border-radius: 30px;
-            display: flex;
-            align-items: center;
-            padding: 0 4px;
-        }}
-        
-        .slider:before {{
-            position: absolute;
-            content: "";
-            height: 22px;
-            width: 22px;
-            background: white;
-            transition: 0.4s;
-            border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transform: translateX({'26px' if st.session_state.theme == 'dark' else '0px'});
-        }}
-        
-        .slider i {{
-            font-size: 12px;
-            color: white;
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-        }}
-        
-        .slider .fa-sun {{
-            left: 6px;
-            opacity: {1 if st.session_state.theme == 'light' else 0.5};
-        }}
-        
-        .slider .fa-moon {{
-            right: 6px;
-            opacity: {1 if st.session_state.theme == 'dark' else 0.5};
+            padding: 0.25rem 0.5rem;
         }}
         
         /* Logo */
@@ -355,7 +295,7 @@ def apply_theme_css():
         
         .chart-description {{
             font-size: 0.9rem;
-            color: {colors['text_secondary']};
+            color: {colors['text_primary'] if st.session_state.theme == 'light' else colors['text_secondary']};
             margin-bottom: 1rem;
             font-weight: 500;
         }}
@@ -555,46 +495,17 @@ def apply_theme_css():
     """, unsafe_allow_html=True)
 
 def create_ios_theme_toggle():
-    """Create iOS-style theme toggle"""
-    colors = get_theme_colors()
-    
-    st.markdown(f"""
-    <div class="theme-toggle-container">
-        <span style="color: {colors['text_muted']}; font-size: 0.8rem; font-weight: 500;">Theme</span>
-        <label class="theme-switch">
-            <input type="checkbox" {'checked' if st.session_state.theme == 'dark' else ''}>
-            <span class="slider">
-                <i class="fas fa-sun"></i>
-                <i class="fas fa-moon"></i>
-            </span>
-        </label>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # JavaScript for toggle functionality
-    st.markdown("""
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggle = document.querySelector('.theme-switch input');
-            if (toggle) {
-                toggle.addEventListener('change', function() {
-                    // This will be handled by Streamlit buttons below
-                });
-            }
-        });
-    </script>
-    """, unsafe_allow_html=True)
-    
-    # Hidden buttons for actual functionality
-    col1, col2, col3 = st.columns([5, 1, 1])
-    with col2:
-        if st.button("", key="light_theme_hidden", help="Switch to Light Mode"):
-            st.session_state.theme = "light"
-            st.rerun()
-    with col3:
-        if st.button("", key="dark_theme_hidden", help="Switch to Dark Mode"):
-            st.session_state.theme = "dark"
-            st.rerun()
+    """Create theme toggle switch"""
+    def toggle_theme():
+        st.session_state.theme = "dark" if st.session_state.theme_toggle else "light"
+        st.rerun()
+    st.toggle(
+        "Dark Mode",
+        key="theme_toggle",
+        value=st.session_state.theme == "dark",
+        on_change=toggle_theme,
+        label_visibility="hidden",
+    )
 
 def create_logo():
     """Create animated logo"""
