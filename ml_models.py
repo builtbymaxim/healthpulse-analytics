@@ -8,6 +8,7 @@ shell prompts that broke imports.
 
 from __future__ import annotations
 
+import argparse
 import joblib
 import numpy as np
 import pandas as pd
@@ -197,20 +198,31 @@ class HealthPredictor:
         self.feature_importance = data['feature_importance']
 
 
-def train_and_evaluate_model(data_path: str = 'health_data.csv') -> None:
-    """Standalone training script."""
+def train_and_evaluate_model(data_path: str = 'health_data.csv', model_path: str = 'health_model.pkl') -> None:
+    """Standalone training script that saves the trained model."""
 
     df = pd.read_csv(data_path)
     predictor = HealthPredictor()
     X, y, _ = predictor.prepare_data(df)
     results = predictor.train_model(X, y)
+    predictor.save_model(model_path)
 
     print("=== MODEL PERFORMANCE ===")
     print(f"Train RMSE: {results['train_metrics']['rmse']:.2f}")
     print(f"Test RMSE: {results['test_metrics']['rmse']:.2f}")
     print(f"CV RMSE: {results['cv_rmse']:.2f}")
+    print(f"Model saved to {model_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train and save glucose prediction model")
+    parser.add_argument("--data", type=str, default="health_data.csv", help="Input CSV with health data")
+    parser.add_argument("--model", type=str, default="health_model.pkl", help="Output path for trained model")
+    args = parser.parse_args()
+
+    train_and_evaluate_model(args.data, args.model)
 
 
 if __name__ == "__main__":
-    train_and_evaluate_model()
+    main()
 

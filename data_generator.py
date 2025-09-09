@@ -10,6 +10,7 @@ vectorised manner, significantly improving performance.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import argparse
 import random
 
 import numpy as np
@@ -114,7 +115,21 @@ def generate_health_data(n_patients: int = 1000, days_per_patient: int = 90) -> 
     return pd.concat(records, ignore_index=True)
 
 
+def main():
+    """CLI entry-point to generate and save synthetic data."""
+
+    parser = argparse.ArgumentParser(description="Generate synthetic health data")
+    parser.add_argument("--patients", type=int, default=1000, help="Number of patients")
+    parser.add_argument("--days", type=int, default=90, help="Days per patient")
+    parser.add_argument(
+        "--output", type=str, default="health_data.csv", help="Output CSV file"
+    )
+    args = parser.parse_args()
+
+    df = generate_health_data(args.patients, args.days)
+    df.to_csv(args.output, index=False)
+    print(f"Saved synthetic data to {args.output}")
+
+
 if __name__ == "__main__":
-    # Simple manual test
-    df = generate_health_data(10, 5)
-    print(df.head())
+    main()

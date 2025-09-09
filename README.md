@@ -21,6 +21,7 @@ A comprehensive health analytics platform featuring AI-powered glucose predictio
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 - **Optimized Data Generation**: Vectorised synthetic data creation for faster simulations
 - **Model Tuning**: Optional hyperparameter grid search for XGBoost
+- **Real Data Friendly**: Upload CSV/Excel files and the app will auto-map common fields
 
 ## Quick Start
 
@@ -38,13 +39,24 @@ cd healthpulse-analytics
 # Install dependencies
 pip install -r requirements.txt
 
-# Generate synthetic data and train model
-python data_generator.py
-python ml_models.py
+# Generate synthetic data and train model (optional)
+python data_generator.py --output health_data.csv
+python ml_models.py --data health_data.csv --model health_model.pkl
 
 # Launch the dashboard
 streamlit run healthpulse_app.py
 ```
+
+Upload a CSV or Excel file on the home page to analyse your own health
+records. The app attempts to automatically map common column names and will
+fallback to synthetic data if no file is provided.
+
+### Real Data Upload
+
+The default dataset is synthetic. To explore real measurements, simply use the
+file uploader on the dashboard. HealthPulse tries to infer the required fields
+(patient ID, timestamps, glucose levels, lifestyle factors) and fills in any
+missing information with safe defaults so you can obtain insights quickly.
 
 ### Docker Setup
 
