@@ -514,6 +514,10 @@ def create_theme_toggle_button():
         help="Toggle light/dark mode",
     )
 
+def create_theme_toggle_button():
+    """Wrapper for backward compatibility"""
+    create_ios_theme_toggle()
+
 def create_logo():
     """Create animated logo"""
     st.markdown("""
