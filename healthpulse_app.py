@@ -570,9 +570,58 @@ def get_chart_theme():
         }
     }
 
+def preprocess_user_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Attempt to normalise user-provided data to expected schema."""
+    col_map = {
+        'patient_id': ['patient_id', 'id', 'patient'],
+        'timestamp': ['timestamp', 'time', 'date', 'datetime'],
+        'glucose_level': ['glucose_level', 'glucose', 'blood_sugar'],
+        'sport_intensity': ['sport_intensity', 'sport', 'exercise'],
+        'meal_carbs': ['meal_carbs', 'carbs', 'carbohydrates'],
+        'sleep_quality': ['sleep_quality', 'sleep'],
+        'stress_level': ['stress_level', 'stress'],
+        'medication_adherence': ['medication_adherence', 'medication', 'adherence'],
+        'age': ['age'],
+        'diabetes_type': ['diabetes_type', 'type']
+    }
+
+    columns = {c.lower(): c for c in df.columns}
+    rename_dict = {}
+    for std_col, variants in col_map.items():
+        for v in variants:
+            if v in columns:
+                rename_dict[columns[v]] = std_col
+                break
+    df = df.rename(columns=rename_dict)
+
+    # Fill missing columns with defaults
+    for col in col_map.keys():
+        if col not in df.columns:
+            if col == 'timestamp':
+                df[col] = pd.date_range(start=datetime.now(), periods=len(df), freq='H')
+            elif col == 'patient_id':
+                df[col] = np.arange(1, len(df) + 1)
+            else:
+                df[col] = 0
+
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    if 'glucose_level' in df.columns:
+        df['risk_flag'] = (df['glucose_level'] > 180).astype(int)
+    else:
+        df['risk_flag'] = 0
+    return df
+
+
 @st.cache_data(ttl=300)
-def load_data():
-    """Load health data with caching"""
+def load_data(uploaded_file=None):
+    """Load health data from disk or uploaded file."""
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file, sep=None, engine='python')
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_excel(uploaded_file)
+        return preprocess_user_data(df)
     try:
         df = pd.read_csv('health_data.csv')
     except FileNotFoundError:
@@ -1228,11 +1277,19 @@ def main():
     
     # Header
     create_premium_header()
-    
+
+    # Optional data upload
+    uploaded_file = st.file_uploader(
+        "Upload health data (CSV or Excel)", type=["csv", "xlsx"],
+        help="Leave empty to use built-in synthetic data"
+    )
+
     # Load data
     with st.spinner("Loading health data..."):
-        df = load_data()
+        df = load_data(uploaded_file)
         predictor = load_model()
+    if uploaded_file is not None:
+        st.success("Using uploaded dataset")
     
     # Navigation
     create_nav_bar()
