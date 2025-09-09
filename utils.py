@@ -49,33 +49,33 @@ def get_lifestyle_recommendations(glucose_level, sport_intensity, meal_carbs, sl
     recommendations = []
     
     if glucose_level > 180:
-        recommendations.append("🚨 High glucose detected. Consider consulting healthcare provider.")
+        recommendations.append("High glucose detected. Consider consulting healthcare provider.")
     
     if sport_intensity < 3:
-        recommendations.append("🏃 Increase physical activity to help regulate glucose levels.")
+        recommendations.append("Increase physical activity to help regulate glucose levels.")
     
     if meal_carbs > 60:
-        recommendations.append("🍽️ Consider reducing carbohydrate intake in next meal.")
+        recommendations.append("Consider reducing carbohydrate intake in next meal.")
     
     if sleep_quality < 6:
-        recommendations.append("😴 Improve sleep quality - aim for 7-9 hours of quality sleep.")
+        recommendations.append("Improve sleep quality - aim for 7-9 hours of quality sleep.")
     
     if stress_level > 7:
-        recommendations.append("🧘 Practice stress management techniques like meditation or deep breathing.")
+        recommendations.append("Practice stress management techniques like meditation or deep breathing.")
     
     if not recommendations:
-        recommendations.append("✅ Current metrics look good! Keep up the healthy lifestyle.")
+        recommendations.append("Current metrics look good! Keep up the healthy lifestyle.")
     
     return recommendations
 
 def format_glucose_display(glucose_level):
     """Format glucose level for display with appropriate units and color coding"""
     if glucose_level > 180:
-        return f"🔴 {glucose_level:.1f} mg/dL (High Risk)"
+        return f"{glucose_level:.1f} mg/dL (High Risk)"
     elif glucose_level > 140:
-        return f"🟡 {glucose_level:.1f} mg/dL (Elevated)"
+        return f"{glucose_level:.1f} mg/dL (Elevated)"
     else:
-        return f"🟢 {glucose_level:.1f} mg/dL (Normal)"
+        return f"{glucose_level:.1f} mg/dL (Normal)"
 
 def calculate_time_in_range(glucose_readings, target_min=70, target_max=180):
     """Calculate percentage of time glucose readings are in target range"""
