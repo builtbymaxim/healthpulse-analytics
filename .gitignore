@@ -1,11 +1,75 @@
-﻿__pycache__/
+# Python
+__pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
 .env
 .venv
 venv/
-health_data.csv
-health_model.pkl
+ENV/
+
+# Data files
+*.csv
 *.pkl
+*.joblib
 *.log
+
+# Streamlit
 .streamlit/
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# iOS / Xcode
+ios/HealthPulse.xcodeproj/
+ios/HealthPulse.xcworkspace/
+ios/*/xcuserdata/
+ios/**/xcshareddata/
+ios/DerivedData/
+ios/*.pbxuser
+ios/*.mode1v3
+ios/*.mode2v3
+ios/*.perspectivev3
+ios/*.xcuserstate
+ios/Pods/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution
+*.tar.gz
+*.zip
