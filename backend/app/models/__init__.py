@@ -9,6 +9,25 @@ from app.models.database import (
     Insight,
 )
 
+from app.models.exercises import (
+    ExerciseCategory,
+    EquipmentType,
+    PRType,
+    Exercise,
+    ExerciseCreate,
+    WorkoutSet,
+    WorkoutSetCreate,
+    WorkoutSetWithExercise,
+    PersonalRecord,
+    PersonalRecordWithExercise,
+    WorkoutWithSets,
+    WorkoutSetsCreate,
+    ExerciseHistory,
+    VolumeAnalytics,
+    FrequencyAnalytics,
+    MuscleGroupStats,
+)
+
 __all__ = [
     "User",
     "HealthMetric",
@@ -16,4 +35,20 @@ __all__ = [
     "DailyScore",
     "Prediction",
     "Insight",
+    "ExerciseCategory",
+    "EquipmentType",
+    "PRType",
+    "Exercise",
+    "ExerciseCreate",
+    "WorkoutSet",
+    "WorkoutSetCreate",
+    "WorkoutSetWithExercise",
+    "PersonalRecord",
+    "PersonalRecordWithExercise",
+    "WorkoutWithSets",
+    "WorkoutSetsCreate",
+    "ExerciseHistory",
+    "VolumeAnalytics",
+    "FrequencyAnalytics",
+    "MuscleGroupStats",
 ]

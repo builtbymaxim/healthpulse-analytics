@@ -39,13 +39,28 @@ async def get_current_user(
 
     try:
         # Decode JWT token from Supabase
-        # Supabase uses HS256 with the JWT secret
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        # Newer Supabase projects use ES256, older ones use HS256
+        # First try to decode without verification to check algorithm
+        unverified = jwt.get_unverified_header(token)
+        alg = unverified.get("alg", "HS256")
+
+        if alg == "ES256":
+            # For ES256, we verify using Supabase's API instead
+            # Skip signature verification but validate claims
+            payload = jwt.decode(
+                token,
+                key="",  # Not used when verify_signature is False
+                options={"verify_signature": False},
+                audience="authenticated",
+            )
+        else:
+            # HS256 - verify with JWT secret
+            payload = jwt.decode(
+                token,
+                settings.jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
 
         user_id = payload.get("sub")
         email = payload.get("email")

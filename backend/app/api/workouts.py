@@ -42,7 +42,7 @@ class IntensityLevel(str, Enum):
 class WorkoutCreate(BaseModel):
     """Create a new workout."""
     workout_type: WorkoutType
-    start_time: datetime
+    started_at: datetime = Field(alias="start_time")  # Accept both start_time and started_at
     duration_minutes: int = Field(gt=0)
     intensity: IntensityLevel = IntensityLevel.MODERATE
     calories_burned: int | None = None
@@ -52,13 +52,15 @@ class WorkoutCreate(BaseModel):
     notes: str | None = None
     exercises: list[dict] | None = None  # For strength workouts
 
+    model_config = {"populate_by_name": True, "extra": "ignore"}
+
 
 class WorkoutResponse(BaseModel):
     """Workout response."""
     id: UUID
     user_id: UUID
     workout_type: str
-    start_time: datetime
+    start_time: datetime  # Database column name
     duration_minutes: int
     intensity: str
     calories_burned: int | None
@@ -108,7 +110,7 @@ def calculate_training_load(
 
 
 # Endpoints
-@router.post("/", response_model=WorkoutResponse)
+@router.post("", response_model=WorkoutResponse)
 async def create_workout(
     workout: WorkoutCreate,
     current_user: CurrentUser = Depends(get_current_user),
@@ -126,7 +128,7 @@ async def create_workout(
     data = {
         "user_id": str(current_user.id),
         "workout_type": workout.workout_type.value,
-        "start_time": workout.start_time.isoformat(),
+        "start_time": workout.started_at.isoformat(),  # DB column is start_time
         "duration_minutes": workout.duration_minutes,
         "intensity": workout.intensity.value,
         "calories_burned": workout.calories_burned,
@@ -146,10 +148,11 @@ async def create_workout(
     return result.data[0]
 
 
-@router.get("/", response_model=list[WorkoutResponse])
+@router.get("", response_model=list[WorkoutResponse])
 async def get_workouts(
     current_user: CurrentUser = Depends(get_current_user),
     workout_type: WorkoutType | None = None,
+    days: int | None = Query(default=None, le=365, description="Get workouts from the last N days"),
     start_date: date | None = None,
     end_date: date | None = None,
     limit: int = Query(default=50, le=200),
@@ -169,6 +172,11 @@ async def get_workouts(
 
     if workout_type:
         query = query.eq("workout_type", workout_type.value)
+
+    # If days parameter is provided, convert to date range
+    if days is not None:
+        start_date = date.today() - timedelta(days=days)
+        end_date = date.today()
 
     if start_date:
         query = query.gte("start_time", f"{start_date}T00:00:00Z")
@@ -288,7 +296,7 @@ async def update_workout(
 
     data = {
         "workout_type": workout.workout_type.value,
-        "start_time": workout.start_time.isoformat(),
+        "start_time": workout.started_at.isoformat(),
         "duration_minutes": workout.duration_minutes,
         "intensity": workout.intensity.value,
         "calories_burned": workout.calories_burned,

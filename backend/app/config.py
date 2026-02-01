@@ -26,13 +26,17 @@ class Settings(BaseSettings):
     # JWT settings (Supabase handles this, but useful for validation)
     jwt_secret: str = ""
 
-    # CORS settings (comma-separated string in .env)
-    cors_origins_str: str = "http://localhost:3000,http://localhost:8501"
+    # CORS settings (comma-separated string in .env, use "*" for all origins)
+    cors_origins_str: str = "*"
 
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
+        # If "*" is in origins, allow all
+        if "*" in origins:
+            return ["*"]
+        return origins
 
 
 @lru_cache

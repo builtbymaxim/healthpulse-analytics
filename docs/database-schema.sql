@@ -291,3 +291,353 @@ CREATE TRIGGER update_profiles_updated_at
 CREATE TRIGGER update_daily_scores_updated_at
     BEFORE UPDATE ON public.daily_scores
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+-- ============================================
+-- NUTRITION TRACKING (Calorie & Macro)
+-- ============================================
+
+-- Gender enum for BMR calculation
+CREATE TYPE gender AS ENUM ('male', 'female', 'other');
+
+-- Activity level for TDEE calculation
+CREATE TYPE activity_level AS ENUM (
+    'sedentary',     -- Little or no exercise (1.2)
+    'light',         -- Exercise 1-3 days/week (1.375)
+    'moderate',      -- Exercise 3-5 days/week (1.55)
+    'active',        -- Exercise 6-7 days/week (1.725)
+    'very_active'    -- Very intense daily exercise (1.9)
+);
+
+-- Nutrition goal types
+CREATE TYPE nutrition_goal_type AS ENUM (
+    'lose_weight',    -- TDEE - 500 cal deficit
+    'build_muscle',   -- TDEE + 300 cal surplus
+    'maintain',       -- TDEE maintenance
+    'general_health'  -- Balanced nutrition
+);
+
+-- Meal type for food logging
+CREATE TYPE meal_type AS ENUM (
+    'breakfast', 'lunch', 'dinner', 'snack'
+);
+
+-- Extend profiles with physical data for BMR/TDEE calculation
+-- Run as ALTER if table already exists:
+-- ALTER TABLE public.profiles ADD COLUMN age INTEGER CHECK (age >= 13 AND age <= 120);
+-- ALTER TABLE public.profiles ADD COLUMN height_cm DECIMAL CHECK (height_cm >= 100 AND height_cm <= 250);
+-- ALTER TABLE public.profiles ADD COLUMN gender gender;
+-- ALTER TABLE public.profiles ADD COLUMN activity_level activity_level DEFAULT 'moderate';
+
+-- ============================================
+-- NUTRITION GOALS TABLE
+-- ============================================
+CREATE TABLE public.nutrition_goals (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    goal_type nutrition_goal_type NOT NULL DEFAULT 'general_health',
+
+    -- Calculated targets (auto-updated when profile/goal changes)
+    bmr DECIMAL,                      -- Basal Metabolic Rate
+    tdee DECIMAL,                     -- Total Daily Energy Expenditure
+    calorie_target DECIMAL,           -- Daily calorie goal
+    protein_target_g DECIMAL,         -- Daily protein in grams
+    carbs_target_g DECIMAL,           -- Daily carbs in grams
+    fat_target_g DECIMAL,             -- Daily fat in grams
+
+    -- Custom overrides (user can manually adjust)
+    custom_calorie_target DECIMAL,
+    custom_protein_target_g DECIMAL,
+    custom_carbs_target_g DECIMAL,
+    custom_fat_target_g DECIMAL,
+
+    -- Settings
+    adjust_for_activity BOOLEAN DEFAULT TRUE,  -- Adjust TDEE based on logged workouts
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(user_id)  -- One active goal per user
+);
+
+CREATE INDEX idx_nutrition_goals_user
+    ON public.nutrition_goals(user_id);
+
+-- ============================================
+-- FOOD ENTRIES TABLE
+-- ============================================
+CREATE TABLE public.food_entries (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+
+    -- Food details
+    name TEXT NOT NULL,
+    meal_type meal_type,
+
+    -- Nutrition values
+    calories DECIMAL NOT NULL CHECK (calories >= 0),
+    protein_g DECIMAL DEFAULT 0 CHECK (protein_g >= 0),
+    carbs_g DECIMAL DEFAULT 0 CHECK (carbs_g >= 0),
+    fat_g DECIMAL DEFAULT 0 CHECK (fat_g >= 0),
+    fiber_g DECIMAL DEFAULT 0 CHECK (fiber_g >= 0),
+
+    -- Serving info
+    serving_size DECIMAL DEFAULT 1,
+    serving_unit TEXT DEFAULT 'serving',
+
+    -- Timing
+    logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Source tracking
+    source metric_source DEFAULT 'manual',
+    notes TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_food_entries_user_date
+    ON public.food_entries(user_id, logged_at DESC);
+
+-- Extend daily_scores with nutrition data
+-- Run as ALTER if table already exists:
+-- ALTER TABLE public.daily_scores ADD COLUMN total_calories_in INTEGER;
+-- ALTER TABLE public.daily_scores ADD COLUMN total_protein_g DECIMAL;
+-- ALTER TABLE public.daily_scores ADD COLUMN total_carbs_g DECIMAL;
+-- ALTER TABLE public.daily_scores ADD COLUMN total_fat_g DECIMAL;
+-- ALTER TABLE public.daily_scores ADD COLUMN nutrition_score DECIMAL CHECK (nutrition_score >= 0 AND nutrition_score <= 100);
+
+-- ============================================
+-- NUTRITION RLS POLICIES
+-- ============================================
+
+ALTER TABLE public.nutrition_goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.food_entries ENABLE ROW LEVEL SECURITY;
+
+-- Nutrition Goals: Users can only manage their own goals
+CREATE POLICY "Users can view own nutrition goals"
+    ON public.nutrition_goals FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own nutrition goals"
+    ON public.nutrition_goals FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own nutrition goals"
+    ON public.nutrition_goals FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own nutrition goals"
+    ON public.nutrition_goals FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Food Entries: Users can only manage their own entries
+CREATE POLICY "Users can view own food entries"
+    ON public.food_entries FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own food entries"
+    ON public.food_entries FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own food entries"
+    ON public.food_entries FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own food entries"
+    ON public.food_entries FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Trigger for nutrition_goals updated_at
+CREATE TRIGGER update_nutrition_goals_updated_at
+    BEFORE UPDATE ON public.nutrition_goals
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+-- ============================================
+-- EXERCISE LIBRARY & STRENGTH TRACKING
+-- ============================================
+
+-- Exercise categories
+CREATE TYPE exercise_category AS ENUM (
+    'chest', 'back', 'shoulders', 'arms', 'legs', 'core', 'cardio', 'other'
+);
+
+-- Equipment types
+CREATE TYPE equipment_type AS ENUM (
+    'barbell', 'dumbbell', 'cable', 'machine', 'bodyweight', 'kettlebell', 'bands', 'other'
+);
+
+-- Global exercise library (shared across all users)
+CREATE TABLE public.exercises (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    category exercise_category NOT NULL,
+    muscle_groups TEXT[] NOT NULL,
+    equipment equipment_type,
+    is_compound BOOLEAN DEFAULT FALSE,
+    instructions TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_exercises_category ON public.exercises(category);
+CREATE INDEX idx_exercises_name ON public.exercises(name);
+
+-- Set-by-set workout logging
+CREATE TABLE public.workout_sets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+    exercise_id UUID REFERENCES public.exercises(id) NOT NULL,
+    set_number INTEGER NOT NULL CHECK (set_number > 0),
+    weight_kg DECIMAL NOT NULL CHECK (weight_kg >= 0),
+    reps INTEGER NOT NULL CHECK (reps > 0),
+    rpe DECIMAL CHECK (rpe >= 1 AND rpe <= 10),  -- Rate of Perceived Exertion
+    is_warmup BOOLEAN DEFAULT FALSE,
+    is_pr BOOLEAN DEFAULT FALSE,  -- Personal Record flag
+    notes TEXT,
+    performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_workout_sets_user ON public.workout_sets(user_id);
+CREATE INDEX idx_workout_sets_exercise ON public.workout_sets(exercise_id);
+CREATE INDEX idx_workout_sets_workout ON public.workout_sets(workout_id);
+CREATE INDEX idx_workout_sets_performed ON public.workout_sets(user_id, performed_at DESC);
+
+-- Personal records tracking
+CREATE TYPE pr_type AS ENUM (
+    '1rm',       -- One rep max
+    '3rm',       -- Three rep max
+    '5rm',       -- Five rep max
+    '10rm',      -- Ten rep max
+    'max_reps',  -- Max reps at bodyweight
+    'max_volume' -- Max volume in single session
+);
+
+CREATE TABLE public.personal_records (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    exercise_id UUID REFERENCES public.exercises(id) NOT NULL,
+    record_type pr_type NOT NULL,
+    value DECIMAL NOT NULL,  -- Weight in kg for rm types, reps for max_reps, kg for max_volume
+    achieved_at TIMESTAMPTZ NOT NULL,
+    workout_set_id UUID REFERENCES public.workout_sets(id) ON DELETE SET NULL,
+    previous_value DECIMAL,  -- Previous PR value for comparison
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, exercise_id, record_type)
+);
+
+CREATE INDEX idx_personal_records_user ON public.personal_records(user_id);
+CREATE INDEX idx_personal_records_exercise ON public.personal_records(exercise_id);
+
+-- ============================================
+-- EXERCISE RLS POLICIES
+-- ============================================
+
+-- Exercises table is public read (global library)
+ALTER TABLE public.exercises ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can view exercises"
+    ON public.exercises FOR SELECT
+    TO authenticated
+    USING (TRUE);
+
+-- Workout sets: Users can only manage their own
+ALTER TABLE public.workout_sets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own workout sets"
+    ON public.workout_sets FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own workout sets"
+    ON public.workout_sets FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own workout sets"
+    ON public.workout_sets FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own workout sets"
+    ON public.workout_sets FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Personal records: Users can only manage their own
+ALTER TABLE public.personal_records ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own personal records"
+    ON public.personal_records FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own personal records"
+    ON public.personal_records FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own personal records"
+    ON public.personal_records FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own personal records"
+    ON public.personal_records FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- ============================================
+-- SEED EXERCISE LIBRARY
+-- ============================================
+
+INSERT INTO public.exercises (name, category, muscle_groups, equipment, is_compound) VALUES
+-- Chest
+('Bench Press', 'chest', ARRAY['pectoralis_major', 'triceps', 'anterior_deltoid'], 'barbell', TRUE),
+('Incline Bench Press', 'chest', ARRAY['upper_pectoralis', 'triceps', 'anterior_deltoid'], 'barbell', TRUE),
+('Dumbbell Bench Press', 'chest', ARRAY['pectoralis_major', 'triceps', 'anterior_deltoid'], 'dumbbell', TRUE),
+('Dumbbell Flyes', 'chest', ARRAY['pectoralis_major'], 'dumbbell', FALSE),
+('Cable Crossover', 'chest', ARRAY['pectoralis_major'], 'cable', FALSE),
+('Push-up', 'chest', ARRAY['pectoralis_major', 'triceps', 'anterior_deltoid'], 'bodyweight', TRUE),
+('Dips', 'chest', ARRAY['pectoralis_major', 'triceps'], 'bodyweight', TRUE),
+
+-- Back
+('Deadlift', 'back', ARRAY['erector_spinae', 'glutes', 'hamstrings', 'trapezius', 'latissimus_dorsi'], 'barbell', TRUE),
+('Barbell Row', 'back', ARRAY['latissimus_dorsi', 'rhomboids', 'biceps', 'rear_deltoid'], 'barbell', TRUE),
+('Pull-up', 'back', ARRAY['latissimus_dorsi', 'biceps', 'rhomboids'], 'bodyweight', TRUE),
+('Chin-up', 'back', ARRAY['latissimus_dorsi', 'biceps'], 'bodyweight', TRUE),
+('Lat Pulldown', 'back', ARRAY['latissimus_dorsi', 'biceps'], 'cable', TRUE),
+('Seated Cable Row', 'back', ARRAY['latissimus_dorsi', 'rhomboids', 'biceps'], 'cable', TRUE),
+('Dumbbell Row', 'back', ARRAY['latissimus_dorsi', 'rhomboids', 'biceps'], 'dumbbell', TRUE),
+('T-Bar Row', 'back', ARRAY['latissimus_dorsi', 'rhomboids', 'biceps'], 'barbell', TRUE),
+('Face Pull', 'back', ARRAY['rear_deltoid', 'rhomboids', 'trapezius'], 'cable', FALSE),
+
+-- Legs
+('Squat', 'legs', ARRAY['quadriceps', 'glutes', 'hamstrings', 'erector_spinae'], 'barbell', TRUE),
+('Front Squat', 'legs', ARRAY['quadriceps', 'glutes', 'core'], 'barbell', TRUE),
+('Leg Press', 'legs', ARRAY['quadriceps', 'glutes'], 'machine', TRUE),
+('Romanian Deadlift', 'legs', ARRAY['hamstrings', 'glutes', 'erector_spinae'], 'barbell', TRUE),
+('Leg Curl', 'legs', ARRAY['hamstrings'], 'machine', FALSE),
+('Leg Extension', 'legs', ARRAY['quadriceps'], 'machine', FALSE),
+('Lunges', 'legs', ARRAY['quadriceps', 'glutes', 'hamstrings'], 'dumbbell', TRUE),
+('Bulgarian Split Squat', 'legs', ARRAY['quadriceps', 'glutes'], 'dumbbell', TRUE),
+('Calf Raise', 'legs', ARRAY['gastrocnemius', 'soleus'], 'machine', FALSE),
+('Hip Thrust', 'legs', ARRAY['glutes', 'hamstrings'], 'barbell', TRUE),
+
+-- Shoulders
+('Overhead Press', 'shoulders', ARRAY['anterior_deltoid', 'lateral_deltoid', 'triceps'], 'barbell', TRUE),
+('Dumbbell Shoulder Press', 'shoulders', ARRAY['anterior_deltoid', 'lateral_deltoid', 'triceps'], 'dumbbell', TRUE),
+('Lateral Raise', 'shoulders', ARRAY['lateral_deltoid'], 'dumbbell', FALSE),
+('Front Raise', 'shoulders', ARRAY['anterior_deltoid'], 'dumbbell', FALSE),
+('Rear Delt Fly', 'shoulders', ARRAY['rear_deltoid'], 'dumbbell', FALSE),
+('Upright Row', 'shoulders', ARRAY['lateral_deltoid', 'trapezius'], 'barbell', TRUE),
+('Arnold Press', 'shoulders', ARRAY['anterior_deltoid', 'lateral_deltoid', 'triceps'], 'dumbbell', TRUE),
+
+-- Arms
+('Barbell Curl', 'arms', ARRAY['biceps'], 'barbell', FALSE),
+('Dumbbell Curl', 'arms', ARRAY['biceps'], 'dumbbell', FALSE),
+('Hammer Curl', 'arms', ARRAY['biceps', 'brachialis'], 'dumbbell', FALSE),
+('Preacher Curl', 'arms', ARRAY['biceps'], 'barbell', FALSE),
+('Tricep Pushdown', 'arms', ARRAY['triceps'], 'cable', FALSE),
+('Skull Crusher', 'arms', ARRAY['triceps'], 'barbell', FALSE),
+('Close-Grip Bench Press', 'arms', ARRAY['triceps', 'pectoralis_major'], 'barbell', TRUE),
+('Overhead Tricep Extension', 'arms', ARRAY['triceps'], 'dumbbell', FALSE),
+
+-- Core
+('Plank', 'core', ARRAY['rectus_abdominis', 'obliques', 'transverse_abdominis'], 'bodyweight', FALSE),
+('Crunch', 'core', ARRAY['rectus_abdominis'], 'bodyweight', FALSE),
+('Hanging Leg Raise', 'core', ARRAY['rectus_abdominis', 'hip_flexors'], 'bodyweight', FALSE),
+('Cable Woodchop', 'core', ARRAY['obliques', 'rectus_abdominis'], 'cable', FALSE),
+('Ab Wheel Rollout', 'core', ARRAY['rectus_abdominis', 'obliques'], 'other', FALSE),
+('Russian Twist', 'core', ARRAY['obliques', 'rectus_abdominis'], 'bodyweight', FALSE);

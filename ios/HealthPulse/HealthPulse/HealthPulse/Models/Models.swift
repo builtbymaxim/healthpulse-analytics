@@ -15,6 +15,11 @@ struct User: Codable, Identifiable {
     var displayName: String?
     var avatarUrl: String?
     var settings: UserSettings?
+    var age: Int?
+    var heightCm: Double?
+    var gender: String?
+    var activityLevel: String?
+    var fitnessGoal: String?
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
@@ -22,7 +27,17 @@ struct User: Codable, Identifiable {
         case displayName = "display_name"
         case avatarUrl = "avatar_url"
         case settings
+        case age
+        case heightCm = "height_cm"
+        case gender
+        case activityLevel = "activity_level"
+        case fitnessGoal = "fitness_goal"
         case createdAt = "created_at"
+    }
+
+    /// Check if user has completed onboarding by verifying required profile fields
+    var isProfileComplete: Bool {
+        return age != nil && heightCm != nil && gender != nil
     }
 }
 
@@ -39,6 +54,15 @@ struct UserSettings: Codable {
         case targetSleepHours = "target_sleep_hours"
         case dailyStepGoal = "daily_step_goal"
         case useMetricUnits = "use_metric_units"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hrvBaseline = try container.decodeIfPresent(Double.self, forKey: .hrvBaseline)
+        rhrBaseline = try container.decodeIfPresent(Double.self, forKey: .rhrBaseline)
+        targetSleepHours = try container.decodeIfPresent(Double.self, forKey: .targetSleepHours)
+        dailyStepGoal = try container.decodeIfPresent(Int.self, forKey: .dailyStepGoal)
+        useMetricUnits = try container.decodeIfPresent(Bool.self, forKey: .useMetricUnits) ?? true
     }
 }
 
@@ -126,11 +150,13 @@ enum WorkoutType: String, Codable, CaseIterable {
     case running, cycling, swimming, walking, hiking
     case strength, hiit, yoga, pilates, crossfit
     case rowing, elliptical, stairClimber = "stair_climber"
+    case weightTraining = "weight_training"
     case sports, other
 
     var displayName: String {
         switch self {
         case .stairClimber: return "Stair Climber"
+        case .weightTraining: return "Weight Training"
         case .hiit: return "HIIT"
         default: return rawValue.capitalized
         }
@@ -144,6 +170,7 @@ enum WorkoutType: String, Codable, CaseIterable {
         case .walking: return "figure.walk"
         case .hiking: return "figure.hiking"
         case .strength: return "dumbbell.fill"
+        case .weightTraining: return "dumbbell.fill"
         case .hiit: return "flame.fill"
         case .yoga: return "figure.yoga"
         case .pilates: return "figure.pilates"

@@ -27,9 +27,9 @@ class PredictionService:
             self.supabase.table("health_metrics")
             .select("*")
             .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep")
-            .gte("recorded_at", week_ago.isoformat())
-            .order("recorded_at", desc=True)
+            .eq("metric_type", "sleep_duration")
+            .gte("timestamp", week_ago.isoformat())
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -40,8 +40,8 @@ class PredictionService:
             .select("*")
             .eq("user_id", str(user_id))
             .eq("metric_type", "hrv")
-            .gte("recorded_at", week_ago.isoformat())
-            .order("recorded_at", desc=True)
+            .gte("timestamp", week_ago.isoformat())
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -51,9 +51,9 @@ class PredictionService:
             self.supabase.table("health_metrics")
             .select("*")
             .eq("user_id", str(user_id))
-            .eq("metric_type", "resting_heart_rate")
-            .gte("recorded_at", week_ago.isoformat())
-            .order("recorded_at", desc=True)
+            .eq("metric_type", "resting_hr")
+            .gte("timestamp", week_ago.isoformat())
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -64,8 +64,8 @@ class PredictionService:
             .select("*")
             .eq("user_id", str(user_id))
             .eq("metric_type", "stress")
-            .gte("recorded_at", week_ago.isoformat())
-            .order("recorded_at", desc=True)
+            .gte("timestamp", week_ago.isoformat())
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -75,7 +75,7 @@ class PredictionService:
             self.supabase.table("workouts")
             .select("training_load")
             .eq("user_id", str(user_id))
-            .gte("started_at", week_ago.isoformat())
+            .gte("start_time", week_ago.isoformat())
             .execute()
         )
 
@@ -99,7 +99,19 @@ class PredictionService:
 
         if sleep_data.data:
             sleep_hours = sleep_data.data[0].get("value", 7.0)
-            sleep_quality = sleep_data.data[0].get("metadata", {}).get("quality", 70.0)
+
+        # Get sleep quality separately
+        sleep_quality_data = (
+            self.supabase.table("health_metrics")
+            .select("value")
+            .eq("user_id", str(user_id))
+            .eq("metric_type", "sleep_quality")
+            .order("timestamp", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if sleep_quality_data.data:
+            sleep_quality = sleep_quality_data.data[0].get("value", 70.0)
 
         if hrv_data.data:
             hrv = hrv_data.data[0].get("value")
@@ -139,30 +151,40 @@ class PredictionService:
             self.supabase.table("health_metrics")
             .select("*")
             .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep")
-            .order("recorded_at", desc=True)
+            .eq("metric_type", "sleep_duration")
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
 
         sleep_quality = 70.0
-        if sleep_data.data:
-            sleep_quality = sleep_data.data[0].get("metadata", {}).get("quality", 70.0)
+        # Get sleep quality as separate metric
+        sleep_quality_data = (
+            self.supabase.table("health_metrics")
+            .select("value")
+            .eq("user_id", str(user_id))
+            .eq("metric_type", "sleep_quality")
+            .order("timestamp", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if sleep_quality_data.data:
+            sleep_quality = sleep_quality_data.data[0].get("value", 70.0)
 
         # Find days since last hard workout
         hard_workouts = (
             self.supabase.table("workouts")
-            .select("started_at")
+            .select("start_time")
             .eq("user_id", str(user_id))
-            .eq("intensity", "high")
-            .order("started_at", desc=True)
+            .in_("intensity", ["hard", "very_hard"])
+            .order("start_time", desc=True)
             .limit(1)
             .execute()
         )
 
         days_since_hard = 3  # Default
         if hard_workouts.data:
-            last_hard = datetime.fromisoformat(hard_workouts.data[0]["started_at"].replace("Z", "+00:00"))
+            last_hard = datetime.fromisoformat(hard_workouts.data[0]["start_time"].replace("Z", "+00:00"))
             days_since_hard = (datetime.now(last_hard.tzinfo) - last_hard).days
 
         # Get energy and soreness from daily scores or metrics
@@ -170,8 +192,8 @@ class PredictionService:
             self.supabase.table("health_metrics")
             .select("value")
             .eq("user_id", str(user_id))
-            .eq("metric_type", "energy")
-            .order("recorded_at", desc=True)
+            .eq("metric_type", "energy_level")
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -181,7 +203,7 @@ class PredictionService:
             .select("value")
             .eq("user_id", str(user_id))
             .eq("metric_type", "soreness")
-            .order("recorded_at", desc=True)
+            .order("timestamp", desc=True)
             .limit(1)
             .execute()
         )
@@ -214,7 +236,7 @@ class PredictionService:
         if existing_score.data:
             data = existing_score.data[0]
             return WellnessResult(
-                overall_score=data.get("overall_score", 70.0),
+                wellness_score=data.get("wellness_score", 70.0),
                 components={
                     "sleep": data.get("sleep_score", 70.0),
                     "activity": data.get("activity_score", 70.0),
@@ -224,7 +246,7 @@ class PredictionService:
                     "mood": data.get("mood_score", 70.0),
                 },
                 trend=data.get("trend", "stable"),
-                comparison_to_baseline=data.get("overall_score", 70.0) - 70.0,
+                comparison_to_baseline=data.get("wellness_score", 70.0) - 70.0,
             )
 
         # Calculate from metrics if no daily score exists
@@ -233,10 +255,10 @@ class PredictionService:
         # Get component scores from metrics
         metrics = (
             self.supabase.table("health_metrics")
-            .select("metric_type, value, metadata")
+            .select("metric_type, value")
             .eq("user_id", str(user_id))
-            .gte("recorded_at", target.isoformat())
-            .lt("recorded_at", (target + timedelta(days=1)).isoformat())
+            .gte("timestamp", target.isoformat())
+            .lt("timestamp", (target + timedelta(days=1)).isoformat())
             .execute()
         )
 
@@ -250,12 +272,12 @@ class PredictionService:
             mtype = metric.get("metric_type")
             value = metric.get("value", 0)
 
-            if mtype == "sleep":
-                sleep_score = metric.get("metadata", {}).get("quality", 70.0)
+            if mtype == "sleep_quality":
+                sleep_score = value
             elif mtype == "steps":
                 # Convert steps to score (10k steps = 100)
                 activity_score = min(100, (value / 10000) * 100)
-            elif mtype == "calories":
+            elif mtype == "calories_in":
                 # Nutrition score based on meeting calorie goals
                 nutrition_score = min(100, value / 20)  # Simplified
             elif mtype == "stress":
@@ -267,7 +289,7 @@ class PredictionService:
         # Get historical scores for trend
         history = (
             self.supabase.table("daily_scores")
-            .select("overall_score")
+            .select("wellness_score")
             .eq("user_id", str(user_id))
             .lt("date", target.isoformat())
             .order("date", desc=True)
@@ -275,7 +297,7 @@ class PredictionService:
             .execute()
         )
 
-        previous_scores = [s["overall_score"] for s in history.data] if history.data else None
+        previous_scores = [s["wellness_score"] for s in history.data] if history.data else None
 
         return self.predictor.calculate_wellness_score(
             sleep_score=sleep_score,
@@ -304,7 +326,7 @@ class PredictionService:
         for record in history.data or []:
             results.append({
                 "date": record["date"],
-                "overall_score": record.get("overall_score", 70.0),
+                "wellness_score": record.get("wellness_score", 70.0),
                 "components": {
                     "sleep": record.get("sleep_score", 70.0),
                     "activity": record.get("activity_score", 70.0),
@@ -314,7 +336,7 @@ class PredictionService:
                     "mood": record.get("mood_score", 70.0),
                 },
                 "trend": record.get("trend", "stable"),
-                "comparison_to_baseline": record.get("overall_score", 70.0) - 70.0,
+                "comparison_to_baseline": record.get("wellness_score", 70.0) - 70.0,
             })
 
         return results
@@ -326,10 +348,10 @@ class PredictionService:
 
         metrics = (
             self.supabase.table("health_metrics")
-            .select("metric_type, value, recorded_at")
+            .select("metric_type, value, timestamp")
             .eq("user_id", str(user_id))
-            .gte("recorded_at", start_date.isoformat())
-            .order("recorded_at")
+            .gte("timestamp", start_date.isoformat())
+            .order("timestamp")
             .execute()
         )
 
@@ -388,7 +410,7 @@ class PredictionService:
         factor_names = {
             "sleep": "sleep quality",
             "hrv": "heart rate variability",
-            "resting_heart_rate": "resting heart rate",
+            "resting_hr": "resting heart rate",
             "steps": "daily steps",
             "stress": "stress levels",
             "mood": "mood",

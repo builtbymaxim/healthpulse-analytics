@@ -1,0 +1,124 @@
+//
+//  AuthService.swift
+//  HealthPulse
+//
+//  Authentication service using backend API
+//
+
+import Foundation
+import Combine
+
+@MainActor
+class AuthService: ObservableObject {
+    static let shared = AuthService()
+
+    @Published var isAuthenticated = false
+    @Published var isOnboardingComplete = false
+    @Published var currentUser: User?
+    @Published var isLoading = false
+    @Published var error: String?
+
+    private init() {
+        checkStoredSession()
+        setupAuthFailureListener()
+    }
+
+    private func setupAuthFailureListener() {
+        NotificationCenter.default.addObserver(
+            forName: .authenticationFailed,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAuthFailure()
+            }
+        }
+    }
+
+    private func handleAuthFailure() {
+        // Clear auth state and redirect to login
+        print("Auth failure detected - logging out")
+        signOut()
+        isOnboardingComplete = false
+        ToastManager.shared.error("Session expired. Please log in again.")
+    }
+
+    private func checkStoredSession() {
+        if let token = UserDefaults.standard.string(forKey: "auth_token") {
+            APIService.shared.setAuthToken(token)
+            isAuthenticated = true
+            Task {
+                await loadProfile()
+            }
+        }
+    }
+
+    func signUp(email: String, password: String) async {
+        isLoading = true
+        error = nil
+
+        do {
+            let response = try await APIService.shared.signUp(email: email, password: password)
+
+            if let token = response.accessToken {
+                await handleAuthSuccess(token: token)
+            } else if response.requiresConfirmation == true {
+                error = "Check your email for confirmation link"
+            } else {
+                error = "Sign up failed"
+            }
+        } catch let apiError as APIError {
+            self.error = apiError.message
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func signIn(email: String, password: String) async {
+        isLoading = true
+        error = nil
+
+        do {
+            let response = try await APIService.shared.signIn(email: email, password: password)
+            if let token = response.accessToken {
+                await handleAuthSuccess(token: token)
+            } else {
+                error = "Sign in failed"
+            }
+        } catch let apiError as APIError {
+            self.error = apiError.message
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func signOut() {
+        UserDefaults.standard.removeObject(forKey: "auth_token")
+        APIService.shared.setAuthToken(nil)
+        isAuthenticated = false
+        currentUser = nil
+    }
+
+    private func handleAuthSuccess(token: String) async {
+        UserDefaults.standard.set(token, forKey: "auth_token")
+        APIService.shared.setAuthToken(token)
+        isAuthenticated = true
+        await loadProfile()
+    }
+
+    private func loadProfile() async {
+        do {
+            currentUser = try await APIService.shared.getProfile()
+            // Check if onboarding is complete (user has set basic profile info)
+            isOnboardingComplete = currentUser?.isProfileComplete ?? false
+        } catch {
+            print("Failed to load profile: \(error)")
+            // If profile load fails, assume onboarding needed
+            isOnboardingComplete = false
+        }
+    }
+}

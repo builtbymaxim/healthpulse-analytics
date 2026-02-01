@@ -18,6 +18,8 @@ class DailyMetrics:
     mood: Optional[int] = None  # 1-10
     stress: Optional[int] = None  # 1-10
     soreness: Optional[int] = None  # 1-10
+    nutrition_score: Optional[float] = None  # 0-100, from nutrition service
+    training_load_7d: Optional[float] = None  # 7-day training load from workouts
 
 
 @dataclass
@@ -28,6 +30,8 @@ class WellnessBreakdown:
     sleep_score: float
     recovery_score: float
     mental_score: float
+    nutrition_score: float
+    training_load_score: float
     data_completeness: float
 
 
@@ -43,12 +47,14 @@ class WellnessCalculator:
         "hrv_baseline": 50,  # Higher is generally better
     }
 
-    # Component weights for overall score
+    # Component weights for overall score (must sum to 1.0)
     WEIGHTS = {
-        "activity": 0.25,
-        "sleep": 0.30,
-        "recovery": 0.25,
-        "mental": 0.20,
+        "activity": 0.20,
+        "sleep": 0.20,
+        "recovery": 0.15,
+        "mental": 0.15,
+        "nutrition": 0.20,
+        "training_load": 0.10,
     }
 
     def __init__(self, user_goals: dict | None = None):
@@ -62,6 +68,8 @@ class WellnessCalculator:
         sleep_score = self._calculate_sleep_score(metrics)
         recovery_score = self._calculate_recovery_score(metrics)
         mental_score = self._calculate_mental_score(metrics)
+        nutrition_score = self._calculate_nutrition_score(metrics)
+        training_load_score = self._calculate_training_load_score(metrics)
 
         # Track data completeness
         completeness = self._calculate_completeness(metrics)
@@ -72,6 +80,8 @@ class WellnessCalculator:
             + sleep_score * self.WEIGHTS["sleep"]
             + recovery_score * self.WEIGHTS["recovery"]
             + mental_score * self.WEIGHTS["mental"]
+            + nutrition_score * self.WEIGHTS["nutrition"]
+            + training_load_score * self.WEIGHTS["training_load"]
         )
 
         return WellnessBreakdown(
@@ -80,6 +90,8 @@ class WellnessCalculator:
             sleep_score=round(sleep_score, 1),
             recovery_score=round(recovery_score, 1),
             mental_score=round(mental_score, 1),
+            nutrition_score=round(nutrition_score, 1),
+            training_load_score=round(training_load_score, 1),
             data_completeness=round(completeness, 2),
         )
 
@@ -159,6 +171,47 @@ class WellnessCalculator:
 
         return sum(scores) / len(scores) if scores else 50.0
 
+    def _calculate_nutrition_score(self, metrics: DailyMetrics) -> float:
+        """Get nutrition score from pre-calculated value.
+
+        The nutrition score is calculated by the NutritionService based on:
+        - Calorie adherence (40%): How close to calorie target
+        - Macro balance (40%): How well macros match targets
+        - Consistency (20%): Regular logging habits
+
+        If no nutrition data is available, returns a neutral score.
+        """
+        if metrics.nutrition_score is not None:
+            return metrics.nutrition_score
+        return 70.0  # Default neutral-positive score if no data
+
+    def _calculate_training_load_score(self, metrics: DailyMetrics) -> float:
+        """Calculate training load score based on 7-day training volume.
+
+        Scoring based on training load (optimal range varies by fitness level):
+        - Too low: Indicates insufficient training stimulus
+        - Optimal: Good balance of training and recovery
+        - Too high: Risk of overtraining
+        """
+        if metrics.training_load_7d is None:
+            return 70.0  # Default if no data
+
+        load = metrics.training_load_7d
+
+        # Optimal weekly training load range (adjustable per user)
+        optimal_min = 300  # Minimum for maintaining fitness
+        optimal_max = 800  # Maximum before overtraining risk
+
+        if optimal_min <= load <= optimal_max:
+            return 100.0
+        elif load < optimal_min:
+            # Below optimal - score decreases as load gets lower
+            return max(40, (load / optimal_min) * 100)
+        else:
+            # Above optimal - score decreases as load gets higher
+            excess = load - optimal_max
+            return max(30, 100 - (excess / optimal_max) * 70)
+
     def _calculate_completeness(self, metrics: DailyMetrics) -> float:
         """Calculate what percentage of metrics are present."""
         fields = [
@@ -172,6 +225,8 @@ class WellnessCalculator:
             metrics.mood,
             metrics.stress,
             metrics.soreness,
+            metrics.nutrition_score,
+            metrics.training_load_7d,
         ]
         present = sum(1 for f in fields if f is not None)
         return present / len(fields)

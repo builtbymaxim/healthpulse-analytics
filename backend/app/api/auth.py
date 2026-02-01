@@ -30,7 +30,15 @@ class AuthResponse(BaseModel):
     email: str
 
 
-@router.post("/signup", response_model=AuthResponse)
+class SignUpPendingResponse(BaseModel):
+    """Response when email confirmation is required."""
+    message: str
+    user_id: str | None
+    email: str
+    requires_confirmation: bool = True
+
+
+@router.post("/signup", response_model=AuthResponse | SignUpPendingResponse)
 async def sign_up(request: SignUpRequest):
     """
     Create a new user account.
@@ -51,12 +59,14 @@ async def sign_up(request: SignUpRequest):
                 detail="Sign up failed. Check if email is already registered.",
             )
 
-        # For email confirmation disabled projects, session is returned immediately
+        # For email confirmation enabled projects, session is None until confirmed
         if response.session is None:
-            raise HTTPException(
-                status_code=200,
-                detail="Check your email for confirmation link.",
-            )
+            return {
+                "message": "Check your email for confirmation link.",
+                "user_id": str(response.user.id) if response.user else None,
+                "email": request.email,
+                "requires_confirmation": True
+            }
 
         return AuthResponse(
             access_token=response.session.access_token,
