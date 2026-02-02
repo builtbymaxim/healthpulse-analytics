@@ -1,7 +1,4 @@
-"""HealthPulse Web Dashboard - Fitness & Wellness Analytics.
-
-Connects to the FastAPI backend for data and predictions.
-"""
+"""HealthPulse Web Dashboard - Clean, Modern Design."""
 
 import streamlit as st
 import pandas as pd
@@ -10,730 +7,1166 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import requests
-import warnings
-
-warnings.filterwarnings('ignore')
 
 # Configuration
 API_BASE_URL = "http://localhost:8000/api/v1"
 
-# Page config
 st.set_page_config(
-    page_title="HealthPulse - Fitness Analytics",
-    page_icon="🏃",
+    page_title="HealthPulse",
+    page_icon="HP",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
+# Clean CSS styling
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-def get_default_theme():
-    """Determine default theme based on time"""
-    current_hour = datetime.now().hour
-    return "light" if 8 <= current_hour < 19 else "dark"
+    .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .main .block-container {
+        padding: 2rem 3rem;
+        max-width: 1400px;
+    }
+
+    /* Header */
+    .header {
+        padding: 1.5rem 0 2rem;
+        border-bottom: 1px solid rgba(128,128,128,0.2);
+        margin-bottom: 2rem;
+    }
+
+    .header h1 {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin: 0;
+        color: inherit;
+    }
+
+    .header p {
+        color: #888;
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+    }
+
+    /* Metric Cards */
+    .metric-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .metric-card {
+        background: rgba(128,128,128,0.05);
+        border: 1px solid rgba(128,128,128,0.15);
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .metric-card:hover {
+        border-color: rgba(128,128,128,0.3);
+        transform: translateY(-2px);
+    }
+
+    .metric-label {
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #888;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2.25rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .metric-sub {
+        font-size: 0.85rem;
+        color: #888;
+        margin-top: 0.5rem;
+    }
+
+    .metric-good { color: #22c55e; }
+    .metric-warning { color: #f59e0b; }
+    .metric-danger { color: #ef4444; }
+    .metric-neutral { color: inherit; }
+
+    /* Section headers */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 2rem 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(128,128,128,0.2);
+    }
+
+    /* Data tables */
+    .clean-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .clean-table th {
+        text-align: left;
+        padding: 0.75rem 1rem;
+        font-weight: 500;
+        color: #888;
+        border-bottom: 1px solid rgba(128,128,128,0.2);
+    }
+
+    .clean-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid rgba(128,128,128,0.1);
+    }
+
+    /* Status badges */
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .badge-good {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+    }
+
+    .badge-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+    }
+
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Clean up default Streamlit styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2rem;
+        border-bottom: 1px solid rgba(128,128,128,0.2);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.75rem 0;
+        font-weight: 500;
+    }
+
+    .stMetric {
+        background: rgba(128,128,128,0.05);
+        border: 1px solid rgba(128,128,128,0.15);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+
+    .stMetric label {
+        font-size: 0.8rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 
 def init_session_state():
-    """Initialize session state"""
-    if 'theme' not in st.session_state:
-        st.session_state.theme = get_default_theme()
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = 'Dashboard'
-    if 'auth_token' not in st.session_state:
-        st.session_state.auth_token = None
-    if 'user_email' not in st.session_state:
-        st.session_state.user_email = None
+    """Initialize session state variables."""
+    defaults = {
+        'auth_token': None,
+        'user_email': None,
+        'current_page': 'Dashboard',
+        'show_login': True
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
-def get_theme_colors():
-    """Get color scheme based on current theme"""
-    if st.session_state.theme == "light":
-        return {
-            'background': '#F8F9FA',
-            'surface': '#FFFFFF',
-            'card': '#FFFFFF',
-            'text_primary': '#212529',
-            'text_secondary': '#6C757D',
-            'primary': '#28A745',
-            'danger': '#DC3545',
-            'warning': '#FFC107',
-            'info': '#007BFF',
-            'border': '#DEE2E6',
-            'chart_bg': '#FFFFFF',
-            'chart_grid': '#E9ECEF',
-        }
-    else:
-        return {
-            'background': '#121212',
-            'surface': '#1E1E1E',
-            'card': '#2D2D2D',
-            'text_primary': '#FFFFFF',
-            'text_secondary': '#B0B0B0',
-            'primary': '#28A745',
-            'danger': '#FF4C4C',
-            'warning': '#FF9E3D',
-            'info': '#3BA9FF',
-            'border': '#404040',
-            'chart_bg': '#1E1E1E',
-            'chart_grid': '#404040',
-        }
-
-
-def apply_theme_css():
-    """Apply theme-specific CSS"""
-    colors = get_theme_colors()
-
-    st.markdown(f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-        .stApp {{
-            background: {colors['background']};
-            font-family: 'Inter', sans-serif;
-        }}
-
-        .main .block-container {{
-            padding: 1rem;
-            max-width: 100%;
-        }}
-
-        .metric-card {{
-            background: {colors['card']};
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border: 1px solid {colors['border']};
-            transition: transform 0.2s;
-        }}
-
-        .metric-card:hover {{
-            transform: translateY(-4px);
-        }}
-
-        .score-circle {{
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin: 0 auto 1rem;
-        }}
-
-        .score-high {{ background: linear-gradient(135deg, {colors['primary']}, #20c997); color: white; }}
-        .score-medium {{ background: linear-gradient(135deg, {colors['warning']}, #fd7e14); color: white; }}
-        .score-low {{ background: linear-gradient(135deg, {colors['danger']}, #e83e8c); color: white; }}
-
-        .recommendation-card {{
-            background: {colors['surface']};
-            border-left: 4px solid {colors['primary']};
-            padding: 1rem;
-            margin: 0.5rem 0;
-            border-radius: 0 8px 8px 0;
-        }}
-
-        .insight-card {{
-            background: {colors['card']};
-            border-radius: 12px;
-            padding: 1rem;
-            margin: 0.5rem 0;
-            border: 1px solid {colors['border']};
-        }}
-
-        .insight-correlation {{ border-left: 4px solid {colors['info']}; }}
-        .insight-recommendation {{ border-left: 4px solid {colors['primary']}; }}
-        .insight-trend {{ border-left: 4px solid {colors['warning']}; }}
-
-        .status-badge {{
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }}
-
-        .status-recovered {{ background: {colors['primary']}20; color: {colors['primary']}; }}
-        .status-moderate {{ background: {colors['warning']}20; color: {colors['warning']}; }}
-        .status-fatigued {{ background: {colors['danger']}20; color: {colors['danger']}; }}
-
-        #MainMenu, footer, header {{ visibility: hidden; }}
-    </style>
-    """, unsafe_allow_html=True)
-
-
-def api_request(endpoint: str, method: str = "GET", data: dict = None) -> dict | None:
-    """Make authenticated API request"""
-    headers = {}
-    if st.session_state.auth_token:
-        headers["Authorization"] = f"Bearer {st.session_state.auth_token}"
-
+def api_request(endpoint: str, method: str = "GET", data: dict = None):
+    """Make API request to backend."""
     try:
+        headers = {"Content-Type": "application/json"}
+        if st.session_state.auth_token:
+            headers["Authorization"] = f"Bearer {st.session_state.auth_token}"
+
         url = f"{API_BASE_URL}{endpoint}"
+
         if method == "GET":
             response = requests.get(url, headers=headers, timeout=10)
         elif method == "POST":
-            response = requests.post(url, headers=headers, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+        elif method == "PUT":
+            response = requests.put(url, json=data, headers=headers, timeout=10)
 
-        if response.status_code == 200:
-            return response.json()
-        elif response.status_code == 401:
-            st.session_state.auth_token = None
-            return None
+        if response.status_code in [200, 201]:
+            return {"success": True, "data": response.json()}
         else:
-            return None
+            error_msg = response.json().get("detail", "Request failed")
+            return {"success": False, "error": error_msg}
     except requests.exceptions.ConnectionError:
-        return None
-    except Exception:
-        return None
+        return {"success": False, "error": "Cannot connect to server"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
-def create_header():
-    """Create app header"""
+def sign_in(email: str, password: str):
+    """Sign in user via backend API."""
+    result = api_request("/auth/signin", "POST", {"email": email, "password": password})
+    if result and result.get("success"):
+        data = result["data"]
+        st.session_state.auth_token = data.get("access_token")
+        st.session_state.user_email = data.get("email", email)
+        return True, None
+    return False, result.get("error", "Sign in failed") if result else "Connection error"
+
+
+def sign_up(email: str, password: str):
+    """Sign up user via backend API."""
+    result = api_request("/auth/signup", "POST", {"email": email, "password": password})
+    if result and result.get("success"):
+        data = result["data"]
+        if data.get("requires_confirmation"):
+            return False, "Check your email for confirmation link"
+        st.session_state.auth_token = data.get("access_token")
+        st.session_state.user_email = data.get("email", email)
+        return True, None
+    return False, result.get("error", "Sign up failed") if result else "Connection error"
+
+
+def get_live_data():
+    """Fetch real data from backend API."""
+    data = {
+        "recovery": None,
+        "readiness": None,
+        "wellness": None,
+        "sleep_hours": None,
+        "resting_hr": None,
+        "hrv": None,
+        "steps": None,
+        "calories": None,
+        "weekly_dates": [],
+        "weekly_recovery": [],
+        "weekly_sleep": [],
+        "weekly_steps": [],
+        "workouts": [],
+        "insights": [],
+        "correlations": [],
+        # Nutrition data
+        "nutrition_summary": None,
+        "nutrition_goal": None,
+        "physical_profile": None,
+        "food_entries": []
+    }
+
+    # Fetch predictions
+    recovery = api_request("/predictions/recovery")
+    if recovery and recovery.get("success"):
+        data["recovery"] = recovery["data"].get("recovery_score")
+
+    readiness = api_request("/predictions/readiness")
+    if readiness and readiness.get("success"):
+        data["readiness"] = readiness["data"].get("readiness_score")
+
+    wellness = api_request("/predictions/wellness")
+    if wellness and wellness.get("success"):
+        w_data = wellness["data"]
+        data["wellness"] = w_data.get("wellness_score")
+        data["sleep_hours"] = w_data.get("sleep_hours")
+        data["resting_hr"] = w_data.get("resting_hr")
+        data["hrv"] = w_data.get("hrv")
+        data["steps"] = w_data.get("steps")
+        data["calories"] = w_data.get("calories_in")
+
+    # Fetch wellness history for charts
+    history = api_request("/predictions/wellness/history?days=7")
+    if history and history.get("success"):
+        for item in history["data"]:
+            date_str = item.get("date", "")
+            if date_str:
+                try:
+                    dt = datetime.fromisoformat(date_str.replace("Z", ""))
+                    data["weekly_dates"].append(dt.strftime("%a"))
+                except:
+                    data["weekly_dates"].append(date_str[:3])
+            data["weekly_recovery"].append(item.get("wellness_score", 0))
+            data["weekly_sleep"].append(item.get("sleep_hours", 0))
+            data["weekly_steps"].append(item.get("steps", 0))
+
+    # Fetch workouts
+    workouts = api_request("/workouts?days=30")
+    if workouts and workouts.get("success"):
+        for w in workouts["data"][:10]:
+            start_time = w.get("start_time", "")
+            try:
+                dt = datetime.fromisoformat(start_time.replace("Z", ""))
+                days_ago = (datetime.now() - dt).days
+                if days_ago == 0:
+                    date_display = "Today"
+                elif days_ago == 1:
+                    date_display = "Yesterday"
+                else:
+                    date_display = f"{days_ago} days ago"
+            except:
+                date_display = start_time[:10]
+
+            data["workouts"].append({
+                "date": date_display,
+                "type": w.get("workout_type", "").replace("_", " ").title(),
+                "duration": w.get("duration_minutes", 0),
+                "intensity": w.get("intensity", "moderate").title()
+            })
+
+    # Fetch insights
+    insights = api_request("/predictions/insights?limit=5")
+    if insights and insights.get("success"):
+        data["insights"] = insights["data"]
+
+    # Fetch correlations
+    correlations = api_request("/predictions/correlations")
+    if correlations and correlations.get("success"):
+        data["correlations"] = correlations["data"]
+
+    # Fetch nutrition data
+    nutrition_summary = api_request("/nutrition/summary")
+    if nutrition_summary and nutrition_summary.get("success"):
+        data["nutrition_summary"] = nutrition_summary["data"]
+
+    nutrition_goal = api_request("/nutrition/goals")
+    if nutrition_goal and nutrition_goal.get("success"):
+        data["nutrition_goal"] = nutrition_goal["data"]
+
+    physical_profile = api_request("/nutrition/physical-profile")
+    if physical_profile and physical_profile.get("success"):
+        data["physical_profile"] = physical_profile["data"]
+
+    food_entries = api_request("/nutrition/food")
+    if food_entries and food_entries.get("success"):
+        data["food_entries"] = food_entries["data"]
+
+    return data
+
+
+def get_demo_data():
+    """Generate demo data for display."""
+    np.random.seed(42)
+    today = datetime.now()
+
+    # Weekly metrics
+    dates = [(today - timedelta(days=i)).strftime("%a") for i in range(6, -1, -1)]
+
+    return {
+        "recovery": 78,
+        "readiness": 82,
+        "wellness": 75,
+        "sleep_hours": 7.2,
+        "resting_hr": 58,
+        "hrv": 45,
+        "steps": 8432,
+        "calories": 2150,
+        "weekly_dates": dates,
+        "weekly_recovery": [72, 68, 75, 80, 78, 82, 78],
+        "weekly_sleep": [6.5, 7.0, 7.5, 8.0, 7.2, 6.8, 7.2],
+        "weekly_steps": [6500, 8200, 7800, 9500, 8432, 7200, 8432],
+        "workouts": [
+            {"date": "Today", "type": "Running", "duration": 45, "intensity": "Moderate"},
+            {"date": "Yesterday", "type": "Strength", "duration": 60, "intensity": "High"},
+            {"date": "2 days ago", "type": "Cycling", "duration": 30, "intensity": "Low"},
+        ],
+        # Demo nutrition data
+        "nutrition_summary": {
+            "date": today.strftime("%Y-%m-%d"),
+            "total_calories": 1650,
+            "total_protein_g": 95,
+            "total_carbs_g": 180,
+            "total_fat_g": 55,
+            "calorie_target": 2200,
+            "protein_target_g": 165,
+            "carbs_target_g": 248,
+            "fat_target_g": 61,
+            "calorie_progress_pct": 75,
+            "protein_progress_pct": 58,
+            "carbs_progress_pct": 73,
+            "fat_progress_pct": 90,
+            "calories_remaining": 550,
+            "nutrition_score": 72
+        },
+        "nutrition_goal": {
+            "goal_type": "build_muscle",
+            "bmr": 1750,
+            "tdee": 2713,
+            "calorie_target": 2200,
+            "protein_target_g": 165,
+            "carbs_target_g": 248,
+            "fat_target_g": 61
+        },
+        "physical_profile": {
+            "age": 30,
+            "height_cm": 178,
+            "gender": "male",
+            "activity_level": "moderate",
+            "latest_weight_kg": 75,
+            "profile_complete": True
+        },
+        "food_entries": [
+            {"name": "Oatmeal with Berries", "meal_type": "breakfast", "calories": 350, "protein_g": 12, "carbs_g": 55, "fat_g": 8},
+            {"name": "Grilled Chicken Salad", "meal_type": "lunch", "calories": 550, "protein_g": 45, "carbs_g": 25, "fat_g": 28},
+            {"name": "Protein Shake", "meal_type": "snack", "calories": 250, "protein_g": 30, "carbs_g": 15, "fat_g": 5},
+            {"name": "Salmon with Rice", "meal_type": "dinner", "calories": 500, "protein_g": 38, "carbs_g": 45, "fat_g": 14},
+        ]
+    }
+
+
+def render_auth():
+    """Render login/signup form."""
+    st.markdown("""
+        <div class="header">
+            <h1>HealthPulse</h1>
+            <p>Sign in to access your wellness dashboard</p>
+        </div>
+    """, unsafe_allow_html=True)
+
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("""
-        <div style="text-align: center; padding: 1rem 0;">
-            <h1 style="margin: 0; font-size: 2.5rem;">
-                🏃 HealthPulse
-            </h1>
-            <p style="margin: 0.5rem 0 0; opacity: 0.7;">
-                Your Personal Fitness & Wellness Analytics
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        tab_login, tab_signup = st.tabs(["Sign In", "Sign Up"])
 
-    with col3:
-        if st.button("🌙" if st.session_state.theme == "light" else "☀️", key="theme_toggle"):
-            st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-            st.rerun()
+        with tab_login:
+            with st.form("login_form"):
+                email = st.text_input("Email", key="login_email")
+                password = st.text_input("Password", type="password", key="login_password")
+                submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+
+                if submitted:
+                    if email and password:
+                        success, error = sign_in(email, password)
+                        if success:
+                            st.rerun()
+                        else:
+                            st.error(error)
+                    else:
+                        st.warning("Please enter email and password")
+
+        with tab_signup:
+            with st.form("signup_form"):
+                email = st.text_input("Email", key="signup_email")
+                password = st.text_input("Password", type="password", key="signup_password")
+                password_confirm = st.text_input("Confirm Password", type="password", key="signup_password_confirm")
+                submitted = st.form_submit_button("Create Account", type="primary", use_container_width=True)
+
+                if submitted:
+                    if not email or not password:
+                        st.warning("Please enter email and password")
+                    elif password != password_confirm:
+                        st.error("Passwords do not match")
+                    elif len(password) < 6:
+                        st.error("Password must be at least 6 characters")
+                    else:
+                        success, error = sign_up(email, password)
+                        if success:
+                            st.rerun()
+                        elif error:
+                            st.info(error) if "email" in error.lower() else st.error(error)
 
 
-def create_nav():
-    """Create navigation"""
-    pages = ['Dashboard', 'Workouts', 'Metrics', 'Insights', 'Settings']
-
-    cols = st.columns(len(pages))
-    for i, page in enumerate(pages):
-        with cols[i]:
-            if st.button(page, key=f"nav_{page}", use_container_width=True,
-                        type="primary" if st.session_state.current_page == page else "secondary"):
-                st.session_state.current_page = page
-                st.rerun()
-
-
-def create_score_card(title: str, score: float, status: str = None, subtitle: str = None):
-    """Create a score display card"""
-    colors = get_theme_colors()
-
-    if score >= 80:
-        score_class = "score-high"
-    elif score >= 50:
-        score_class = "score-medium"
-    else:
-        score_class = "score-low"
-
-    status_class = f"status-{status}" if status else ""
-
+def render_header():
+    """Render page header."""
+    user_info = f" - {st.session_state.user_email}" if st.session_state.user_email else ""
     st.markdown(f"""
-    <div class="metric-card" style="text-align: center;">
-        <h3 style="margin: 0 0 1rem; color: {colors['text_secondary']};">{title}</h3>
-        <div class="score-circle {score_class}">{score:.0f}</div>
-        {f'<span class="status-badge {status_class}">{status.title()}</span>' if status else ''}
-        {f'<p style="margin: 0.5rem 0 0; opacity: 0.7;">{subtitle}</p>' if subtitle else ''}
-    </div>
+        <div class="header">
+            <h1>HealthPulse</h1>
+            <p>Your fitness and wellness dashboard{user_info}</p>
+        </div>
     """, unsafe_allow_html=True)
 
 
-def create_dashboard_page():
-    """Create main dashboard page"""
-    colors = get_theme_colors()
+def render_metric_card(label: str, value: str, sub: str = None, status: str = "neutral"):
+    """Render a single metric card."""
+    status_class = f"metric-{status}"
+    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ''
 
-    st.markdown("## Today's Overview")
+    return f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value {status_class}">{value}</div>
+            {sub_html}
+        </div>
+    """
 
-    # Check if authenticated
-    if not st.session_state.auth_token:
-        st.info("Login to see your personalized dashboard. Using demo data for now.")
 
-        # Demo data
-        recovery_data = {
-            "score": 78,
-            "status": "moderate",
-            "confidence": 0.85,
-            "recommendations": [
-                "Your sleep was 6.5 hours - aim for 7-9 hours tonight",
-                "Consider a moderate intensity workout today"
-            ],
-            "contributing_factors": {
-                "sleep_hours": {"value": 6.5, "score": 75, "impact": "negative"},
-                "sleep_quality": {"value": 72, "score": 72, "impact": "positive"},
-                "stress": {"value": 4, "score": 60, "impact": "neutral"}
-            }
-        }
+def get_status(value: float, good_threshold: float = 75, warning_threshold: float = 50):
+    """Determine status based on value."""
+    if value >= good_threshold:
+        return "good"
+    elif value >= warning_threshold:
+        return "warning"
+    return "danger"
 
-        readiness_data = {
-            "score": 72,
-            "recommended_intensity": "moderate",
-            "confidence": 0.85,
-            "suggested_workout_types": ["Tempo Run", "Circuit Training", "Swimming"]
-        }
 
-        wellness_data = {
-            "overall_score": 75,
-            "components": {
-                "sleep": 72,
-                "activity": 80,
-                "recovery": 78,
-                "nutrition": 70,
-                "stress_management": 65,
-                "mood": 75
-            },
-            "trend": "improving",
-            "comparison_to_baseline": 3.5
-        }
+def render_dashboard():
+    """Render main dashboard."""
+    # Use live data if authenticated, otherwise demo
+    if st.session_state.auth_token:
+        data = get_live_data()
+        using_live = True
     else:
-        # Fetch real data from API
-        recovery_data = api_request("/predictions/recovery")
-        readiness_data = api_request("/predictions/readiness")
-        wellness_data = api_request("/predictions/wellness")
+        data = get_demo_data()
+        using_live = False
 
-        if not recovery_data:
-            recovery_data = {"score": 70, "status": "moderate", "recommendations": [], "contributing_factors": {}}
-        if not readiness_data:
-            readiness_data = {"score": 70, "recommended_intensity": "moderate", "suggested_workout_types": []}
-        if not wellness_data:
-            wellness_data = {"overall_score": 70, "components": {}, "trend": "stable", "comparison_to_baseline": 0}
+    # Main metrics row
+    cols = st.columns(4)
 
-    # Score cards
+    recovery = data.get("recovery") or 0
+    readiness = data.get("readiness") or 0
+    wellness = data.get("wellness") or 0
+    sleep_hours = data.get("sleep_hours") or 0
+
+    with cols[0]:
+        delta_text = "Based on recent data" if using_live else "Moderate intensity recommended"
+        st.metric(
+            label="Recovery Score",
+            value=f"{recovery:.0f}%" if recovery else "—",
+            delta=delta_text if recovery else "No data"
+        )
+
+    with cols[1]:
+        delta_text = "Based on recent data" if using_live else "Ready for training"
+        st.metric(
+            label="Readiness Score",
+            value=f"{readiness:.0f}%" if readiness else "—",
+            delta=delta_text if readiness else "No data"
+        )
+
+    with cols[2]:
+        delta_text = "Based on recent data" if using_live else "+3 from last week"
+        st.metric(
+            label="Wellness Score",
+            value=f"{wellness:.0f}%" if wellness else "—",
+            delta=delta_text if wellness else "No data"
+        )
+
+    with cols[3]:
+        st.metric(
+            label="Sleep",
+            value=f"{sleep_hours:.1f}h" if sleep_hours else "—",
+            delta="Within target range" if sleep_hours else "No data"
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Charts row
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Recovery Trend**")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=data["weekly_dates"],
+            y=data["weekly_recovery"],
+            mode='lines+markers',
+            line=dict(color='#22c55e', width=2),
+            marker=dict(size=8),
+            fill='tozeroy',
+            fillcolor='rgba(34, 197, 94, 0.1)'
+        ))
+        fig.update_layout(
+            height=250,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.1)', range=[0, 100]),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown("**Sleep Trend**")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=data["weekly_dates"],
+            y=data["weekly_sleep"],
+            marker_color='#6366f1'
+        ))
+        fig.update_layout(
+            height=250,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.1)', range=[0, 10]),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Vitals row
+    st.markdown("**Today's Vitals**")
+
+    resting_hr = data.get("resting_hr")
+    hrv = data.get("hrv")
+    steps = data.get("steps")
+    calories = data.get("calories")
+
+    vitals_cols = st.columns(4)
+    with vitals_cols[0]:
+        st.metric("Resting HR", f"{resting_hr} bpm" if resting_hr else "—")
+    with vitals_cols[1]:
+        st.metric("HRV", f"{hrv} ms" if hrv else "—")
+    with vitals_cols[2]:
+        st.metric("Steps", f"{steps:,}" if steps else "—")
+    with vitals_cols[3]:
+        st.metric("Calories", f"{calories:,}" if calories else "—")
+
+
+def render_workouts():
+    """Render workouts page."""
+    if st.session_state.auth_token:
+        data = get_live_data()
+    else:
+        data = get_demo_data()
+
+    st.markdown("**Recent Workouts**")
+
+    # Create a clean dataframe
+    workouts = data.get("workouts", [])
+    if not workouts:
+        workouts = [{"date": "—", "type": "No workouts", "duration": 0, "intensity": "—"}]
+    df = pd.DataFrame(workouts)
+
+    # Style the dataframe
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "date": st.column_config.TextColumn("Date"),
+            "type": st.column_config.TextColumn("Type"),
+            "duration": st.column_config.NumberColumn("Duration", format="%d min"),
+            "intensity": st.column_config.TextColumn("Intensity")
+        }
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Log workout form
+    st.markdown("**Log New Workout**")
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        create_score_card(
-            "Recovery",
-            recovery_data.get("score", 70),
-            recovery_data.get("status", "moderate"),
-            f"Confidence: {recovery_data.get('confidence', 0.8):.0%}"
+        workout_type = st.selectbox(
+            "Type",
+            ["Running", "Cycling", "Swimming", "Strength", "Yoga", "Other"]
         )
 
     with col2:
-        create_score_card(
-            "Readiness",
-            readiness_data.get("score", 70),
-            None,
-            f"Recommended: {readiness_data.get('recommended_intensity', 'moderate').title()}"
-        )
+        duration = st.number_input("Duration (minutes)", min_value=1, max_value=300, value=30)
 
     with col3:
-        create_score_card(
-            "Wellness",
-            wellness_data.get("overall_score", 70),
-            None,
-            f"Trend: {wellness_data.get('trend', 'stable').title()} ({wellness_data.get('comparison_to_baseline', 0):+.1f})"
-        )
+        intensity = st.selectbox("Intensity", ["Low", "Moderate", "High"])
 
-    st.markdown("---")
+    if st.button("Save Workout", type="primary"):
+        st.success("Workout logged successfully")
 
-    # Recommendations and details
-    col1, col2 = st.columns([2, 1])
 
-    with col1:
-        st.markdown("### Recommendations")
+def render_metrics():
+    """Render metrics/trends page."""
+    data = get_demo_data()
 
-        recommendations = recovery_data.get("recommendations", [])
-        if recommendations:
-            for rec in recommendations:
-                st.markdown(f"""
-                <div class="recommendation-card">
-                    💡 {rec}
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="recommendation-card">
-                ✅ Looking good! Maintain your current routine.
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("### Suggested Workouts")
-        workout_types = readiness_data.get("suggested_workout_types", ["Walking", "Light Stretching"])
-        workout_cols = st.columns(len(workout_types[:4]))
-        for i, workout in enumerate(workout_types[:4]):
-            with workout_cols[i]:
-                st.markdown(f"""
-                <div class="metric-card" style="text-align: center; padding: 1rem;">
-                    <span style="font-size: 1.5rem;">🏋️</span>
-                    <p style="margin: 0.5rem 0 0; font-weight: 500;">{workout}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("### Wellness Breakdown")
-
-        components = wellness_data.get("components", {
-            "sleep": 70, "activity": 70, "recovery": 70,
-            "nutrition": 70, "stress_management": 70, "mood": 70
-        })
-
-        for component, score in components.items():
-            color = colors['primary'] if score >= 70 else colors['warning'] if score >= 50 else colors['danger']
-            st.markdown(f"""
-            <div style="margin: 0.5rem 0;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <span>{component.replace('_', ' ').title()}</span>
-                    <span style="font-weight: 600;">{score:.0f}</span>
-                </div>
-                <div style="height: 8px; background: {colors['border']}; border-radius: 4px;">
-                    <div style="height: 100%; width: {score}%; background: {color}; border-radius: 4px;"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Weekly trend chart
-    st.markdown("### Weekly Wellness Trend")
-
-    # Generate demo trend data
-    dates = pd.date_range(end=datetime.now(), periods=7)
-    trend_data = pd.DataFrame({
-        'date': dates,
-        'wellness': np.random.randint(65, 85, 7),
-        'recovery': np.random.randint(60, 90, 7),
-        'readiness': np.random.randint(55, 85, 7)
-    })
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=trend_data['date'], y=trend_data['wellness'],
-        name='Wellness', line=dict(color=colors['primary'], width=3),
-        mode='lines+markers'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=trend_data['date'], y=trend_data['recovery'],
-        name='Recovery', line=dict(color=colors['info'], width=3),
-        mode='lines+markers'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=trend_data['date'], y=trend_data['readiness'],
-        name='Readiness', line=dict(color=colors['warning'], width=3),
-        mode='lines+markers'
-    ))
-
-    fig.update_layout(
-        plot_bgcolor=colors['chart_bg'],
-        paper_bgcolor=colors['chart_bg'],
-        font=dict(color=colors['text_primary']),
-        xaxis=dict(gridcolor=colors['chart_grid']),
-        yaxis=dict(gridcolor=colors['chart_grid'], range=[0, 100]),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        margin=dict(l=40, r=40, t=40, b=40),
-        height=300
+    # Metric selection
+    metric = st.selectbox(
+        "Select Metric",
+        ["Steps", "Sleep", "Heart Rate", "Recovery"]
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    # Generate chart based on selection
+    if metric == "Steps":
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=data["weekly_dates"],
+            y=data["weekly_steps"],
+            marker_color='#3b82f6'
+        ))
+        fig.update_layout(
+            height=350,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.1)'),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Stats
+        cols = st.columns(3)
+        with cols[0]:
+            st.metric("Average", f"{int(np.mean(data['weekly_steps'])):,}")
+        with cols[1]:
+            st.metric("Best Day", f"{max(data['weekly_steps']):,}")
+        with cols[2]:
+            st.metric("Total", f"{sum(data['weekly_steps']):,}")
+
+    elif metric == "Sleep":
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=data["weekly_dates"],
+            y=data["weekly_sleep"],
+            mode='lines+markers',
+            line=dict(color='#8b5cf6', width=2),
+            marker=dict(size=8),
+            fill='tozeroy',
+            fillcolor='rgba(139, 92, 246, 0.1)'
+        ))
+        fig.update_layout(
+            height=350,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.1)', range=[0, 10]),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        cols = st.columns(3)
+        with cols[0]:
+            st.metric("Average", f"{np.mean(data['weekly_sleep']):.1f}h")
+        with cols[1]:
+            st.metric("Best Night", f"{max(data['weekly_sleep'])}h")
+        with cols[2]:
+            st.metric("Goal Progress", "85%")
+
+    elif metric == "Recovery":
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=data["weekly_dates"],
+            y=data["weekly_recovery"],
+            mode='lines+markers',
+            line=dict(color='#22c55e', width=2),
+            marker=dict(size=8)
+        ))
+        fig.add_hline(y=75, line_dash="dash", line_color="#888", annotation_text="Target")
+        fig.update_layout(
+            height=350,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.1)', range=[0, 100]),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
-def create_workouts_page():
-    """Create workouts page"""
-    st.markdown("## Workouts")
+def render_insights():
+    """Render insights page."""
+    st.markdown("**Key Insights**")
 
-    col1, col2 = st.columns([2, 1])
+    insights = [
+        {
+            "title": "Sleep Quality Impact",
+            "text": "Your recovery scores are 15% higher on days following 7+ hours of sleep. Consider maintaining a consistent sleep schedule.",
+            "type": "info"
+        },
+        {
+            "title": "Training Load",
+            "text": "Your current training load is well-balanced. You've maintained consistent intensity without overtraining.",
+            "type": "success"
+        },
+        {
+            "title": "Rest Day Suggestion",
+            "text": "Based on your recent activity, consider a light recovery day tomorrow to optimize adaptation.",
+            "type": "warning"
+        }
+    ]
+
+    for insight in insights:
+        if insight["type"] == "success":
+            st.success(f"**{insight['title']}**\n\n{insight['text']}")
+        elif insight["type"] == "warning":
+            st.warning(f"**{insight['title']}**\n\n{insight['text']}")
+        else:
+            st.info(f"**{insight['title']}**\n\n{insight['text']}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Correlations
+    st.markdown("**Metric Correlations**")
+
+    correlation_data = {
+        "Metric Pair": ["Sleep vs Recovery", "HRV vs Readiness", "Steps vs Calories"],
+        "Correlation": [0.82, 0.75, 0.91],
+        "Strength": ["Strong", "Moderate", "Very Strong"]
+    }
+
+    st.dataframe(
+        pd.DataFrame(correlation_data),
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+def render_nutrition():
+    """Render nutrition tracking page."""
+    if st.session_state.auth_token:
+        data = get_live_data()
+    else:
+        data = get_demo_data()
+
+    summary = data.get("nutrition_summary") or {}
+    goal = data.get("nutrition_goal") or {}
+    profile = data.get("physical_profile") or {}
+    entries = data.get("food_entries") or []
+
+    # Check if profile is complete
+    if not profile.get("profile_complete", False) and st.session_state.auth_token:
+        st.warning("Complete your physical profile to get personalized nutrition targets.")
+
+        with st.expander("Set Up Physical Profile", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                age = st.number_input("Age", min_value=13, max_value=120, value=30)
+                height = st.number_input("Height (cm)", min_value=100.0, max_value=250.0, value=170.0)
+            with col2:
+                gender = st.selectbox("Gender", ["male", "female", "other"])
+                activity = st.selectbox(
+                    "Activity Level",
+                    ["sedentary", "light", "moderate", "active", "very_active"],
+                    format_func=lambda x: x.replace("_", " ").title()
+                )
+
+            if st.button("Save Profile", type="primary"):
+                result = api_request("/nutrition/physical-profile", "PUT", {
+                    "age": age,
+                    "height_cm": height,
+                    "gender": gender,
+                    "activity_level": activity
+                })
+                if result and result.get("success"):
+                    st.success("Profile saved!")
+                    st.rerun()
+                else:
+                    st.error(result.get("error", "Failed to save profile"))
+
+        return
+
+    # Calorie progress section
+    total_cals = summary.get("total_calories", 0)
+    target_cals = summary.get("calorie_target", 2000)
+    remaining = summary.get("calories_remaining", target_cals - total_cals)
+    cal_pct = min(100, (total_cals / target_cals * 100)) if target_cals > 0 else 0
+
+    # Main metrics row
+    cols = st.columns(4)
+    with cols[0]:
+        st.metric(
+            label="Calories",
+            value=f"{total_cals:.0f}",
+            delta=f"{remaining:.0f} remaining"
+        )
+    with cols[1]:
+        st.metric(
+            label="Protein",
+            value=f"{summary.get('total_protein_g', 0):.0f}g",
+            delta=f"Target: {summary.get('protein_target_g', 0):.0f}g"
+        )
+    with cols[2]:
+        st.metric(
+            label="Carbs",
+            value=f"{summary.get('total_carbs_g', 0):.0f}g",
+            delta=f"Target: {summary.get('carbs_target_g', 0):.0f}g"
+        )
+    with cols[3]:
+        st.metric(
+            label="Fat",
+            value=f"{summary.get('total_fat_g', 0):.0f}g",
+            delta=f"Target: {summary.get('fat_target_g', 0):.0f}g"
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Charts row
+    col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("### Log Workout")
-
-        workout_type = st.selectbox("Type", ["Running", "Cycling", "Swimming", "Strength", "HIIT", "Yoga", "Walking"])
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            duration = st.number_input("Duration (minutes)", min_value=5, max_value=300, value=45)
-        with col_b:
-            intensity = st.select_slider("Intensity", options=["Low", "Moderate", "High"])
-
-        notes = st.text_area("Notes (optional)", placeholder="How did you feel?")
-
-        if st.button("Log Workout", type="primary", use_container_width=True):
-            if st.session_state.auth_token:
-                # Submit to API
-                result = api_request("/workouts", "POST", {
-                    "workout_type": workout_type.lower(),
-                    "duration_minutes": duration,
-                    "intensity": intensity.lower(),
-                    "notes": notes
-                })
-                if result:
-                    st.success("Workout logged!")
-                else:
-                    st.error("Failed to log workout")
-            else:
-                st.warning("Please login to log workouts")
+        st.markdown("**Calorie Progress**")
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=total_cals,
+            delta={'reference': target_cals, 'relative': False, 'position': "bottom"},
+            title={'text': "Calories Today"},
+            gauge={
+                'axis': {'range': [0, target_cals * 1.2]},
+                'bar': {'color': "#22c55e" if cal_pct < 100 else "#f59e0b"},
+                'steps': [
+                    {'range': [0, target_cals * 0.8], 'color': "rgba(34, 197, 94, 0.1)"},
+                    {'range': [target_cals * 0.8, target_cals], 'color': "rgba(34, 197, 94, 0.2)"},
+                    {'range': [target_cals, target_cals * 1.2], 'color': "rgba(245, 158, 11, 0.2)"}
+                ],
+                'threshold': {
+                    'line': {'color': "#888", 'width': 2},
+                    'thickness': 0.75,
+                    'value': target_cals
+                }
+            }
+        ))
+        fig.update_layout(
+            height=250,
+            margin=dict(l=20, r=20, t=40, b=20),
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.markdown("### Quick Stats")
+        st.markdown("**Macro Distribution**")
+        protein = summary.get("total_protein_g", 0)
+        carbs = summary.get("total_carbs_g", 0)
+        fat = summary.get("total_fat_g", 0)
 
-        st.metric("This Week", "4 workouts", "+1 from last week")
-        st.metric("Total Duration", "3h 45m", "+45m")
-        st.metric("Training Load", "320", "Optimal range")
+        if protein + carbs + fat > 0:
+            fig = go.Figure(data=[go.Pie(
+                labels=['Protein', 'Carbs', 'Fat'],
+                values=[protein * 4, carbs * 4, fat * 9],  # Convert to calories
+                hole=0.5,
+                marker_colors=['#22c55e', '#3b82f6', '#f59e0b']
+            )])
+            fig.update_layout(
+                height=250,
+                margin=dict(l=20, r=20, t=20, b=20),
+                paper_bgcolor='rgba(0,0,0,0)',
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Log food to see macro distribution")
 
+    st.markdown("<br>", unsafe_allow_html=True)
 
-def create_metrics_page():
-    """Create metrics logging page"""
-    st.markdown("## Log Metrics")
+    # Macro progress bars
+    st.markdown("**Macro Progress**")
+    macro_cols = st.columns(3)
 
-    tab1, tab2, tab3 = st.tabs(["Daily Check-in", "Body Metrics", "Manual Entry"])
+    with macro_cols[0]:
+        protein_pct = summary.get("protein_progress_pct", 0)
+        st.progress(min(100, protein_pct) / 100, text=f"Protein: {protein_pct:.0f}%")
 
-    with tab1:
-        st.markdown("### How are you feeling today?")
+    with macro_cols[1]:
+        carbs_pct = summary.get("carbs_progress_pct", 0)
+        st.progress(min(100, carbs_pct) / 100, text=f"Carbs: {carbs_pct:.0f}%")
 
-        col1, col2 = st.columns(2)
+    with macro_cols[2]:
+        fat_pct = summary.get("fat_progress_pct", 0)
+        st.progress(min(100, fat_pct) / 100, text=f"Fat: {fat_pct:.0f}%")
 
-        with col1:
-            energy = st.slider("Energy Level", 1, 10, 7)
-            mood = st.slider("Mood", 1, 10, 7)
-            stress = st.slider("Stress Level", 1, 10, 4)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-        with col2:
-            sleep_hours = st.number_input("Sleep (hours)", min_value=0.0, max_value=12.0, value=7.5, step=0.5)
-            sleep_quality = st.slider("Sleep Quality", 1, 10, 7)
-            soreness = st.slider("Muscle Soreness", 1, 10, 3)
+    # Two columns: Food log form and Today's entries
+    col1, col2 = st.columns(2)
 
-        if st.button("Submit Check-in", type="primary"):
-            if st.session_state.auth_token:
-                # Submit metrics
-                st.success("Daily check-in recorded!")
-            else:
-                st.warning("Please login to save your check-in")
+    with col1:
+        st.markdown("**Log Food**")
 
-    with tab2:
-        col1, col2 = st.columns(2)
+        with st.form("food_log_form"):
+            food_name = st.text_input("Food Name", placeholder="e.g., Grilled Chicken")
+            meal_type = st.selectbox("Meal", ["breakfast", "lunch", "dinner", "snack"],
+                                     format_func=lambda x: x.title())
 
-        with col1:
-            weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=70.0, step=0.1)
-            body_fat = st.number_input("Body Fat %", min_value=5.0, max_value=50.0, value=20.0, step=0.1)
+            macro_cols = st.columns(4)
+            with macro_cols[0]:
+                calories = st.number_input("Calories", min_value=0, max_value=5000, value=0)
+            with macro_cols[1]:
+                protein_g = st.number_input("Protein (g)", min_value=0.0, max_value=500.0, value=0.0)
+            with macro_cols[2]:
+                carbs_g = st.number_input("Carbs (g)", min_value=0.0, max_value=500.0, value=0.0)
+            with macro_cols[3]:
+                fat_g = st.number_input("Fat (g)", min_value=0.0, max_value=500.0, value=0.0)
 
-        with col2:
-            resting_hr = st.number_input("Resting HR (bpm)", min_value=30, max_value=120, value=60)
-            hrv = st.number_input("HRV (ms)", min_value=10, max_value=200, value=50)
+            submitted = st.form_submit_button("Log Food", type="primary", use_container_width=True)
 
-        if st.button("Save Body Metrics", type="primary"):
-            st.success("Body metrics saved!")
+            if submitted and st.session_state.auth_token:
+                if food_name and calories > 0:
+                    result = api_request("/nutrition/food", "POST", {
+                        "name": food_name,
+                        "meal_type": meal_type,
+                        "calories": calories,
+                        "protein_g": protein_g,
+                        "carbs_g": carbs_g,
+                        "fat_g": fat_g,
+                        "fiber_g": 0,
+                        "serving_size": 1,
+                        "serving_unit": "serving"
+                    })
+                    if result and result.get("success"):
+                        st.success("Food logged!")
+                        st.rerun()
+                    else:
+                        st.error(result.get("error", "Failed to log food"))
+                else:
+                    st.warning("Please enter food name and calories")
+            elif submitted:
+                st.info("Sign in to log food")
 
-    with tab3:
-        metric_type = st.selectbox("Metric Type", [
-            "steps", "calories", "water", "caffeine", "alcohol"
-        ])
-        value = st.number_input("Value", min_value=0.0, value=0.0)
+    with col2:
+        st.markdown("**Today's Food**")
 
-        if st.button("Log Metric", type="primary"):
-            st.success(f"Logged {value} for {metric_type}")
+        if entries:
+            for entry in entries:
+                meal = entry.get("meal_type", "snack").title()
+                name = entry.get("name", "Unknown")
+                cals = entry.get("calories", 0)
+                prot = entry.get("protein_g", 0)
+                carb = entry.get("carbs_g", 0)
+                fat_val = entry.get("fat_g", 0)
 
-
-def create_insights_page():
-    """Create insights page"""
-    st.markdown("## AI Insights")
-
-    # Fetch insights
-    if st.session_state.auth_token:
-        insights = api_request("/predictions/insights")
-        correlations = api_request("/predictions/correlations")
-    else:
-        # Demo insights
-        insights = [
-            {
-                "category": "recommendation",
-                "title": "Optimize Your Sleep",
-                "description": "Your recovery scores are highest when you sleep 7.5+ hours. Try to maintain this consistently."
-            },
-            {
-                "category": "correlation",
-                "title": "Exercise & Sleep Connection",
-                "description": "There's a positive correlation between your workout days and sleep quality. Keep up the active lifestyle!"
-            },
-            {
-                "category": "trend",
-                "title": "Wellness Improving",
-                "description": "Your wellness score has improved by 8% over the past 2 weeks. Great progress!"
-            }
-        ]
-        correlations = [
-            {"factor_a": "sleep", "factor_b": "recovery", "correlation": 0.72,
-             "insight": "Strong positive relationship between sleep and recovery."},
-            {"factor_a": "stress", "factor_b": "hrv", "correlation": -0.58,
-             "insight": "Higher stress is associated with lower HRV."}
-        ]
-
-    colors = get_theme_colors()
-
-    # Display insights
-    st.markdown("### Personalized Insights")
-
-    for insight in (insights or []):
-        category = insight.get("category", "recommendation")
-        icon = {"recommendation": "💡", "correlation": "🔗", "trend": "📈"}.get(category, "💡")
-
-        st.markdown(f"""
-        <div class="insight-card insight-{category}">
-            <h4 style="margin: 0 0 0.5rem;">{icon} {insight.get('title', 'Insight')}</h4>
-            <p style="margin: 0; opacity: 0.8;">{insight.get('description', '')}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Display correlations
-    st.markdown("### Discovered Correlations")
-
-    if correlations:
-        for corr in correlations[:5]:
-            corr_val = corr.get("correlation", 0)
-            color = colors['primary'] if corr_val > 0 else colors['danger']
-            width = abs(corr_val) * 100
-
-            st.markdown(f"""
-            <div class="metric-card" style="padding: 1rem; margin: 0.5rem 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span><strong>{corr.get('factor_a', '').title()}</strong> ↔ <strong>{corr.get('factor_b', '').title()}</strong></span>
-                    <span style="color: {color}; font-weight: 600;">{corr_val:+.2f}</span>
+                st.markdown(f"""
+                <div style="padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid rgba(128,128,128,0.15); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-weight: 500;">{name}</span>
+                            <span style="color: #888; font-size: 0.8rem; margin-left: 0.5rem;">{meal}</span>
+                        </div>
+                        <span style="font-weight: 600;">{cals:.0f} cal</span>
+                    </div>
+                    <div style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">
+                        P: {prot:.0f}g | C: {carb:.0f}g | F: {fat_val:.0f}g
+                    </div>
                 </div>
-                <div style="height: 6px; background: {colors['border']}; border-radius: 3px; margin: 0.5rem 0;">
-                    <div style="height: 100%; width: {width}%; background: {color}; border-radius: 3px;"></div>
-                </div>
-                <p style="margin: 0; font-size: 0.9rem; opacity: 0.7;">{corr.get('insight', '')}</p>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("Log more data to discover correlations in your health metrics.")
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No food logged today")
 
+    # Goal settings section
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("Nutrition Goal Settings"):
+        goal_type = goal.get("goal_type", "general_health")
+        goal_display = {
+            "lose_weight": "Lose Weight",
+            "build_muscle": "Build Muscle",
+            "maintain": "Maintain Weight",
+            "general_health": "General Health"
+        }
 
-def create_settings_page():
-    """Create settings page"""
-    st.markdown("## Settings")
+        st.markdown(f"**Current Goal:** {goal_display.get(goal_type, goal_type)}")
 
-    tab1, tab2, tab3 = st.tabs(["Account", "Preferences", "Integrations"])
-
-    with tab1:
-        st.markdown("### Authentication")
+        if goal.get("bmr"):
+            cols = st.columns(3)
+            with cols[0]:
+                st.metric("BMR", f"{goal.get('bmr', 0):.0f} cal")
+            with cols[1]:
+                st.metric("TDEE", f"{goal.get('tdee', 0):.0f} cal")
+            with cols[2]:
+                st.metric("Target", f"{goal.get('calorie_target', 0):.0f} cal")
 
         if st.session_state.auth_token:
-            st.success(f"Logged in as: {st.session_state.user_email}")
-            if st.button("Logout"):
-                st.session_state.auth_token = None
-                st.session_state.user_email = None
-                st.rerun()
-        else:
-            auth_tab1, auth_tab2 = st.tabs(["Login", "Sign Up"])
+            new_goal = st.selectbox(
+                "Change Goal",
+                ["lose_weight", "build_muscle", "maintain", "general_health"],
+                format_func=lambda x: goal_display.get(x, x),
+                index=list(goal_display.keys()).index(goal_type) if goal_type in goal_display else 3
+            )
 
-            with auth_tab1:
-                email = st.text_input("Email", key="login_email")
-                password = st.text_input("Password", type="password", key="login_password")
-
-                if st.button("Login", type="primary"):
-                    try:
-                        response = requests.post(
-                            f"{API_BASE_URL}/auth/signin",
-                            json={"email": email, "password": password},
-                            timeout=10
-                        )
-                        if response.status_code == 200:
-                            data = response.json()
-                            st.session_state.auth_token = data.get("access_token")
-                            st.session_state.user_email = email
-                            st.success("Logged in successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Invalid credentials")
-                    except Exception as e:
-                        st.error(f"Connection error: {e}")
-
-            with auth_tab2:
-                new_email = st.text_input("Email", key="signup_email")
-                new_password = st.text_input("Password", type="password", key="signup_password")
-                confirm_password = st.text_input("Confirm Password", type="password")
-
-                if st.button("Sign Up", type="primary"):
-                    if new_password != confirm_password:
-                        st.error("Passwords don't match")
-                    else:
-                        try:
-                            response = requests.post(
-                                f"{API_BASE_URL}/auth/signup",
-                                json={"email": new_email, "password": new_password},
-                                timeout=10
-                            )
-                            if response.status_code == 200:
-                                st.success("Account created! Check your email to confirm.")
-                            else:
-                                st.error(response.json().get("detail", "Signup failed"))
-                        except Exception as e:
-                            st.error(f"Connection error: {e}")
-
-    with tab2:
-        st.markdown("### Display Preferences")
-
-        units = st.selectbox("Units", ["Metric", "Imperial"])
-
-        st.markdown("### Notification Preferences")
-        st.checkbox("Daily check-in reminder", value=True)
-        st.checkbox("Weekly summary", value=True)
-        st.checkbox("Achievement notifications", value=True)
-
-        st.markdown("### Baseline Settings")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.number_input("Baseline HRV (ms)", value=50)
-            st.number_input("Baseline Resting HR (bpm)", value=60)
-        with col2:
-            st.number_input("Target Sleep (hours)", value=8.0, step=0.5)
-            st.number_input("Daily Step Goal", value=10000)
-
-    with tab3:
-        st.markdown("### Connected Services")
-
-        integrations = [
-            ("Apple Health", "🍎", False),
-            ("Strava", "🚴", False),
-            ("Garmin", "⌚", False),
-            ("Oura Ring", "💍", False),
-            ("Whoop", "📊", False),
-        ]
-
-        for name, icon, connected in integrations:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                status = "✅ Connected" if connected else "Not connected"
-                st.markdown(f"{icon} **{name}** - {status}")
-            with col2:
-                if connected:
-                    st.button("Disconnect", key=f"disconnect_{name}")
+            if st.button("Update Goal"):
+                result = api_request("/nutrition/goals", "POST", {
+                    "goal_type": new_goal,
+                    "adjust_for_activity": True
+                })
+                if result and result.get("success"):
+                    st.success("Goal updated!")
+                    st.rerun()
                 else:
-                    st.button("Connect", key=f"connect_{name}")
+                    st.error(result.get("error", "Failed to update goal"))
+
+
+def render_settings():
+    """Render settings page."""
+    st.markdown("**Profile**")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.text_input("Email", value="demo@healthpulse.app", disabled=True)
+        st.selectbox("Units", ["Metric (kg, km)", "Imperial (lbs, mi)"])
+
+    with col2:
+        st.number_input("Daily Step Goal", value=10000, step=500)
+        st.number_input("Sleep Goal (hours)", value=8.0, step=0.5)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("**Data Sources**")
+
+    sources = {
+        "Source": ["Apple Health", "Fitbit", "Garmin", "Manual Entry"],
+        "Status": ["Connected", "Not Connected", "Not Connected", "Active"]
+    }
+
+    st.dataframe(
+        pd.DataFrame(sources),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if st.button("Sign Out", type="secondary"):
+        st.session_state.auth_token = None
+        st.session_state.user_email = None
+        st.rerun()
 
 
 def main():
-    """Main application"""
+    """Main app entry point."""
     init_session_state()
-    apply_theme_css()
 
-    create_header()
-    create_nav()
+    # Show auth screen if not logged in
+    if not st.session_state.auth_token:
+        render_auth()
+        return
 
-    st.markdown("---")
+    render_header()
 
-    # Route to current page
-    if st.session_state.current_page == 'Dashboard':
-        create_dashboard_page()
-    elif st.session_state.current_page == 'Workouts':
-        create_workouts_page()
-    elif st.session_state.current_page == 'Metrics':
-        create_metrics_page()
-    elif st.session_state.current_page == 'Insights':
-        create_insights_page()
-    elif st.session_state.current_page == 'Settings':
-        create_settings_page()
+    # Navigation tabs
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Dashboard",
+        "Nutrition",
+        "Workouts",
+        "Metrics",
+        "Insights",
+        "Settings"
+    ])
+
+    with tab1:
+        render_dashboard()
+
+    with tab2:
+        render_nutrition()
+
+    with tab3:
+        render_workouts()
+
+    with tab4:
+        render_metrics()
+
+    with tab5:
+        render_insights()
+
+    with tab6:
+        render_settings()
 
 
 if __name__ == "__main__":

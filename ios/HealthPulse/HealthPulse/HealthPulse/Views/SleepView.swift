@@ -33,6 +33,15 @@ struct SleepView: View {
                             actionTitle: "Retry",
                             action: { Task { await loadData() } }
                         )
+                    } else if summary == nil && history.isEmpty {
+                        // No sleep data yet - show empty state
+                        EmptyStateView(
+                            icon: "moon.zzz",
+                            title: "No Sleep Data Yet",
+                            message: "Log your first night's sleep to start tracking your rest patterns.",
+                            actionTitle: "Log Sleep",
+                            action: { showingLogSheet = true }
+                        )
                     } else {
                         // Today's Sleep Card
                         if let summary = summary {

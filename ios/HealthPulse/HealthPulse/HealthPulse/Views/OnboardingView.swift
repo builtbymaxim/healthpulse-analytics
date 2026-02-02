@@ -161,7 +161,17 @@ struct OnboardingView: View {
             }
 
             Spacer()
-            Spacer()
+
+            // Sign in option for users who already have an account
+            Button {
+                // Sign out current account and return to login
+                authService.signOut()
+            } label: {
+                Text("Already have an account? Sign In")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+            }
+            .padding(.bottom, 8)
         }
         .padding()
     }
@@ -749,9 +759,14 @@ struct OnboardingView: View {
     private func loadCaloriePreview() async {
         isLoadingPreview = true
         do {
+            // Pass all profile values since they're not saved yet during onboarding
             caloriePreview = try await APIService.shared.previewCalorieTargets(
                 goalType: fitnessGoal,
-                weightKg: weightKg
+                weightKg: weightKg,
+                age: age,
+                heightCm: heightCm,
+                gender: gender.rawValue,
+                activityLevel: activityLevel.rawValue
             )
         } catch {
             print("Failed to load calorie preview: \(error)")

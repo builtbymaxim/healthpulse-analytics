@@ -56,8 +56,8 @@ class SleepService:
     def __init__(self):
         self.supabase = get_supabase_client()
 
-    async def get_sleep_summary(self, user_id: UUID, target_date: date | None = None) -> SleepSummary:
-        """Get sleep summary for a specific date."""
+    async def get_sleep_summary(self, user_id: UUID, target_date: date | None = None) -> SleepSummary | None:
+        """Get sleep summary for a specific date. Returns None if no sleep data exists."""
         target = target_date or date.today()
         # Sleep data is usually logged for the previous night
         prev_day = target - timedelta(days=1)
@@ -65,12 +65,16 @@ class SleepService:
         # Fetch sleep metrics for this date range
         metrics = await self._get_sleep_metrics(user_id, target, target)
 
+        # If no sleep data exists, return None instead of defaults
+        if not metrics or "sleep_duration" not in metrics:
+            return None
+
         # Get previous 7 days for trend
         week_ago = target - timedelta(days=7)
         historical = await self._get_sleep_metrics(user_id, week_ago, prev_day)
 
         # Calculate values
-        duration = metrics.get("sleep_duration", 7.0)
+        duration = metrics.get("sleep_duration", 0)
         quality = metrics.get("sleep_quality", 70.0)
         deep = metrics.get("deep_sleep", duration * 0.2)  # Default 20% deep
         rem = metrics.get("rem_sleep", duration * 0.25)   # Default 25% REM

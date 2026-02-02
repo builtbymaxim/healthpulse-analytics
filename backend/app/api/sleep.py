@@ -26,12 +26,12 @@ class SleepLogRequest(BaseModel):
 
 
 # Endpoints
-@router.get("/summary", response_model=SleepSummary)
+@router.get("/summary", response_model=SleepSummary | None)
 async def get_sleep_summary(
     target_date: date | None = None,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Get sleep summary for a specific date (defaults to today)."""
+    """Get sleep summary for a specific date (defaults to today). Returns null if no sleep data exists."""
     service = get_sleep_service()
     return await service.get_sleep_summary(
         user_id=current_user.id,

@@ -30,10 +30,10 @@ class APIService {
     }()
 
     private init() {
-        // Load from config or environment
-        // Use your Mac's local IP for physical device testing
+        // Production URL (Railway deployment)
+        // For local development, set API_BASE_URL environment variable in Xcode scheme
         self.baseURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
-            ?? "http://192.168.0.149:8000/api/v1"
+            ?? "https://healthpulse-analytics-production.up.railway.app/api/v1"
     }
 
     func setAuthToken(_ token: String?) {
@@ -74,10 +74,84 @@ class APIService {
             return try decoder.decode(T.self, from: data)
         case 401:
             // Notify app that auth failed - should trigger logout
+            print("API 401 Unauthorized for \(endpoint)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                print("  Response: \(errorBody)")
+            }
             NotificationCenter.default.post(name: .authenticationFailed, object: nil)
             throw APIError.unauthorized
         case 404:
+            print("API 404 Not Found for \(endpoint)")
             throw APIError.notFound
+        case 422:
+            // Validation error - log the details
+            print("API 422 Validation Error for \(endpoint)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                print("  Response: \(errorBody)")
+            }
+            throw APIError.validationError
+        case 500...599:
+            print("API \(httpResponse.statusCode) Server Error for \(endpoint)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                print("  Response: \(errorBody)")
+            }
+            throw APIError.serverError
+        default:
+            print("API \(httpResponse.statusCode) Unknown Error for \(endpoint)")
+            if let errorBody = String(data: data, encoding: .utf8) {
+                print("  Response: \(errorBody)")
+            }
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+
+    /// Request that can return null from the backend (returns nil instead of throwing)
+    private func optionalRequest<T: Decodable>(
+        endpoint: String,
+        method: String = "GET",
+        body: (any Encodable)? = nil
+    ) async throws -> T? {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let body = body {
+            request.httpBody = try encoder.encode(body)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200...299:
+            // Check if response is null (literally "null" in JSON)
+            if let str = String(data: data, encoding: .utf8), str.trimmingCharacters(in: .whitespaces) == "null" {
+                return nil
+            }
+            // Check for empty response
+            if data.isEmpty {
+                return nil
+            }
+            return try decoder.decode(T.self, from: data)
+        case 401:
+            print("API 401 Unauthorized for \(endpoint)")
+            NotificationCenter.default.post(name: .authenticationFailed, object: nil)
+            throw APIError.unauthorized
+        case 404:
+            return nil  // Not found means no data
+        case 422:
+            throw APIError.validationError
         case 500...599:
             throw APIError.serverError
         default:
@@ -415,14 +489,14 @@ class APIService {
 
     // MARK: - Sleep
 
-    func getSleepSummary(date: Date? = nil) async throws -> SleepSummary {
+    func getSleepSummary(date: Date? = nil) async throws -> SleepSummary? {
         var endpoint = "/sleep/summary"
         if let date = date {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             endpoint += "?target_date=\(formatter.string(from: date))"
         }
-        return try await request(endpoint: endpoint)
+        return try await optionalRequest(endpoint: endpoint)
     }
 
     func getSleepHistory(days: Int = 7) async throws -> [SleepEntry] {
@@ -474,6 +548,7 @@ enum APIError: Error, LocalizedError {
     case unauthorized
     case notFound
     case serverError
+    case validationError
     case badRequest(String)
     case unknown(Int)
 
@@ -493,6 +568,8 @@ enum APIError: Error, LocalizedError {
             return "Resource not found"
         case .serverError:
             return "Server error. Please try again later."
+        case .validationError:
+            return "Invalid data. Please check your input."
         case .badRequest(let msg):
             return msg
         case .unknown(let code):
