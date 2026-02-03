@@ -7,6 +7,7 @@ from uuid import UUID
 
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
+from app.services.nutrition_calculator import get_nutrition_calculator
 
 router = APIRouter()
 
@@ -284,6 +285,34 @@ async def complete_onboarding(
                 settings["target_weight_kg"] = profile.target_weight_kg
             supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
             print(f"  Settings updated")
+
+        # Calculate and create nutrition goal
+        calculator = get_nutrition_calculator()
+        targets = calculator.calculate_targets(
+            weight_kg=profile.weight_kg,
+            height_cm=profile.height_cm,
+            age=profile.age,
+            gender=profile.gender,
+            activity_level=profile.activity_level,
+            goal_type=profile.fitness_goal,
+        )
+        print(f"  Calculated targets: BMR={targets.bmr}, TDEE={targets.tdee}, Calories={targets.calorie_target}")
+
+        # Upsert nutrition goal (delete existing first, then insert)
+        supabase.table("nutrition_goals").delete().eq("user_id", str(current_user.id)).execute()
+        nutrition_goal = {
+            "user_id": str(current_user.id),
+            "goal_type": profile.fitness_goal,
+            "bmr": targets.bmr,
+            "tdee": targets.tdee,
+            "calorie_target": targets.calorie_target,
+            "protein_target_g": targets.protein_g,
+            "carbs_target_g": targets.carbs_g,
+            "fat_target_g": targets.fat_g,
+            "adjust_for_activity": True,
+        }
+        supabase.table("nutrition_goals").insert(nutrition_goal).execute()
+        print(f"  Nutrition goal created with {targets.calorie_target} kcal target")
 
         # Re-fetch the updated profile
         updated = (
