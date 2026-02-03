@@ -237,51 +237,70 @@ async def complete_onboarding(
     """Complete user onboarding with profile data."""
     supabase = get_supabase_client()
 
-    # Update profile with onboarding data
-    update_data = {
-        "age": profile.age,
-        "height_cm": profile.height_cm,
-        "gender": profile.gender,
-        "activity_level": profile.activity_level,
-        "fitness_goal": profile.fitness_goal,
-    }
+    print(f"Onboarding for user {current_user.id}: {profile.model_dump()}")
 
-    result = (
-        supabase.table("profiles")
-        .update(update_data)
-        .eq("id", str(current_user.id))
-        .execute()
-    )
-
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    # Also log the initial weight as a metric
-    if profile.weight_kg:
-        weight_data = {
-            "user_id": str(current_user.id),
-            "metric_type": "weight",
-            "value": profile.weight_kg,
-            "unit": "kg",
-            "source": "manual",
-            "recorded_at": datetime.now(timezone.utc).isoformat(),
+    try:
+        # Update profile with onboarding data
+        update_data = {
+            "age": profile.age,
+            "height_cm": profile.height_cm,
+            "gender": profile.gender,
+            "activity_level": profile.activity_level,
+            "fitness_goal": profile.fitness_goal,
         }
-        supabase.table("health_metrics").insert(weight_data).execute()
 
-    # Update settings with target sleep if provided
-    if profile.target_sleep_hours:
-        settings = result.data[0].get("settings") or {}
-        settings["target_sleep_hours"] = profile.target_sleep_hours
-        if profile.target_weight_kg:
-            settings["target_weight_kg"] = profile.target_weight_kg
-        supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
+        print(f"  Updating profile: {update_data}")
+        result = (
+            supabase.table("profiles")
+            .update(update_data)
+            .eq("id", str(current_user.id))
+            .execute()
+        )
 
-    # Re-fetch the updated profile
-    updated = (
-        supabase.table("profiles")
-        .select("*")
-        .eq("id", str(current_user.id))
-        .execute()
-    )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Profile not found")
 
-    return updated.data[0] if updated.data else result.data[0]
+        print(f"  Profile updated successfully")
+
+        # Also log the initial weight as a metric
+        if profile.weight_kg:
+            weight_data = {
+                "user_id": str(current_user.id),
+                "metric_type": "weight",
+                "value": profile.weight_kg,
+                "unit": "kg",
+                "source": "manual",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            print(f"  Logging weight: {weight_data}")
+            supabase.table("health_metrics").insert(weight_data).execute()
+            print(f"  Weight logged successfully")
+
+        # Update settings with target sleep if provided
+        if profile.target_sleep_hours:
+            settings = result.data[0].get("settings") or {}
+            settings["target_sleep_hours"] = profile.target_sleep_hours
+            if profile.target_weight_kg:
+                settings["target_weight_kg"] = profile.target_weight_kg
+            supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
+            print(f"  Settings updated")
+
+        # Re-fetch the updated profile
+        updated = (
+            supabase.table("profiles")
+            .select("*")
+            .eq("id", str(current_user.id))
+            .execute()
+        )
+
+        print(f"  Onboarding complete!")
+        return updated.data[0] if updated.data else result.data[0]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"  Onboarding error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save onboarding data: {str(e)}"
+        )

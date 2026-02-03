@@ -12,6 +12,12 @@ CREATE TABLE public.profiles (
     email TEXT NOT NULL,
     display_name TEXT,
     avatar_url TEXT,
+    -- Physical profile for BMR/TDEE calculations
+    age INTEGER CHECK (age >= 13 AND age <= 120),
+    height_cm DECIMAL CHECK (height_cm >= 100 AND height_cm <= 250),
+    gender TEXT,  -- 'male', 'female', 'other'
+    activity_level TEXT DEFAULT 'moderate',  -- 'sedentary', 'light', 'moderate', 'active', 'very_active'
+    fitness_goal TEXT,  -- 'lose_weight', 'build_muscle', 'maintain', 'general_health'
     settings JSONB DEFAULT '{
         "units": "metric",
         "timezone": "UTC",
@@ -320,13 +326,6 @@ CREATE TYPE nutrition_goal_type AS ENUM (
 CREATE TYPE meal_type AS ENUM (
     'breakfast', 'lunch', 'dinner', 'snack'
 );
-
--- Extend profiles with physical data for BMR/TDEE calculation
--- Run as ALTER if table already exists:
--- ALTER TABLE public.profiles ADD COLUMN age INTEGER CHECK (age >= 13 AND age <= 120);
--- ALTER TABLE public.profiles ADD COLUMN height_cm DECIMAL CHECK (height_cm >= 100 AND height_cm <= 250);
--- ALTER TABLE public.profiles ADD COLUMN gender gender;
--- ALTER TABLE public.profiles ADD COLUMN activity_level activity_level DEFAULT 'moderate';
 
 -- ============================================
 -- NUTRITION GOALS TABLE
