@@ -510,6 +510,31 @@ class APIService {
     func logSleep(_ request: SleepLogRequest) async throws -> EmptyResponse {
         try await self.request(endpoint: "/sleep/log", method: "POST", body: request)
     }
+
+    // MARK: - Training Plans
+
+    func getTodaysWorkout() async throws -> TodayWorkoutResponse {
+        try await request(endpoint: "/training-plans/today")
+    }
+
+    func getActiveTrainingPlan() async throws -> TrainingPlanSummary? {
+        try await optionalRequest(endpoint: "/training-plans/active")
+    }
+
+    func getTrainingPlanTemplates(modality: String? = nil, daysPerWeek: Int? = nil) async throws -> [PlanTemplate] {
+        var endpoint = "/training-plans/templates"
+        var params: [String] = []
+        if let modality = modality {
+            params.append("modality=\(modality)")
+        }
+        if let daysPerWeek = daysPerWeek {
+            params.append("days_per_week=\(daysPerWeek)")
+        }
+        if !params.isEmpty {
+            endpoint += "?" + params.joined(separator: "&")
+        }
+        return try await request(endpoint: endpoint)
+    }
 }
 
 // Helper for empty responses

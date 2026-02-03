@@ -326,3 +326,82 @@ struct Correlation: Codable {
         case confidence
     }
 }
+
+// MARK: - Training Plans
+
+struct TodayWorkoutResponse: Codable {
+    let hasPlan: Bool
+    let isRestDay: Bool
+    let workoutName: String?
+    let workoutFocus: String?
+    let exercises: [PlannedExercise]?
+    let estimatedMinutes: Int?
+    let dayOfWeek: Int
+    let planName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case hasPlan = "has_plan"
+        case isRestDay = "is_rest_day"
+        case workoutName = "workout_name"
+        case workoutFocus = "workout_focus"
+        case exercises
+        case estimatedMinutes = "estimated_minutes"
+        case dayOfWeek = "day_of_week"
+        case planName = "plan_name"
+    }
+}
+
+struct PlannedExercise: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let sets: Int?
+    let reps: String?
+    let notes: String?
+}
+
+struct TrainingPlanSummary: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let description: String?
+    let daysPerWeek: Int
+    let schedule: [String: String]
+    let isActive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description
+        case daysPerWeek = "days_per_week"
+        case schedule
+        case isActive = "is_active"
+    }
+}
+
+struct PlanTemplate: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let description: String?
+    let daysPerWeek: Int
+    let goalType: String
+    let subGoals: [String]?
+    let modality: String
+    let equipmentRequired: [String]?
+    let difficulty: String
+    let workouts: [TemplateWorkout]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description
+        case daysPerWeek = "days_per_week"
+        case goalType = "goal_type"
+        case subGoals = "sub_goals"
+        case modality
+        case equipmentRequired = "equipment_required"
+        case difficulty, workouts
+    }
+}
+
+struct TemplateWorkout: Codable {
+    let day: Int
+    let name: String
+    let focus: String?
+    let estimatedMinutes: Int?
+    let exercises: [PlannedExercise]?
+}

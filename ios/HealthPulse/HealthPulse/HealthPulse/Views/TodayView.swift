@@ -17,6 +17,30 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // New User Welcome Checklist
+                    if viewModel.isNewUser {
+                        WelcomeChecklistCard(
+                            hasLoggedWorkout: viewModel.hasLoggedWorkout,
+                            hasLoggedMeal: viewModel.hasLoggedMeal,
+                            hasLoggedSleep: viewModel.hasLoggedSleep,
+                            hasSetupTrainingPlan: viewModel.hasSetupTrainingPlan,
+                            onWorkoutTap: { tabRouter.navigateTo(.workout) },
+                            onMealTap: { tabRouter.navigateTo(.nutrition) },
+                            onSleepTap: { tabRouter.navigateTo(.sleep) },
+                            onTrainingPlanTap: { /* TODO: Navigate to training plan setup */ }
+                        )
+                        .padding(.horizontal)
+                    }
+
+                    // Today's Workout Card (from training plan)
+                    if let todaysWorkout = viewModel.todaysWorkout {
+                        TodayWorkoutCard(
+                            workout: todaysWorkout,
+                            onTap: { tabRouter.navigateTo(.workout) }
+                        )
+                        .padding(.horizontal)
+                    }
+
                     // Today's Nutrition Progress
                     NutritionProgressCard(
                         calories: viewModel.todayCalories,
@@ -58,8 +82,8 @@ struct TodayView: View {
                         .padding(.horizontal)
                     }
 
-                    // Nutrition Adherence (weekly habits)
-                    if !viewModel.weeklyNutritionData.isEmpty {
+                    // Nutrition Adherence (weekly habits) - only show if has real data
+                    if viewModel.hasNutritionHistory {
                         NutritionAdherenceCard(
                             weeklyData: viewModel.weeklyNutritionData,
                             adherenceScore: viewModel.weeklyAdherenceScore
@@ -71,17 +95,19 @@ struct TodayView: View {
                         .padding(.horizontal)
                     }
 
-                    // Sleep Pattern Card
-                    SleepPatternCard(
-                        avgHours: viewModel.avgSleepHours,
-                        consistencyScore: viewModel.sleepConsistencyScore,
-                        trend: viewModel.sleepTrend
-                    )
-                    .onTapGesture {
-                        tabRouter.navigateTo(.sleep)
-                        HapticsManager.shared.light()
+                    // Sleep Pattern Card - only show if has data
+                    if viewModel.hasSleepData {
+                        SleepPatternCard(
+                            avgHours: viewModel.avgSleepHours,
+                            consistencyScore: viewModel.sleepConsistencyScore,
+                            trend: viewModel.sleepTrend
+                        )
+                        .onTapGesture {
+                            tabRouter.navigateTo(.sleep)
+                            HapticsManager.shared.light()
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
                     // Quick Stats Row
                     HStack(spacing: 12) {
@@ -116,27 +142,29 @@ struct TodayView: View {
                     }
                     .padding(.horizontal)
 
-                    // Recovery & Readiness (compact)
-                    HStack(spacing: 12) {
-                        CompactScoreCard(
-                            title: "Recovery",
-                            score: viewModel.recoveryScore,
-                            status: viewModel.recoveryStatus,
-                            color: statusColor(viewModel.recoveryStatus)
-                        )
+                    // Recovery & Readiness (compact) - only show if has enough data
+                    if !viewModel.isNewUser {
+                        HStack(spacing: 12) {
+                            CompactScoreCard(
+                                title: "Recovery",
+                                score: viewModel.recoveryScore,
+                                status: viewModel.recoveryStatus,
+                                color: statusColor(viewModel.recoveryStatus)
+                            )
 
-                        CompactScoreCard(
-                            title: "Readiness",
-                            score: viewModel.readinessScore,
-                            status: viewModel.recommendedIntensity,
-                            color: .blue
-                        )
-                        .onTapGesture {
-                            tabRouter.navigateTo(.workout)
-                            HapticsManager.shared.light()
+                            CompactScoreCard(
+                                title: "Readiness",
+                                score: viewModel.readinessScore,
+                                status: viewModel.recommendedIntensity,
+                                color: .blue
+                            )
+                            .onTapGesture {
+                                tabRouter.navigateTo(.workout)
+                                HapticsManager.shared.light()
+                            }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
                     Spacer(minLength: 20)
                 }
@@ -160,6 +188,265 @@ struct TodayView: View {
         case "fatigued": return .red
         default: return .gray
         }
+    }
+}
+
+// MARK: - Welcome Checklist Card
+
+struct WelcomeChecklistCard: View {
+    let hasLoggedWorkout: Bool
+    let hasLoggedMeal: Bool
+    let hasLoggedSleep: Bool
+    let hasSetupTrainingPlan: Bool
+    let onWorkoutTap: () -> Void
+    let onMealTap: () -> Void
+    let onSleepTap: () -> Void
+    let onTrainingPlanTap: () -> Void
+
+    private var completedCount: Int {
+        [hasLoggedWorkout, hasLoggedMeal, hasLoggedSleep, hasSetupTrainingPlan].filter { $0 }.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Welcome to HealthPulse!")
+                        .font(.headline)
+                    Text("Let's build your routine")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(completedCount)/4")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.primary.opacity(0.15))
+                    .foregroundStyle(AppTheme.primary)
+                    .clipShape(Capsule())
+            }
+
+            // Checklist items
+            VStack(spacing: 12) {
+                ChecklistItem(
+                    isCompleted: hasLoggedWorkout,
+                    title: "Complete your first workout",
+                    icon: "dumbbell.fill",
+                    action: onWorkoutTap
+                )
+
+                ChecklistItem(
+                    isCompleted: hasLoggedMeal,
+                    title: "Log today's meals",
+                    icon: "fork.knife",
+                    action: onMealTap
+                )
+
+                ChecklistItem(
+                    isCompleted: hasLoggedSleep,
+                    title: "Track your sleep",
+                    icon: "moon.zzz.fill",
+                    action: onSleepTap
+                )
+
+                ChecklistItem(
+                    isCompleted: hasSetupTrainingPlan,
+                    title: "Set up a training plan",
+                    icon: "calendar.badge.clock",
+                    action: onTrainingPlanTap
+                )
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+    }
+}
+
+struct ChecklistItem: View {
+    let isCompleted: Bool
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: {
+            if !isCompleted {
+                HapticsManager.shared.light()
+                action()
+            }
+        }) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isCompleted ? .green : .secondary)
+
+                // Icon
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(isCompleted ? .secondary : AppTheme.primary)
+                    .frame(width: 24)
+
+                // Title
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(isCompleted ? .secondary : .primary)
+                    .strikethrough(isCompleted, color: .secondary)
+
+                Spacer()
+
+                if !isCompleted {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(isCompleted)
+    }
+}
+
+// MARK: - Today's Workout Card
+
+struct TodayWorkoutCard: View {
+    let workout: TodayWorkoutResponse
+    let onTap: () -> Void
+
+    private var dayName: String {
+        let days = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return workout.dayOfWeek >= 1 && workout.dayOfWeek <= 7 ? days[workout.dayOfWeek] : ""
+    }
+
+    var body: some View {
+        Button(action: {
+            HapticsManager.shared.light()
+            onTap()
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Today's Workout")
+                            .font(.headline)
+                        if let planName = workout.planName {
+                            Text(planName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Text(dayName)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.15))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
+
+                if workout.isRestDay {
+                    // Rest day view
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.purple.opacity(0.15))
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: "bed.double.fill")
+                                .font(.title2)
+                                .foregroundStyle(.purple)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Rest Day")
+                                .font(.title3.bold())
+
+                            Text("Recovery is part of the plan")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                } else {
+                    // Workout day view
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: "dumbbell.fill")
+                                .font(.title2)
+                                .foregroundStyle(.green)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workout.workoutName ?? "Workout")
+                                .font(.title3.bold())
+
+                            HStack(spacing: 12) {
+                                if let focus = workout.workoutFocus {
+                                    Label(focus, systemImage: "target")
+                                }
+                                if let minutes = workout.estimatedMinutes {
+                                    Label("\(minutes) min", systemImage: "clock")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    // Exercise preview (show first 3)
+                    if let exercises = workout.exercises, !exercises.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(exercises.prefix(3)) { exercise in
+                                HStack {
+                                    Circle()
+                                        .fill(Color.green.opacity(0.5))
+                                        .frame(width: 6, height: 6)
+                                    Text(exercise.name)
+                                        .font(.caption)
+                                    if let sets = exercise.sets, let reps = exercise.reps {
+                                        Spacer()
+                                        Text("\(sets)×\(reps)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            if exercises.count > 3 {
+                                Text("+\(exercises.count - 3) more exercises")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 14)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -615,6 +902,20 @@ struct WorkoutSummary {
 
 @MainActor
 class TodayViewModel: ObservableObject {
+    // New user tracking
+    @Published var isNewUser: Bool = true
+    @Published var hasLoggedWorkout: Bool = false
+    @Published var hasLoggedMeal: Bool = false
+    @Published var hasLoggedSleep: Bool = false
+    @Published var hasSetupTrainingPlan: Bool = false
+
+    // Today's workout from training plan
+    @Published var todaysWorkout: TodayWorkoutResponse?
+
+    // Data availability flags
+    @Published var hasNutritionHistory: Bool = false
+    @Published var hasSleepData: Bool = false
+
     // Nutrition
     @Published var todayCalories: Double = 0
     @Published var calorieGoal: Double = 2000
@@ -630,8 +931,8 @@ class TodayViewModel: ObservableObject {
     @Published var weeklyAdherenceScore: Int = 0
 
     // Sleep patterns
-    @Published var avgSleepHours: Double = 7.5
-    @Published var sleepConsistencyScore: Int = 75
+    @Published var avgSleepHours: Double = 0
+    @Published var sleepConsistencyScore: Int = 0
     @Published var sleepTrend: TrendDirection = .stable
 
     // Workout streak
@@ -651,10 +952,16 @@ class TodayViewModel: ObservableObject {
     func loadData() async {
         isLoading = true
 
+        // Load user profile to determine if new user
+        await loadUserProfile()
+
+        // Load today's workout from training plan
+        await loadTodaysWorkout()
+
         // Load nutrition summary
         await loadNutrition()
 
-        // Load weekly nutrition adherence
+        // Load weekly nutrition adherence (real data)
         await loadWeeklyNutrition()
 
         // Load workout data
@@ -663,10 +970,47 @@ class TodayViewModel: ObservableObject {
         // Load sleep patterns
         await loadSleepPatterns()
 
-        // Load predictions
-        await loadPredictions()
+        // Only load predictions if not a new user (needs data)
+        if !isNewUser {
+            await loadPredictions()
+        }
 
         isLoading = false
+    }
+
+    private func loadUserProfile() async {
+        do {
+            let user = try await APIService.shared.getProfile()
+            let calendar = Calendar.current
+            let daysSinceCreation = calendar.dateComponents([.day], from: user.createdAt, to: Date()).day ?? 0
+
+            // User is "new" if account is < 7 days old
+            isNewUser = daysSinceCreation < 7
+        } catch {
+            print("Failed to load user profile: \(error)")
+            // Default to showing new user experience
+            isNewUser = true
+        }
+    }
+
+    private func loadTodaysWorkout() async {
+        do {
+            let workout = try await APIService.shared.getTodaysWorkout()
+
+            // Update hasSetupTrainingPlan based on whether they have a plan
+            hasSetupTrainingPlan = workout.hasPlan
+
+            // Only show the card if they have a plan
+            if workout.hasPlan {
+                todaysWorkout = workout
+            } else {
+                todaysWorkout = nil
+            }
+        } catch {
+            print("Failed to load today's workout: \(error)")
+            hasSetupTrainingPlan = false
+            todaysWorkout = nil
+        }
     }
 
     private func loadNutrition() async {
@@ -680,39 +1024,75 @@ class TodayViewModel: ObservableObject {
             proteinGoal = summary.proteinTargetG
             carbsGoal = summary.carbsTargetG
             fatGoal = summary.fatTargetG
+
+            // Check if user has logged any food today
+            hasLoggedMeal = summary.totalCalories > 0
         } catch {
             print("Failed to load nutrition: \(error)")
         }
     }
 
     private func loadWeeklyNutrition() async {
-        // Generate last 7 days of adherence data
-        // In a real app, this would come from an API endpoint
-        let calendar = Calendar.current
-        var adherenceData: [DayAdherence] = []
-        var onTargetDays = 0
+        do {
+            let weeklyData = try await APIService.shared.getWeeklyNutritionSummary()
 
-        for dayOffset in (0..<7).reversed() {
-            let date = calendar.date(byAdding: .day, value: -dayOffset, to: Date())!
-            // Simulate progress - in real app, fetch from API
-            let progress = Double.random(in: 0.5...1.3)
-            let isOnTarget = progress >= 0.8 && progress <= 1.2
+            // Check if there's any real data (non-zero calories on any day)
+            let daysWithData = weeklyData.filter { $0.totalCalories > 0 }
+            hasNutritionHistory = daysWithData.count >= 2  // Need at least 2 days of data to show chart
 
-            if isOnTarget { onTargetDays += 1 }
+            guard hasNutritionHistory else {
+                weeklyNutritionData = []
+                weeklyAdherenceScore = 0
+                return
+            }
 
-            adherenceData.append(DayAdherence(
-                day: date,
-                progress: progress,
-                isOnTarget: isOnTarget
-            ))
+            // Convert API data to DayAdherence format
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            var adherenceData: [DayAdherence] = []
+            var onTargetDays = 0
+
+            for day in weeklyData {
+                guard let date = dateFormatter.date(from: day.date) else { continue }
+
+                let progress = day.calorieTarget > 0 ? day.totalCalories / day.calorieTarget : 0
+                let isOnTarget = progress >= 0.8 && progress <= 1.2
+
+                if isOnTarget && day.totalCalories > 0 { onTargetDays += 1 }
+
+                adherenceData.append(DayAdherence(
+                    day: date,
+                    progress: progress,
+                    isOnTarget: isOnTarget
+                ))
+            }
+
+            weeklyNutritionData = adherenceData
+            weeklyAdherenceScore = daysWithData.isEmpty ? 0 : Int((Double(onTargetDays) / Double(daysWithData.count)) * 100)
+        } catch {
+            print("Failed to load weekly nutrition: \(error)")
+            hasNutritionHistory = false
+            weeklyNutritionData = []
+            weeklyAdherenceScore = 0
         }
-
-        weeklyNutritionData = adherenceData
-        weeklyAdherenceScore = Int((Double(onTargetDays) / 7.0) * 100)
     }
 
     private func loadSleepPatterns() async {
         do {
+            let history = try await APIService.shared.getSleepHistory(days: 7)
+
+            // Check if there's any sleep data
+            hasSleepData = !history.isEmpty
+            hasLoggedSleep = !history.isEmpty
+
+            guard hasSleepData else {
+                avgSleepHours = 0
+                sleepConsistencyScore = 0
+                sleepTrend = .stable
+                return
+            }
+
             let analytics = try await APIService.shared.getSleepAnalytics(days: 7)
             avgSleepHours = analytics.avgDurationHours
             sleepConsistencyScore = Int(analytics.consistencyScore)
@@ -727,9 +1107,9 @@ class TodayViewModel: ObservableObject {
             }
         } catch {
             print("Failed to load sleep patterns: \(error)")
-            // Use defaults
-            avgSleepHours = 7.5
-            sleepConsistencyScore = 75
+            hasSleepData = false
+            avgSleepHours = 0
+            sleepConsistencyScore = 0
             sleepTrend = .stable
         }
     }
@@ -737,6 +1117,9 @@ class TodayViewModel: ObservableObject {
     private func loadWorkouts() async {
         do {
             let workouts = try await APIService.shared.getWorkouts(days: 30)
+
+            // Update checklist status
+            hasLoggedWorkout = !workouts.isEmpty
 
             // Calculate streak
             workoutStreak = calculateStreak(from: workouts)

@@ -38,6 +38,11 @@ class OnboardingProfile(BaseModel):
     activity_level: str
     target_weight_kg: float | None = None
     target_sleep_hours: float | None = None
+    # Training preferences
+    training_modality: str | None = None
+    equipment: list[str] | None = None
+    days_per_week: int | None = None
+    preferred_days: list[int] | None = None
 
 
 class UserSettings(BaseModel):
@@ -277,14 +282,24 @@ async def complete_onboarding(
             supabase.table("health_metrics").insert(weight_data).execute()
             print(f"  Weight logged successfully")
 
-        # Update settings with target sleep if provided
+        # Update settings with target sleep and training preferences
+        settings = result.data[0].get("settings") or {}
         if profile.target_sleep_hours:
-            settings = result.data[0].get("settings") or {}
             settings["target_sleep_hours"] = profile.target_sleep_hours
-            if profile.target_weight_kg:
-                settings["target_weight_kg"] = profile.target_weight_kg
-            supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
-            print(f"  Settings updated")
+        if profile.target_weight_kg:
+            settings["target_weight_kg"] = profile.target_weight_kg
+        # Add training preferences to settings
+        if profile.training_modality:
+            settings["training_modality"] = profile.training_modality
+        if profile.equipment:
+            settings["equipment"] = profile.equipment
+        if profile.days_per_week:
+            settings["days_per_week"] = profile.days_per_week
+        if profile.preferred_days:
+            settings["preferred_days"] = profile.preferred_days
+
+        supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
+        print(f"  Settings updated with training preferences")
 
         # Calculate and create nutrition goal
         calculator = get_nutrition_calculator()
@@ -313,6 +328,46 @@ async def complete_onboarding(
         }
         supabase.table("nutrition_goals").insert(nutrition_goal).execute()
         print(f"  Nutrition goal created with {targets.calorie_target} kcal target")
+
+        # Create training plan if training preferences were provided
+        if profile.training_modality and profile.days_per_week:
+            try:
+                # Find a matching plan template
+                template_result = (
+                    supabase.table("plan_templates")
+                    .select("*")
+                    .eq("modality", profile.training_modality)
+                    .eq("days_per_week", profile.days_per_week)
+                    .limit(1)
+                    .execute()
+                )
+
+                if template_result.data:
+                    template = template_result.data[0]
+                    # Build schedule from preferred days
+                    schedule = {}
+                    workouts = template.get("workouts", [])
+                    if profile.preferred_days and workouts:
+                        for i, day in enumerate(sorted(profile.preferred_days)):
+                            if i < len(workouts):
+                                schedule[str(day)] = workouts[i].get("name", f"Workout {i+1}")
+
+                    training_plan = {
+                        "user_id": str(current_user.id),
+                        "template_id": template["id"],
+                        "name": template["name"],
+                        "description": template.get("description"),
+                        "goal_type": profile.fitness_goal,
+                        "schedule": schedule,
+                        "is_active": True,
+                    }
+                    supabase.table("user_training_plans").insert(training_plan).execute()
+                    print(f"  Training plan '{template['name']}' created")
+                else:
+                    print(f"  No matching template found for {profile.training_modality}/{profile.days_per_week} days")
+            except Exception as plan_error:
+                print(f"  Warning: Could not create training plan: {plan_error}")
+                # Don't fail onboarding if plan creation fails
 
         # Re-fetch the updated profile
         updated = (

@@ -640,3 +640,105 @@ INSERT INTO public.exercises (name, category, muscle_groups, equipment, is_compo
 ('Cable Woodchop', 'core', ARRAY['obliques', 'rectus_abdominis'], 'cable', FALSE),
 ('Ab Wheel Rollout', 'core', ARRAY['rectus_abdominis', 'obliques'], 'other', FALSE),
 ('Russian Twist', 'core', ARRAY['obliques', 'rectus_abdominis'], 'bodyweight', FALSE);
+
+-- ============================================
+-- TRAINING PLANS
+-- ============================================
+
+-- Training plan templates (pre-built programs)
+CREATE TABLE public.plan_templates (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    days_per_week INT NOT NULL,
+    goal_type TEXT NOT NULL,
+    sub_goals TEXT[],
+    modality TEXT NOT NULL,
+    equipment_required TEXT[],
+    difficulty TEXT DEFAULT 'beginner',
+    workouts JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User's active training plan
+CREATE TABLE public.user_training_plans (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    template_id UUID REFERENCES plan_templates(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    goal_type TEXT,
+    sub_goal TEXT,
+    schedule JSONB NOT NULL,
+    customizations JSONB,
+    is_active BOOLEAN DEFAULT true,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_training_plans_user ON user_training_plans(user_id);
+CREATE INDEX idx_user_training_plans_active ON user_training_plans(user_id, is_active) WHERE is_active = true;
+
+-- Workout sessions (full logging)
+CREATE TABLE public.workout_sessions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    plan_id UUID REFERENCES user_training_plans(id) ON DELETE SET NULL,
+    planned_workout_name TEXT,
+    started_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ,
+    duration_minutes INT,
+    exercises JSONB NOT NULL,
+    overall_rating INT CHECK (overall_rating >= 1 AND overall_rating <= 5),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_workout_sessions_user ON workout_sessions(user_id);
+CREATE INDEX idx_workout_sessions_date ON workout_sessions(user_id, started_at DESC);
+
+-- Exercise progress (aggregated for charts)
+CREATE TABLE public.exercise_progress (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    exercise_id UUID REFERENCES exercises(id) NOT NULL,
+    date DATE NOT NULL,
+    best_weight DECIMAL,
+    best_reps INT,
+    total_volume DECIMAL,
+    estimated_1rm DECIMAL,
+    sets_completed INT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, exercise_id, date)
+);
+
+CREATE INDEX idx_exercise_progress_user ON exercise_progress(user_id, exercise_id);
+
+-- ============================================
+-- TRAINING PLANS RLS POLICIES
+-- ============================================
+
+ALTER TABLE plan_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_training_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workout_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exercise_progress ENABLE ROW LEVEL SECURITY;
+
+-- Templates are public read
+CREATE POLICY "Anyone can view templates" ON plan_templates FOR SELECT TO authenticated USING (true);
+
+-- User data is private
+CREATE POLICY "Users can view own plans" ON user_training_plans FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own plans" ON user_training_plans FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own plans" ON user_training_plans FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own plans" ON user_training_plans FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own sessions" ON workout_sessions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own sessions" ON workout_sessions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own sessions" ON workout_sessions FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own sessions" ON workout_sessions FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own progress" ON exercise_progress FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own progress" ON exercise_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own progress" ON exercise_progress FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own progress" ON exercise_progress FOR DELETE USING (auth.uid() = user_id);

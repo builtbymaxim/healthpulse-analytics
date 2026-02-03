@@ -31,7 +31,15 @@ struct OnboardingView: View {
     @State private var caloriePreview: CalorieTargetsPreview?
     @State private var isLoadingPreview = false
 
-    let totalSteps = 8
+    // Training preferences
+    @State private var trainingModality: TrainingModality = .gym
+    @State private var selectedEquipment: Set<Equipment> = [.barbell, .dumbbells, .cableMachine]
+    @State private var daysPerWeek: Int = 4
+    @State private var preferredDays: Set<Int> = [1, 2, 4, 5]  // Mon, Tue, Thu, Fri
+    @State private var suggestedPlan: PlanTemplate?
+    @State private var isLoadingPlan = false
+
+    let totalSteps = 11
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,8 +57,11 @@ struct OnboardingView: View {
                 goalStep.tag(3)
                 activityStep.tag(4)
                 caloriePreviewStep.tag(5)
-                sleepStep.tag(6)
-                healthKitStep.tag(7)
+                trainingModalityStep.tag(6)
+                scheduleStep.tag(7)
+                planSuggestionStep.tag(8)
+                sleepStep.tag(9)
+                healthKitStep.tag(10)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentStep)
@@ -621,6 +632,280 @@ struct OnboardingView: View {
         }
     }
 
+    private var trainingModalityStep: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Text("Where Do You Train?")
+                    .font(.title.bold())
+                Text("We'll suggest the right plan for you")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 40)
+
+            VStack(spacing: 12) {
+                ForEach(TrainingModality.allCases, id: \.self) { modality in
+                    Button {
+                        trainingModality = modality
+                        // Set default equipment based on modality
+                        if modality == .gym {
+                            selectedEquipment = [.barbell, .dumbbells, .cableMachine]
+                        } else if modality == .home {
+                            selectedEquipment = [.dumbbells, .pullupBar]
+                        } else {
+                            selectedEquipment = []
+                        }
+                        HapticsManager.shared.selection()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: modality.icon)
+                                .font(.title2)
+                                .foregroundStyle(trainingModality == modality ? .white : modality.color)
+                                .frame(width: 44, height: 44)
+                                .background(trainingModality == modality ? modality.color : modality.color.opacity(0.15))
+                                .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(modality.displayName)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text(modality.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if trainingModality == modality {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(trainingModality == modality ? Color.green : Color.clear, lineWidth: 2)
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal)
+
+            // Equipment selection for gym/home
+            if trainingModality == .gym || trainingModality == .home {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Available Equipment")
+                        .font(.headline)
+                        .padding(.horizontal)
+
+                    let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(Equipment.forModality(trainingModality), id: \.self) { equipment in
+                            Button {
+                                if selectedEquipment.contains(equipment) {
+                                    selectedEquipment.remove(equipment)
+                                } else {
+                                    selectedEquipment.insert(equipment)
+                                }
+                                HapticsManager.shared.selection()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: selectedEquipment.contains(equipment) ? "checkmark.square.fill" : "square")
+                                        .foregroundStyle(selectedEquipment.contains(equipment) ? .green : .secondary)
+                                    Text(equipment.displayName)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    private var scheduleStep: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Text("Your Schedule")
+                    .font(.title.bold())
+                Text("How many days can you commit?")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 40)
+
+            // Days per week
+            VStack(spacing: 16) {
+                Text("\(daysPerWeek)")
+                    .font(.system(size: 64, weight: .bold, design: .rounded))
+                    .foregroundStyle(.green)
+
+                Text("days per week")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(2...6, id: \.self) { days in
+                        Button {
+                            daysPerWeek = days
+                            // Auto-select days based on count
+                            updatePreferredDays(for: days)
+                            HapticsManager.shared.selection()
+                        } label: {
+                            Text("\(days)")
+                                .font(.headline)
+                                .frame(width: 48, height: 48)
+                                .background(daysPerWeek == days ? Color.green : Color(.secondarySystemBackground))
+                                .foregroundStyle(daysPerWeek == days ? .white : .primary)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+            }
+
+            Divider()
+                .padding(.horizontal)
+
+            // Preferred days
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Preferred Days")
+                    .font(.headline)
+
+                HStack(spacing: 6) {
+                    ForEach(1...7, id: \.self) { day in
+                        Button {
+                            if preferredDays.contains(day) {
+                                preferredDays.remove(day)
+                            } else if preferredDays.count < daysPerWeek {
+                                preferredDays.insert(day)
+                            }
+                            HapticsManager.shared.selection()
+                        } label: {
+                            Text(dayAbbreviation(day))
+                                .font(.subheadline.bold())
+                                .frame(width: 44, height: 44)
+                                .background(preferredDays.contains(day) ? Color.green : Color(.secondarySystemBackground))
+                                .foregroundStyle(preferredDays.contains(day) ? .white : .primary)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+
+            if preferredDays.count < daysPerWeek {
+                Text("Select \(daysPerWeek - preferredDays.count) more day\(daysPerWeek - preferredDays.count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            Spacer()
+        }
+    }
+
+    private var planSuggestionStep: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Text("Your Training Plan")
+                    .font(.title.bold())
+                Text("Based on your goals and schedule")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 40)
+
+            if isLoadingPlan {
+                ProgressView("Finding the perfect plan...")
+                    .frame(maxHeight: .infinity)
+            } else if let plan = suggestedPlan {
+                VStack(spacing: 16) {
+                    // Plan card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(plan.name)
+                                    .font(.title2.bold())
+                                Text(plan.description)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(plan.daysPerWeek) days")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.green.opacity(0.15))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
+                        }
+
+                        Divider()
+
+                        // Weekly overview
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Weekly Schedule")
+                                .font(.subheadline.bold())
+
+                            ForEach(plan.workouts, id: \.day) { workout in
+                                HStack {
+                                    Text(dayName(workout.day))
+                                        .font(.subheadline)
+                                        .frame(width: 60, alignment: .leading)
+                                    Text(workout.name)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text("\(workout.estimatedMinutes) min")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.green, lineWidth: 2)
+                    )
+
+                    Text("You can customize this plan anytime")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal)
+            } else {
+                // No plan available - show generic message
+                VStack(spacing: 16) {
+                    Image(systemName: "dumbbell.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+
+                    Text("We'll help you find the right plan")
+                        .font(.headline)
+
+                    Text("Based on your \(daysPerWeek)-day schedule, we'll suggest workouts that match your \(fitnessGoal.displayName.lowercased()) goal.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .frame(maxHeight: .infinity)
+            }
+
+            Spacer()
+        }
+    }
+
     private var sleepStep: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
@@ -736,8 +1021,154 @@ struct OnboardingView: View {
                     withAnimation { currentStep += 1 }
                 }
             }
+        } else if currentStep == 7 {
+            // After schedule step, load suggested plan
+            Task {
+                await loadSuggestedPlan()
+                await MainActor.run {
+                    withAnimation { currentStep += 1 }
+                }
+            }
         } else {
             withAnimation { currentStep += 1 }
+        }
+    }
+
+    private func dayAbbreviation(_ day: Int) -> String {
+        switch day {
+        case 1: return "M"
+        case 2: return "T"
+        case 3: return "W"
+        case 4: return "T"
+        case 5: return "F"
+        case 6: return "S"
+        case 7: return "S"
+        default: return ""
+        }
+    }
+
+    private func dayName(_ day: Int) -> String {
+        switch day {
+        case 1: return "Monday"
+        case 2: return "Tuesday"
+        case 3: return "Wednesday"
+        case 4: return "Thursday"
+        case 5: return "Friday"
+        case 6: return "Saturday"
+        case 7: return "Sunday"
+        default: return ""
+        }
+    }
+
+    private func updatePreferredDays(for count: Int) {
+        // Common workout splits based on days per week
+        switch count {
+        case 2:
+            preferredDays = [1, 4]  // Mon, Thu
+        case 3:
+            preferredDays = [1, 3, 5]  // Mon, Wed, Fri
+        case 4:
+            preferredDays = [1, 2, 4, 5]  // Mon, Tue, Thu, Fri
+        case 5:
+            preferredDays = [1, 2, 3, 4, 5]  // Mon-Fri
+        case 6:
+            preferredDays = [1, 2, 3, 4, 5, 6]  // Mon-Sat
+        default:
+            preferredDays = [1, 3, 5]
+        }
+    }
+
+    private func loadSuggestedPlan() async {
+        isLoadingPlan = true
+
+        // For now, create a mock suggested plan based on user preferences
+        // In the future, this would fetch from the API based on templates
+        await MainActor.run {
+            suggestedPlan = suggestPlanLocally()
+            isLoadingPlan = false
+        }
+    }
+
+    private func suggestPlanLocally() -> PlanTemplate? {
+        // Suggest plan based on days per week and modality
+        let sortedDays = preferredDays.sorted()
+
+        if trainingModality == .home || trainingModality == .outdoor {
+            // Home/outdoor: suggest bodyweight plan
+            return PlanTemplate(
+                id: UUID(),
+                name: "Home Bodyweight",
+                description: "Build strength and muscle at home with no equipment needed.",
+                daysPerWeek: min(daysPerWeek, 3),
+                goalType: fitnessGoal.rawValue,
+                modality: trainingModality.rawValue,
+                workouts: sortedDays.prefix(3).enumerated().map { index, day in
+                    let workoutNames = ["Upper Body", "Lower Body", "Full Body"]
+                    return WorkoutPreview(
+                        day: day,
+                        name: workoutNames[index % 3],
+                        estimatedMinutes: 40
+                    )
+                }
+            )
+        }
+
+        // Gym plans based on days per week
+        switch daysPerWeek {
+        case 2...3:
+            return PlanTemplate(
+                id: UUID(),
+                name: "Full Body Strength",
+                description: "Hit every muscle group each session with compound movements.",
+                daysPerWeek: daysPerWeek,
+                goalType: fitnessGoal.rawValue,
+                modality: "gym",
+                workouts: sortedDays.prefix(3).enumerated().map { index, day in
+                    let names = ["Full Body A", "Full Body B", "Full Body C"]
+                    let focus = ["Squat Focus", "Deadlift Focus", "Bench Focus"]
+                    return WorkoutPreview(
+                        day: day,
+                        name: "\(names[index % 3]) - \(focus[index % 3])",
+                        estimatedMinutes: 60
+                    )
+                }
+            )
+        case 4:
+            return PlanTemplate(
+                id: UUID(),
+                name: "Upper/Lower Split",
+                description: "Balanced 4-day split alternating between upper and lower body.",
+                daysPerWeek: 4,
+                goalType: fitnessGoal.rawValue,
+                modality: "gym",
+                workouts: sortedDays.prefix(4).enumerated().map { index, day in
+                    let names = ["Upper Body A", "Lower Body A", "Upper Body B", "Lower Body B"]
+                    return WorkoutPreview(
+                        day: day,
+                        name: names[index % 4],
+                        estimatedMinutes: 60
+                    )
+                }
+            )
+        case 5...6:
+            return PlanTemplate(
+                id: UUID(),
+                name: "Push Pull Legs",
+                description: "High frequency split. Each muscle hit twice per week.",
+                daysPerWeek: daysPerWeek,
+                goalType: fitnessGoal.rawValue,
+                modality: "gym",
+                workouts: sortedDays.prefix(6).enumerated().map { index, day in
+                    let names = ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]
+                    return WorkoutPreview(
+                        day: day,
+                        name: names[index % 6],
+                        estimatedMinutes: 55
+                    )
+                }
+            )
+        default:
+            return nil
         }
     }
 
@@ -790,7 +1221,11 @@ struct OnboardingView: View {
                     fitnessGoal: fitnessGoal.rawValue,
                     activityLevel: activityLevel.rawValue,
                     targetWeightKg: targetWeightKg,
-                    targetSleepHours: targetSleepHours
+                    targetSleepHours: targetSleepHours,
+                    trainingModality: trainingModality.rawValue,
+                    equipment: selectedEquipment.map { $0.rawValue },
+                    daysPerWeek: daysPerWeek,
+                    preferredDays: Array(preferredDays).sorted()
                 )
 
                 try await APIService.shared.saveOnboardingProfile(profileData)
@@ -880,6 +1315,11 @@ struct OnboardingProfile: Encodable {
     let activityLevel: String
     let targetWeightKg: Double
     let targetSleepHours: Double
+    // Training preferences
+    let trainingModality: String?
+    let equipment: [String]?
+    let daysPerWeek: Int?
+    let preferredDays: [Int]?
 
     enum CodingKeys: String, CodingKey {
         case age
@@ -890,7 +1330,109 @@ struct OnboardingProfile: Encodable {
         case activityLevel = "activity_level"
         case targetWeightKg = "target_weight_kg"
         case targetSleepHours = "target_sleep_hours"
+        case trainingModality = "training_modality"
+        case equipment
+        case daysPerWeek = "days_per_week"
+        case preferredDays = "preferred_days"
     }
+}
+
+// MARK: - Training Preference Enums
+
+enum TrainingModality: String, CaseIterable {
+    case gym = "gym"
+    case home = "home"
+    case outdoor = "outdoor"
+    case mixed = "mixed"
+
+    var displayName: String {
+        switch self {
+        case .gym: return "Gym"
+        case .home: return "Home"
+        case .outdoor: return "Outdoor"
+        case .mixed: return "Mixed"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gym: return "Full equipment access"
+        case .home: return "Bodyweight or minimal equipment"
+        case .outdoor: return "Running, cycling, calisthenics"
+        case .mixed: return "Combination of gym and home"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .gym: return "dumbbell.fill"
+        case .home: return "house.fill"
+        case .outdoor: return "figure.run"
+        case .mixed: return "arrow.triangle.2.circlepath"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .gym: return .blue
+        case .home: return .orange
+        case .outdoor: return .green
+        case .mixed: return .purple
+        }
+    }
+}
+
+enum Equipment: String, CaseIterable {
+    case barbell = "barbell"
+    case dumbbells = "dumbbells"
+    case cableMachine = "cable_machine"
+    case pullupBar = "pullup_bar"
+    case resistanceBands = "resistance_bands"
+    case kettlebells = "kettlebells"
+    case bench = "bench"
+    case cardioMachines = "cardio_machines"
+
+    var displayName: String {
+        switch self {
+        case .barbell: return "Barbell & Rack"
+        case .dumbbells: return "Dumbbells"
+        case .cableMachine: return "Cable Machine"
+        case .pullupBar: return "Pull-up Bar"
+        case .resistanceBands: return "Resistance Bands"
+        case .kettlebells: return "Kettlebells"
+        case .bench: return "Bench"
+        case .cardioMachines: return "Cardio Machines"
+        }
+    }
+
+    static func forModality(_ modality: TrainingModality) -> [Equipment] {
+        switch modality {
+        case .gym:
+            return [.barbell, .dumbbells, .cableMachine, .pullupBar, .bench, .cardioMachines]
+        case .home:
+            return [.dumbbells, .pullupBar, .resistanceBands, .kettlebells, .bench]
+        case .outdoor, .mixed:
+            return [.resistanceBands, .pullupBar]
+        }
+    }
+}
+
+// MARK: - Plan Preview Models
+
+struct PlanTemplate {
+    let id: UUID
+    let name: String
+    let description: String
+    let daysPerWeek: Int
+    let goalType: String
+    let modality: String
+    let workouts: [WorkoutPreview]
+}
+
+struct WorkoutPreview {
+    let day: Int
+    let name: String
+    let estimatedMinutes: Int
 }
 
 #Preview {
