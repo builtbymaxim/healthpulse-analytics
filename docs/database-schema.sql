@@ -514,14 +514,17 @@ CREATE TYPE pr_type AS ENUM (
 CREATE TABLE public.personal_records (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
-    exercise_id UUID REFERENCES public.exercises(id) NOT NULL,
+    exercise_id UUID REFERENCES public.exercises(id),  -- Optional, for library exercises
+    exercise_name TEXT,  -- For training plan exercises (may not be in library)
     record_type pr_type NOT NULL,
     value DECIMAL NOT NULL,  -- Weight in kg for rm types, reps for max_reps, kg for max_volume
     achieved_at TIMESTAMPTZ NOT NULL,
     workout_set_id UUID REFERENCES public.workout_sets(id) ON DELETE SET NULL,
+    workout_session_id UUID REFERENCES public.workout_sessions(id) ON DELETE SET NULL,
     previous_value DECIMAL,  -- Previous PR value for comparison
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, exercise_id, record_type)
+    CONSTRAINT pr_has_exercise CHECK (exercise_id IS NOT NULL OR exercise_name IS NOT NULL),
+    UNIQUE(user_id, COALESCE(exercise_id::TEXT, exercise_name), record_type)
 );
 
 CREATE INDEX idx_personal_records_user ON public.personal_records(user_id);
@@ -742,3 +745,173 @@ CREATE POLICY "Users can view own progress" ON exercise_progress FOR SELECT USIN
 CREATE POLICY "Users can insert own progress" ON exercise_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own progress" ON exercise_progress FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own progress" ON exercise_progress FOR DELETE USING (auth.uid() = user_id);
+
+-- ============================================
+-- SEED PLAN TEMPLATES
+-- ============================================
+
+INSERT INTO public.plan_templates (name, description, days_per_week, goal_type, sub_goals, modality, equipment_required, difficulty, workouts) VALUES
+-- Full Body Strength (3 days)
+(
+    'Full Body Strength',
+    'Hit every muscle group each session with compound movements. Great for beginners or those with limited time.',
+    3,
+    'build_strength',
+    ARRAY['strength', 'muscle'],
+    'gym',
+    ARRAY['barbell', 'dumbbells', 'cable_machine'],
+    'beginner',
+    '[
+        {"day": 1, "name": "Full Body A", "focus": "Squat Focus", "estimatedMinutes": 60, "exercises": [
+            {"name": "Squat", "sets": 5, "reps": "5", "notes": "Key lift"},
+            {"name": "Bench Press", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Barbell Row", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Dumbbell Shoulder Press", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Dumbbell Curl", "sets": 2, "reps": "12", "notes": null}
+        ]},
+        {"day": 3, "name": "Full Body B", "focus": "Deadlift Focus", "estimatedMinutes": 60, "exercises": [
+            {"name": "Deadlift", "sets": 5, "reps": "5", "notes": "Key lift"},
+            {"name": "Overhead Press", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Lat Pulldown", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Leg Press", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Tricep Pushdown", "sets": 2, "reps": "12", "notes": null}
+        ]},
+        {"day": 5, "name": "Full Body C", "focus": "Bench Focus", "estimatedMinutes": 60, "exercises": [
+            {"name": "Bench Press", "sets": 5, "reps": "5", "notes": "Key lift"},
+            {"name": "Front Squat", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Seated Cable Row", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Romanian Deadlift", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Face Pull", "sets": 2, "reps": "15", "notes": null}
+        ]}
+    ]'::jsonb
+),
+-- Upper/Lower Split (4 days)
+(
+    'Upper/Lower Split',
+    'Balanced 4-day split alternating between upper and lower body. Ideal for intermediate lifters.',
+    4,
+    'build_muscle',
+    ARRAY['muscle', 'strength'],
+    'gym',
+    ARRAY['barbell', 'dumbbells', 'cable_machine', 'bench'],
+    'intermediate',
+    '[
+        {"day": 1, "name": "Upper Body A", "focus": "Push Focus", "estimatedMinutes": 60, "exercises": [
+            {"name": "Bench Press", "sets": 4, "reps": "6", "notes": "Key lift"},
+            {"name": "Overhead Press", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Barbell Row", "sets": 4, "reps": "8", "notes": null},
+            {"name": "Lateral Raise", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Tricep Pushdown", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Dumbbell Curl", "sets": 3, "reps": "12", "notes": null}
+        ]},
+        {"day": 2, "name": "Lower Body A", "focus": "Quad Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Squat", "sets": 4, "reps": "6", "notes": "Key lift"},
+            {"name": "Romanian Deadlift", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Leg Press", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Leg Curl", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Calf Raise", "sets": 4, "reps": "15", "notes": null}
+        ]},
+        {"day": 4, "name": "Upper Body B", "focus": "Pull Focus", "estimatedMinutes": 60, "exercises": [
+            {"name": "Pull-up", "sets": 4, "reps": "8", "notes": "Key lift"},
+            {"name": "Incline Bench Press", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Seated Cable Row", "sets": 4, "reps": "10", "notes": null},
+            {"name": "Dumbbell Shoulder Press", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Face Pull", "sets": 3, "reps": "15", "notes": null},
+            {"name": "Hammer Curl", "sets": 3, "reps": "12", "notes": null}
+        ]},
+        {"day": 5, "name": "Lower Body B", "focus": "Hip Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Deadlift", "sets": 4, "reps": "5", "notes": "Key lift"},
+            {"name": "Bulgarian Split Squat", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Hip Thrust", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Leg Extension", "sets": 3, "reps": "15", "notes": null},
+            {"name": "Calf Raise", "sets": 4, "reps": "12", "notes": null}
+        ]}
+    ]'::jsonb
+),
+-- Push Pull Legs (6 days)
+(
+    'Push Pull Legs',
+    'High frequency split hitting each muscle twice per week. For those who can train 6 days.',
+    6,
+    'build_muscle',
+    ARRAY['muscle', 'hypertrophy'],
+    'gym',
+    ARRAY['barbell', 'dumbbells', 'cable_machine', 'bench'],
+    'intermediate',
+    '[
+        {"day": 1, "name": "Push A", "focus": "Chest Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Bench Press", "sets": 4, "reps": "6", "notes": "Key lift"},
+            {"name": "Incline Dumbbell Press", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Overhead Press", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Lateral Raise", "sets": 3, "reps": "15", "notes": null},
+            {"name": "Tricep Pushdown", "sets": 3, "reps": "12", "notes": null}
+        ]},
+        {"day": 2, "name": "Pull A", "focus": "Back Width", "estimatedMinutes": 55, "exercises": [
+            {"name": "Pull-up", "sets": 4, "reps": "8", "notes": "Key lift"},
+            {"name": "Barbell Row", "sets": 4, "reps": "8", "notes": null},
+            {"name": "Face Pull", "sets": 3, "reps": "15", "notes": null},
+            {"name": "Dumbbell Curl", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Hammer Curl", "sets": 2, "reps": "12", "notes": null}
+        ]},
+        {"day": 3, "name": "Legs A", "focus": "Quad Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Squat", "sets": 4, "reps": "6", "notes": "Key lift"},
+            {"name": "Leg Press", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Romanian Deadlift", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Leg Curl", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Calf Raise", "sets": 4, "reps": "15", "notes": null}
+        ]},
+        {"day": 4, "name": "Push B", "focus": "Shoulder Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Overhead Press", "sets": 4, "reps": "6", "notes": "Key lift"},
+            {"name": "Dumbbell Bench Press", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Cable Crossover", "sets": 3, "reps": "12", "notes": null},
+            {"name": "Lateral Raise", "sets": 4, "reps": "12", "notes": null},
+            {"name": "Skull Crusher", "sets": 3, "reps": "10", "notes": null}
+        ]},
+        {"day": 5, "name": "Pull B", "focus": "Back Thickness", "estimatedMinutes": 55, "exercises": [
+            {"name": "Deadlift", "sets": 4, "reps": "5", "notes": "Key lift"},
+            {"name": "Lat Pulldown", "sets": 4, "reps": "10", "notes": null},
+            {"name": "Dumbbell Row", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Rear Delt Fly", "sets": 3, "reps": "15", "notes": null},
+            {"name": "Barbell Curl", "sets": 3, "reps": "10", "notes": null}
+        ]},
+        {"day": 6, "name": "Legs B", "focus": "Hip Focus", "estimatedMinutes": 55, "exercises": [
+            {"name": "Hip Thrust", "sets": 4, "reps": "10", "notes": "Key lift"},
+            {"name": "Front Squat", "sets": 3, "reps": "8", "notes": null},
+            {"name": "Leg Curl", "sets": 4, "reps": "12", "notes": null},
+            {"name": "Bulgarian Split Squat", "sets": 3, "reps": "10", "notes": null},
+            {"name": "Calf Raise", "sets": 4, "reps": "12", "notes": null}
+        ]}
+    ]'::jsonb
+),
+-- Home Bodyweight (3 days)
+(
+    'Home Bodyweight',
+    'Build strength and muscle at home with no equipment needed. Perfect for beginners or traveling.',
+    3,
+    'general_health',
+    ARRAY['strength', 'muscle', 'fitness'],
+    'home',
+    ARRAY[],
+    'beginner',
+    '[
+        {"day": 1, "name": "Upper Body", "focus": "Push & Pull", "estimatedMinutes": 40, "exercises": [
+            {"name": "Push-up", "sets": 4, "reps": "max", "notes": "Key lift"},
+            {"name": "Dips", "sets": 3, "reps": "max", "notes": "Use chair or bench"},
+            {"name": "Pull-up", "sets": 4, "reps": "max", "notes": "Key lift, or inverted rows"},
+            {"name": "Plank", "sets": 3, "reps": "60s", "notes": null}
+        ]},
+        {"day": 3, "name": "Lower Body", "focus": "Legs", "estimatedMinutes": 35, "exercises": [
+            {"name": "Bulgarian Split Squat", "sets": 4, "reps": "12", "notes": "Key lift, bodyweight"},
+            {"name": "Lunges", "sets": 3, "reps": "12", "notes": "Each leg"},
+            {"name": "Hip Thrust", "sets": 3, "reps": "15", "notes": "Single leg or elevated"},
+            {"name": "Calf Raise", "sets": 4, "reps": "20", "notes": "Single leg on step"}
+        ]},
+        {"day": 5, "name": "Full Body", "focus": "Conditioning", "estimatedMinutes": 40, "exercises": [
+            {"name": "Push-up", "sets": 3, "reps": "max", "notes": null},
+            {"name": "Chin-up", "sets": 3, "reps": "max", "notes": "Or rows"},
+            {"name": "Squat", "sets": 4, "reps": "20", "notes": "Bodyweight"},
+            {"name": "Hanging Leg Raise", "sets": 3, "reps": "12", "notes": "Or lying"},
+            {"name": "Russian Twist", "sets": 3, "reps": "20", "notes": null}
+        ]}
+    ]'::jsonb
+);

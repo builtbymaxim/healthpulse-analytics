@@ -405,3 +405,169 @@ struct TemplateWorkout: Codable {
     let estimatedMinutes: Int?
     let exercises: [PlannedExercise]?
 }
+
+// MARK: - Training Plan Requests/Responses
+
+struct ActivatePlanRequest: Codable {
+    let templateId: UUID
+    let schedule: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case templateId = "template_id"
+        case schedule
+    }
+}
+
+struct ActivatePlanResponse: Codable {
+    let success: Bool
+    let planId: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case planId = "plan_id"
+    }
+}
+
+struct WorkoutSessionRequest: Codable {
+    let planId: UUID?
+    let plannedWorkoutName: String?
+    let startedAt: Date
+    let completedAt: Date?
+    let durationMinutes: Int?
+    let exercises: [ExerciseLog]
+    let overallRating: Int?
+    let notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case planId = "plan_id"
+        case plannedWorkoutName = "planned_workout_name"
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+        case durationMinutes = "duration_minutes"
+        case exercises
+        case overallRating = "overall_rating"
+        case notes
+    }
+}
+
+struct ExerciseLog: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let isKeyLift: Bool
+    var sets: [SetLog]
+    var isCompleted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isKeyLift = "is_key_lift"
+        case sets
+        case isCompleted = "is_completed"
+    }
+}
+
+struct SetLog: Codable, Identifiable {
+    let id: UUID
+    var weight: Double
+    var reps: Int
+    var rpe: Int?
+    var restTaken: Int?
+    var isPR: Bool
+    let completedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, weight, reps, rpe
+        case restTaken = "rest_taken"
+        case isPR = "is_pr"
+        case completedAt = "completed_at"
+    }
+
+    init(id: UUID = UUID(), weight: Double, reps: Int, rpe: Int? = nil, restTaken: Int? = nil, isPR: Bool = false, completedAt: Date = Date()) {
+        self.id = id
+        self.weight = weight
+        self.reps = reps
+        self.rpe = rpe
+        self.restTaken = restTaken
+        self.isPR = isPR
+        self.completedAt = completedAt
+    }
+}
+
+struct WorkoutSessionResponse: Codable {
+    let success: Bool
+    let sessionId: UUID
+    let prsAchieved: [PRInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case sessionId = "session_id"
+        case prsAchieved = "prs_achieved"
+    }
+}
+
+struct PRInfo: Codable, Identifiable {
+    var id: String { "\(exerciseName)-\(recordType)" }
+    let exerciseName: String
+    let recordType: String
+    let value: Double
+    let previousValue: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case exerciseName = "exercise_name"
+        case recordType = "record_type"
+        case value
+        case previousValue = "previous_value"
+    }
+}
+
+struct WorkoutSession: Codable, Identifiable {
+    let id: UUID
+    let planId: UUID?
+    let plannedWorkoutName: String?
+    let startedAt: Date
+    let completedAt: Date?
+    let durationMinutes: Int?
+    let exercises: [ExerciseLog]?
+    let overallRating: Int?
+    let notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case planId = "plan_id"
+        case plannedWorkoutName = "planned_workout_name"
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+        case durationMinutes = "duration_minutes"
+        case exercises
+        case overallRating = "overall_rating"
+        case notes
+    }
+}
+
+struct ExerciseProgressResponse: Codable {
+    let exerciseName: String
+    let progress: [ProgressPoint]
+
+    enum CodingKeys: String, CodingKey {
+        case exerciseName = "exercise_name"
+        case progress
+    }
+}
+
+struct ProgressPoint: Codable, Identifiable {
+    var id: String { date }
+    let date: String
+    let bestWeight: Double
+    let bestReps: Int
+    let totalVolume: Double
+    let estimated1RM: Double
+    let setsCompleted: Int
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case bestWeight = "best_weight"
+        case bestReps = "best_reps"
+        case totalVolume = "total_volume"
+        case estimated1RM = "estimated_1rm"
+        case setsCompleted = "sets_completed"
+    }
+}

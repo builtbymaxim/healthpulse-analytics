@@ -12,6 +12,10 @@ struct TodayView: View {
     @StateObject private var viewModel = TodayViewModel()
     @EnvironmentObject var healthKitService: HealthKitService
     @EnvironmentObject var tabRouter: TabRouter
+    @State private var showTrainingPlanSetup = false
+    @State private var showWorkoutExecution = false
+    @State private var showPRCelebration = false
+    @State private var achievedPRs: [PRInfo] = []
 
     var body: some View {
         NavigationStack {
@@ -27,7 +31,7 @@ struct TodayView: View {
                             onWorkoutTap: { tabRouter.navigateTo(.workout) },
                             onMealTap: { tabRouter.navigateTo(.nutrition) },
                             onSleepTap: { tabRouter.navigateTo(.sleep) },
-                            onTrainingPlanTap: { /* TODO: Navigate to training plan setup */ }
+                            onTrainingPlanTap: { showTrainingPlanSetup = true }
                         )
                         .padding(.horizontal)
                     }
@@ -36,7 +40,15 @@ struct TodayView: View {
                     if let todaysWorkout = viewModel.todaysWorkout {
                         TodayWorkoutCard(
                             workout: todaysWorkout,
-                            onTap: { tabRouter.navigateTo(.workout) }
+                            onTap: {
+                                if todaysWorkout.isRestDay {
+                                    // Just navigate to workout tab on rest days
+                                    tabRouter.navigateTo(.workout)
+                                } else {
+                                    // Start workout execution
+                                    showWorkoutExecution = true
+                                }
+                            }
                         )
                         .padding(.horizontal)
                     }
@@ -177,6 +189,29 @@ struct TodayView: View {
             }
             .task {
                 await viewModel.loadData()
+            }
+            .sheet(isPresented: $showTrainingPlanSetup) {
+                TrainingPlanView()
+            }
+            .fullScreenCover(isPresented: $showWorkoutExecution) {
+                if let workout = viewModel.todaysWorkout {
+                    WorkoutExecutionView(workout: workout, planId: nil) { prs in
+                        if !prs.isEmpty {
+                            achievedPRs = prs
+                            showPRCelebration = true
+                        }
+                        Task {
+                            await viewModel.loadData()
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showPRCelebration) {
+                PRCelebrationView(prs: achievedPRs) {
+                    showPRCelebration = false
+                    achievedPRs = []
+                }
+                .presentationDetents([.medium])
             }
         }
     }

@@ -36,7 +36,7 @@ struct OnboardingView: View {
     @State private var selectedEquipment: Set<Equipment> = [.barbell, .dumbbells, .cableMachine]
     @State private var daysPerWeek: Int = 4
     @State private var preferredDays: Set<Int> = [1, 2, 4, 5]  // Mon, Tue, Thu, Fri
-    @State private var suggestedPlan: PlanTemplate?
+    @State private var suggestedPlan: PlanTemplatePreview?
     @State private var isLoadingPlan = false
 
     let totalSteps = 11
@@ -1089,13 +1089,13 @@ struct OnboardingView: View {
         }
     }
 
-    private func suggestPlanLocally() -> PlanTemplate? {
+    private func suggestPlanLocally() -> PlanTemplatePreview? {
         // Suggest plan based on days per week and modality
         let sortedDays = preferredDays.sorted()
 
         if trainingModality == .home || trainingModality == .outdoor {
             // Home/outdoor: suggest bodyweight plan
-            return PlanTemplate(
+            return PlanTemplatePreview(
                 id: UUID(),
                 name: "Home Bodyweight",
                 description: "Build strength and muscle at home with no equipment needed.",
@@ -1116,7 +1116,7 @@ struct OnboardingView: View {
         // Gym plans based on days per week
         switch daysPerWeek {
         case 2...3:
-            return PlanTemplate(
+            return PlanTemplatePreview(
                 id: UUID(),
                 name: "Full Body Strength",
                 description: "Hit every muscle group each session with compound movements.",
@@ -1134,7 +1134,7 @@ struct OnboardingView: View {
                 }
             )
         case 4:
-            return PlanTemplate(
+            return PlanTemplatePreview(
                 id: UUID(),
                 name: "Upper/Lower Split",
                 description: "Balanced 4-day split alternating between upper and lower body.",
@@ -1151,7 +1151,7 @@ struct OnboardingView: View {
                 }
             )
         case 5...6:
-            return PlanTemplate(
+            return PlanTemplatePreview(
                 id: UUID(),
                 name: "Push Pull Legs",
                 description: "High frequency split. Each muscle hit twice per week.",
@@ -1419,7 +1419,7 @@ enum Equipment: String, CaseIterable {
 
 // MARK: - Plan Preview Models
 
-struct PlanTemplate {
+struct PlanTemplatePreview {
     let id: UUID
     let name: String
     let description: String

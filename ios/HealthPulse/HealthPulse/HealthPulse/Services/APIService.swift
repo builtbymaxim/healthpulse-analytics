@@ -535,6 +535,32 @@ class APIService {
         }
         return try await request(endpoint: endpoint)
     }
+
+    func getTemplateDetails(templateId: UUID) async throws -> PlanTemplate {
+        try await request(endpoint: "/training-plans/templates/\(templateId)")
+    }
+
+    func activateTrainingPlan(templateId: UUID, schedule: [String: String]) async throws -> ActivatePlanResponse {
+        let body = ActivatePlanRequest(templateId: templateId, schedule: schedule)
+        return try await request(endpoint: "/training-plans/activate", method: "POST", body: body)
+    }
+
+    func deactivateTrainingPlan() async throws -> EmptyResponse {
+        try await request(endpoint: "/training-plans/active", method: "DELETE")
+    }
+
+    func logWorkoutSession(_ session: WorkoutSessionRequest) async throws -> WorkoutSessionResponse {
+        try await request(endpoint: "/training-plans/sessions", method: "POST", body: session)
+    }
+
+    func getWorkoutSessions(days: Int = 30) async throws -> [WorkoutSession] {
+        try await request(endpoint: "/training-plans/sessions?days=\(days)")
+    }
+
+    func getExerciseProgress(exerciseName: String, days: Int = 90) async throws -> ExerciseProgressResponse {
+        let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? exerciseName
+        return try await request(endpoint: "/training-plans/progress/\(encoded)?days=\(days)")
+    }
 }
 
 // Helper for empty responses
