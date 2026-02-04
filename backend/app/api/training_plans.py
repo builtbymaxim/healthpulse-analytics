@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 from typing import Optional
 
@@ -301,7 +301,7 @@ async def get_workout_sessions(
     """Get recent workout sessions."""
     supabase = get_supabase_client()
 
-    from_date = (datetime.now() - __import__("datetime").timedelta(days=days)).isoformat()
+    from_date = (datetime.now() - timedelta(days=days)).isoformat()
 
     result = (
         supabase.table("workout_sessions")
@@ -324,7 +324,7 @@ async def get_exercise_progress(
     """Get progress history for a specific exercise."""
     supabase = get_supabase_client()
 
-    from_date = (datetime.now() - __import__("datetime").timedelta(days=days)).isoformat()
+    from_date = (datetime.now() - timedelta(days=days)).isoformat()
 
     # Get workout sessions and extract relevant exercise data
     result = (
