@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - User
 
@@ -123,12 +124,17 @@ struct Workout: Codable, Identifiable {
     let startedAt: Date
     var endedAt: Date?
     var durationMinutes: Int?
-    var intensity: Intensity
+    var intensity: Intensity?
     var caloriesBurned: Double?
     var averageHeartRate: Double?
     var trainingLoad: Double?
     var notes: String?
     let createdAt: Date
+    // Training plan fields
+    var planId: UUID?
+    var plannedWorkoutName: String?
+    var exercises: [ExerciseLog]?
+    var overallRating: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -143,6 +149,10 @@ struct Workout: Codable, Identifiable {
         case trainingLoad = "training_load"
         case notes
         case createdAt = "created_at"
+        case planId = "plan_id"
+        case plannedWorkoutName = "planned_workout_name"
+        case exercises
+        case overallRating = "overall_rating"
     }
 }
 
@@ -180,6 +190,19 @@ enum WorkoutType: String, Codable, CaseIterable {
         case .stairClimber: return "figure.stair.stepper"
         case .sports: return "sportscourt.fill"
         case .other: return "figure.mixed.cardio"
+        }
+    }
+
+    // Color for workout type
+    var color: Color {
+        switch self {
+        case .strength, .weightTraining: return .green
+        case .running, .hiking, .walking: return .orange
+        case .cycling: return .blue
+        case .swimming: return .cyan
+        case .yoga, .pilates: return .purple
+        case .hiit, .crossfit: return .red
+        default: return .gray
         }
     }
 }

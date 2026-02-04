@@ -11,16 +11,42 @@ struct WorkoutTabView: View {
     @State private var showStrengthSheet = false
     @State private var showRunningSheet = false
     @State private var showGeneralWorkout = false
+    @State private var showTrainingPlanView = false
+    @State private var showWorkoutExecution = false
+    @State private var showPRCelebration = false
+    @State private var achievedPRs: [PRInfo] = []
     @State private var recentWorkouts: [Workout] = []
+    @State private var todaysWorkout: TodayWorkoutResponse?
+    @State private var hasActivePlan = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Today's Planned Workout (if user has an active plan)
+                    if let workout = todaysWorkout, hasActivePlan {
+                        TodayPlanWorkoutCard(
+                            workout: workout,
+                            onStartWorkout: {
+                                if !workout.isRestDay {
+                                    showWorkoutExecution = true
+                                    HapticsManager.shared.medium()
+                                }
+                            },
+                            onManagePlan: {
+                                showTrainingPlanView = true
+                            }
+                        )
+                        .padding(.horizontal)
+                    }
+
                     // Quick Start Section
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Start Workout")
-                            .font(.headline)
+                        HStack {
+                            Text(hasActivePlan ? "Or Start Free Workout" : "Start Workout")
+                                .font(.headline)
+                            Spacer()
+                        }
 
                         // Primary workout types - big buttons
                         HStack(spacing: 16) {
@@ -94,7 +120,15 @@ struct WorkoutTabView: View {
                             .padding(.vertical, 40)
                         } else {
                             ForEach(recentWorkouts.prefix(5)) { workout in
-                                RecentWorkoutRow(workout: workout)
+                                NavigationLink {
+                                    WorkoutDetailView(workout: workout) {
+                                        // Remove from local list immediately
+                                        recentWorkouts.removeAll { $0.id == workout.id }
+                                    }
+                                } label: {
+                                    RecentWorkoutRow(workout: workout)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -106,6 +140,39 @@ struct WorkoutTabView: View {
             }
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showTrainingPlanView = true
+                    } label: {
+                        Image(systemName: hasActivePlan ? "calendar.badge.checkmark" : "calendar.badge.plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showTrainingPlanView) {
+                TrainingPlanView()
+            }
+            .fullScreenCover(isPresented: $showWorkoutExecution) {
+                if let workout = todaysWorkout {
+                    WorkoutExecutionView(workout: workout, planId: nil) { prs in
+                        if !prs.isEmpty {
+                            achievedPRs = prs
+                            showPRCelebration = true
+                        }
+                        Task {
+                            await loadTodaysWorkout()
+                            loadRecentWorkouts()
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showPRCelebration) {
+                PRCelebrationView(prs: achievedPRs) {
+                    showPRCelebration = false
+                    achievedPRs = []
+                }
+                .presentationDetents([.medium])
+            }
             .sheet(isPresented: $showStrengthSheet) {
                 StrengthWorkoutLogView(workoutId: nil) { savedSets in
                     ToastManager.shared.success("Workout saved with \(savedSets.count) sets!")
@@ -137,7 +204,32 @@ struct WorkoutTabView: View {
                 }
             }
             .task {
+                await loadTodaysWorkout()
                 loadRecentWorkouts()
+            }
+            .refreshable {
+                await loadTodaysWorkout()
+                loadRecentWorkouts()
+            }
+        }
+    }
+
+    private func loadTodaysWorkout() async {
+        do {
+            let workout = try await APIService.shared.getTodaysWorkout()
+            await MainActor.run {
+                hasActivePlan = workout.hasPlan
+                if workout.hasPlan {
+                    todaysWorkout = workout
+                } else {
+                    todaysWorkout = nil
+                }
+            }
+        } catch {
+            print("Failed to load today's workout: \(error)")
+            await MainActor.run {
+                hasActivePlan = false
+                todaysWorkout = nil
             }
         }
     }
@@ -151,6 +243,137 @@ struct WorkoutTabView: View {
                 print("Failed to load workouts: \(error)")
             }
         }
+    }
+}
+
+// MARK: - Today's Plan Workout Card
+
+struct TodayPlanWorkoutCard: View {
+    let workout: TodayWorkoutResponse
+    let onStartWorkout: () -> Void
+    let onManagePlan: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Today's Plan")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let planName = workout.planName {
+                        Text(planName)
+                            .font(.headline)
+                    }
+                }
+                Spacer()
+                Button {
+                    onManagePlan()
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if workout.isRestDay {
+                // Rest day
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.purple.opacity(0.15))
+                            .frame(width: 60, height: 60)
+                        Image(systemName: "bed.double.fill")
+                            .font(.title2)
+                            .foregroundStyle(.purple)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Rest Day")
+                            .font(.title3.bold())
+                        Text("Recovery is part of the plan")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            } else {
+                // Workout day
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 60, height: 60)
+                            Image(systemName: "dumbbell.fill")
+                                .font(.title2)
+                                .foregroundStyle(.green)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workout.workoutName ?? "Workout")
+                                .font(.title3.bold())
+                            HStack(spacing: 12) {
+                                if let focus = workout.workoutFocus {
+                                    Label(focus, systemImage: "target")
+                                }
+                                if let minutes = workout.estimatedMinutes {
+                                    Label("\(minutes) min", systemImage: "clock")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+
+                    // Exercise preview
+                    if let exercises = workout.exercises, !exercises.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(exercises.prefix(3)) { exercise in
+                                HStack {
+                                    Circle()
+                                        .fill(Color.green.opacity(0.5))
+                                        .frame(width: 6, height: 6)
+                                    Text(exercise.name)
+                                        .font(.caption)
+                                    Spacer()
+                                    if let sets = exercise.sets, let reps = exercise.reps {
+                                        Text("\(sets)×\(reps)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            if exercises.count > 3 {
+                                Text("+\(exercises.count - 3) more exercises")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.leading, 14)
+                            }
+                        }
+                    }
+
+                    // Start button
+                    Button {
+                        onStartWorkout()
+                    } label: {
+                        HStack {
+                            Image(systemName: "play.fill")
+                            Text("Start Workout")
+                        }
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.green)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
     }
 }
 
@@ -226,25 +449,46 @@ struct RecentWorkoutRow: View {
         HStack(spacing: 12) {
             Image(systemName: workout.workoutType.icon)
                 .font(.title2)
-                .foregroundStyle(.green)
+                .foregroundStyle(workout.workoutType.color)
                 .frame(width: 44, height: 44)
-                .background(Color.green.opacity(0.1))
+                .background(workout.workoutType.color.opacity(0.1))
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(workout.workoutType.displayName)
+                // Show planned workout name if from training plan, otherwise type
+                Text(workout.plannedWorkoutName ?? workout.workoutType.displayName)
                     .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
 
-                Text("\(workout.durationMinutes ?? 0) min")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    if let duration = workout.durationMinutes {
+                        Text("\(duration) min")
+                    }
+                    if workout.planId != nil {
+                        Text("Plan")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.15))
+                            .foregroundStyle(.green)
+                            .clipShape(Capsule())
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Text(workout.startedAt.formatted(date: .abbreviated, time: .omitted))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(workout.startedAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding()
         .background(Color(.secondarySystemBackground))

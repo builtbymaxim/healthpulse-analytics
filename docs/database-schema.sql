@@ -96,8 +96,22 @@ CREATE TABLE public.workouts (
     notes TEXT,
     exercises JSONB, -- For strength workouts: [{name, sets, reps, weight}]
     source metric_source DEFAULT 'manual',
+    -- Training plan fields (unified with workout_sessions)
+    plan_id UUID REFERENCES public.user_training_plans(id) ON DELETE SET NULL,
+    planned_workout_name TEXT,
+    overall_rating INTEGER CHECK (overall_rating >= 1 AND overall_rating <= 5),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add plan columns to existing workouts table
+-- ALTER TABLE public.workouts ADD COLUMN plan_id UUID REFERENCES public.user_training_plans(id) ON DELETE SET NULL;
+-- ALTER TABLE public.workouts ADD COLUMN planned_workout_name TEXT;
+-- ALTER TABLE public.workouts ADD COLUMN overall_rating INTEGER CHECK (overall_rating >= 1 AND overall_rating <= 5);
+
+-- Migration: Migrate workout_sessions data to workouts table
+-- INSERT INTO public.workouts (user_id, workout_type, start_time, duration_minutes, intensity, notes, exercises, plan_id, planned_workout_name, overall_rating)
+-- SELECT user_id, 'weight_training'::workout_type, started_at, COALESCE(duration_minutes, 60), 'moderate'::intensity_level, notes, exercises, plan_id, planned_workout_name, overall_rating
+-- FROM public.workout_sessions;
 
 CREATE INDEX idx_workouts_user_time
     ON public.workouts(user_id, start_time DESC);
@@ -464,6 +478,14 @@ CREATE TYPE equipment_type AS ENUM (
     'barbell', 'dumbbell', 'cable', 'machine', 'bodyweight', 'kettlebell', 'bands', 'other'
 );
 
+-- Exercise input types (how sets are logged)
+CREATE TYPE exercise_input_type AS ENUM (
+    'weight_and_reps',  -- Standard: weight × reps (e.g., Bench Press: 80kg × 5)
+    'reps_only',        -- Bodyweight: reps only (e.g., Push-up: 20 reps)
+    'time_only',        -- Timed: duration in seconds (e.g., Plank: 60s)
+    'distance_and_time' -- Cardio: distance and time (e.g., Run: 5km in 25min)
+);
+
 -- Global exercise library (shared across all users)
 CREATE TABLE public.exercises (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -471,10 +493,20 @@ CREATE TABLE public.exercises (
     category exercise_category NOT NULL,
     muscle_groups TEXT[] NOT NULL,
     equipment equipment_type,
+    input_type exercise_input_type DEFAULT 'weight_and_reps',
     is_compound BOOLEAN DEFAULT FALSE,
     instructions TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add input_type column to existing exercises table
+-- ALTER TABLE public.exercises ADD COLUMN input_type exercise_input_type DEFAULT 'weight_and_reps';
+
+-- Migration: Update common bodyweight exercises
+-- UPDATE public.exercises SET input_type = 'reps_only' WHERE name IN ('Push-up', 'Pull-up', 'Chin-up', 'Dip', 'Burpee', 'Sit-up', 'Crunch');
+
+-- Migration: Update timed exercises
+-- UPDATE public.exercises SET input_type = 'time_only' WHERE name IN ('Plank', 'Wall Sit', 'Dead Hang', 'Hollow Hold', 'L-Sit');
 
 CREATE INDEX idx_exercises_category ON public.exercises(category);
 CREATE INDEX idx_exercises_name ON public.exercises(name);

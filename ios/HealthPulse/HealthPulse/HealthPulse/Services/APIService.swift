@@ -254,6 +254,10 @@ class APIService {
         try await request(endpoint: "/workouts?days=\(days)")
     }
 
+    func deleteWorkout(id: UUID) async throws {
+        let _: EmptyResponse = try await request(endpoint: "/workouts/\(id)", method: "DELETE")
+    }
+
     // MARK: - Exercises
 
     func getExercises(category: ExerciseCategory? = nil, search: String? = nil) async throws -> [Exercise] {

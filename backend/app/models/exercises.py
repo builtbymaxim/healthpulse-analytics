@@ -40,6 +40,14 @@ class PRType(str, Enum):
     MAX_VOLUME = "max_volume"
 
 
+class ExerciseInputType(str, Enum):
+    """How exercise sets are logged."""
+    WEIGHT_AND_REPS = "weight_and_reps"  # Standard: weight × reps (e.g., Bench Press: 80kg × 5)
+    REPS_ONLY = "reps_only"              # Bodyweight: reps only (e.g., Push-up: 20 reps)
+    TIME_ONLY = "time_only"              # Timed: duration in seconds (e.g., Plank: 60s)
+    DISTANCE_AND_TIME = "distance_and_time"  # Cardio: distance and time (e.g., Run: 5km in 25min)
+
+
 # ============================================
 # Exercise Library Models
 # ============================================
@@ -52,6 +60,7 @@ class Exercise(BaseModel):
     category: ExerciseCategory
     muscle_groups: list[str]
     equipment: EquipmentType | None = None
+    input_type: ExerciseInputType = ExerciseInputType.WEIGHT_AND_REPS
     is_compound: bool = False
     instructions: str | None = None
     created_at: datetime

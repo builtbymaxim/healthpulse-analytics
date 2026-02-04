@@ -51,6 +51,10 @@ class WorkoutCreate(BaseModel):
     max_heart_rate: int | None = None
     notes: str | None = None
     exercises: list[dict] | None = None  # For strength workouts
+    # Training plan fields
+    plan_id: UUID | None = None
+    planned_workout_name: str | None = None
+    overall_rating: int | None = Field(default=None, ge=1, le=5)
 
     model_config = {"populate_by_name": True, "extra": "ignore"}
 
@@ -62,7 +66,7 @@ class WorkoutResponse(BaseModel):
     workout_type: str
     start_time: datetime  # Database column name
     duration_minutes: int
-    intensity: str
+    intensity: str | None
     calories_burned: int | None
     distance_km: float | None
     avg_heart_rate: int | None
@@ -70,6 +74,10 @@ class WorkoutResponse(BaseModel):
     training_load: float | None
     notes: str | None
     exercises: list[dict] | None
+    # Training plan fields
+    plan_id: UUID | None = None
+    planned_workout_name: str | None = None
+    overall_rating: int | None = None
     created_at: datetime
 
 
@@ -138,6 +146,10 @@ async def create_workout(
         "training_load": training_load,
         "notes": workout.notes,
         "exercises": workout.exercises,
+        # Training plan fields
+        "plan_id": str(workout.plan_id) if workout.plan_id else None,
+        "planned_workout_name": workout.planned_workout_name,
+        "overall_rating": workout.overall_rating,
     }
 
     result = supabase.table("workouts").insert(data).execute()
@@ -306,6 +318,10 @@ async def update_workout(
         "training_load": training_load,
         "notes": workout.notes,
         "exercises": workout.exercises,
+        # Training plan fields
+        "plan_id": str(workout.plan_id) if workout.plan_id else None,
+        "planned_workout_name": workout.planned_workout_name,
+        "overall_rating": workout.overall_rating,
     }
 
     result = (

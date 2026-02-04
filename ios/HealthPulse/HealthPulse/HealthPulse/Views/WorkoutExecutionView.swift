@@ -15,6 +15,7 @@ struct WorkoutExecutionView: View {
 
     @StateObject private var viewModel: WorkoutExecutionViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showExercisePicker = false
 
     init(workout: TodayWorkoutResponse, planId: UUID?, onComplete: @escaping ([PRInfo]) -> Void) {
         self.workout = workout
@@ -44,8 +45,30 @@ struct WorkoutExecutionView: View {
                                 onDeleteSet: { setIndex in viewModel.deleteSet(from: index, setIndex: setIndex) }
                             )
                         }
+
+                        // Add Exercise button
+                        Button {
+                            showExercisePicker = true
+                            HapticsManager.shared.light()
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add Exercise")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.green)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                     .padding()
+                }
+                .sheet(isPresented: $showExercisePicker) {
+                    AddExerciseSheet { exerciseName in
+                        viewModel.addExercise(name: exerciseName)
+                    }
                 }
 
                 // Complete workout button
@@ -318,6 +341,15 @@ struct ExerciseLogEntry: Identifiable {
         }
         self.isCompleted = false
     }
+
+    // For adding custom exercises during workout
+    init(name: String, isKeyLift: Bool, targetSetsReps: String?, sets: [SetLogEntry], isCompleted: Bool) {
+        self.name = name
+        self.isKeyLift = isKeyLift
+        self.targetSetsReps = targetSetsReps
+        self.sets = sets
+        self.isCompleted = isCompleted
+    }
 }
 
 struct SetLogEntry: Identifiable {
@@ -386,6 +418,17 @@ class WorkoutExecutionViewModel: ObservableObject {
         guard exerciseIndex < exerciseLogs.count,
               setIndex < exerciseLogs[exerciseIndex].sets.count else { return }
         exerciseLogs[exerciseIndex].sets.remove(at: setIndex)
+    }
+
+    func addExercise(name: String) {
+        let newExercise = ExerciseLogEntry(
+            name: name,
+            isKeyLift: false,  // Added exercises are accessories
+            targetSetsReps: nil,
+            sets: [SetLogEntry()],
+            isCompleted: false
+        )
+        exerciseLogs.append(newExercise)
     }
 
     func completeWorkout(completion: @escaping ([PRInfo]) -> Void) {
@@ -507,6 +550,135 @@ struct PRCelebrationView: View {
             .padding(.horizontal)
         }
         .padding(.vertical, 32)
+    }
+}
+
+// MARK: - Add Exercise Sheet
+
+struct AddExerciseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onAdd: (String) -> Void
+
+    @State private var searchText = ""
+    @State private var exercises: [Exercise] = []
+    @State private var isLoading = true
+
+    // Common exercises for quick access
+    private let commonExercises = [
+        "Bench Press", "Squat", "Deadlift", "Overhead Press",
+        "Barbell Row", "Pull-up", "Dumbbell Curl", "Tricep Pushdown",
+        "Leg Press", "Lat Pulldown", "Face Pull", "Lateral Raise",
+        "Romanian Deadlift", "Hip Thrust", "Calf Raise", "Plank"
+    ]
+
+    var filteredExercises: [Exercise] {
+        if searchText.isEmpty {
+            return exercises
+        }
+        return exercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("Loading exercises...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        // Quick add common exercises
+                        if searchText.isEmpty {
+                            Section("Common Exercises") {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                                    ForEach(commonExercises.prefix(8), id: \.self) { exercise in
+                                        Button {
+                                            addExercise(exercise)
+                                        } label: {
+                                            Text(exercise)
+                                                .font(.caption)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(Color.green.opacity(0.1))
+                                                .foregroundStyle(.green)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+
+                        // Search results or full list
+                        Section(searchText.isEmpty ? "All Exercises" : "Search Results") {
+                            if filteredExercises.isEmpty && !searchText.isEmpty {
+                                // Allow adding custom exercise
+                                Button {
+                                    addExercise(searchText)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(.green)
+                                        Text("Add \"\(searchText)\" as custom exercise")
+                                    }
+                                }
+                            } else {
+                                ForEach(filteredExercises) { exercise in
+                                    Button {
+                                        addExercise(exercise.name)
+                                    } label: {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(exercise.name)
+                                                    .foregroundStyle(.primary)
+                                                Text(exercise.category.capitalized)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "plus.circle")
+                                                .foregroundStyle(.green)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .searchable(text: $searchText, prompt: "Search exercises")
+                }
+            }
+            .navigationTitle("Add Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task {
+                await loadExercises()
+            }
+        }
+    }
+
+    private func loadExercises() async {
+        do {
+            let fetchedExercises = try await APIService.shared.getExercises()
+            await MainActor.run {
+                exercises = fetchedExercises
+                isLoading = false
+            }
+        } catch {
+            print("Failed to load exercises: \(error)")
+            await MainActor.run {
+                isLoading = false
+            }
+        }
+    }
+
+    private func addExercise(_ name: String) {
+        HapticsManager.shared.medium()
+        onAdd(name)
+        dismiss()
     }
 }
 

@@ -16,6 +16,7 @@ struct Exercise: Codable, Identifiable, Hashable {
     let category: ExerciseCategory
     let muscleGroups: [String]
     var equipment: EquipmentType?
+    var inputType: ExerciseInputType
     var isCompound: Bool
     var instructions: String?
     let createdAt: Date
@@ -24,9 +25,23 @@ struct Exercise: Codable, Identifiable, Hashable {
         case id, name, category
         case muscleGroups = "muscle_groups"
         case equipment
+        case inputType = "input_type"
         case isCompound = "is_compound"
         case instructions
         case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(ExerciseCategory.self, forKey: .category)
+        muscleGroups = try container.decode([String].self, forKey: .muscleGroups)
+        equipment = try container.decodeIfPresent(EquipmentType.self, forKey: .equipment)
+        inputType = try container.decodeIfPresent(ExerciseInputType.self, forKey: .inputType) ?? .weightAndReps
+        isCompound = try container.decode(Bool.self, forKey: .isCompound)
+        instructions = try container.decodeIfPresent(String.self, forKey: .instructions)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }
 
@@ -81,6 +96,22 @@ enum EquipmentType: String, Codable, CaseIterable {
         case .kettlebell: return "scalemass.fill"
         case .bands: return "circle.dotted"
         case .other: return "questionmark.circle"
+        }
+    }
+}
+
+enum ExerciseInputType: String, Codable, CaseIterable {
+    case weightAndReps = "weight_and_reps"    // Standard: weight × reps (e.g., Bench Press: 80kg × 5)
+    case repsOnly = "reps_only"               // Bodyweight: reps only (e.g., Push-up: 20 reps)
+    case timeOnly = "time_only"               // Timed: duration in seconds (e.g., Plank: 60s)
+    case distanceAndTime = "distance_and_time" // Cardio: distance and time (e.g., Run: 5km in 25min)
+
+    var displayName: String {
+        switch self {
+        case .weightAndReps: return "Weight & Reps"
+        case .repsOnly: return "Reps Only"
+        case .timeOnly: return "Time Only"
+        case .distanceAndTime: return "Distance & Time"
         }
     }
 }
