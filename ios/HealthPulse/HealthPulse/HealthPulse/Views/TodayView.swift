@@ -53,6 +53,12 @@ struct TodayView: View {
                         .padding(.horizontal)
                     }
 
+                    // Smart Recommendations (non-new users only)
+                    if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
+                        SmartRecommendationsSection(recommendations: viewModel.recommendations)
+                            .padding(.horizontal)
+                    }
+
                     // Today's Nutrition Progress
                     NutritionProgressCard(
                         calories: viewModel.todayCalories,
@@ -69,6 +75,12 @@ struct TodayView: View {
                         HapticsManager.shared.light()
                     }
                     .padding(.horizontal)
+
+                    // Weekly Summary (non-new users with data)
+                    if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
+                        WeeklySummaryCard(summary: summary)
+                            .padding(.horizontal)
+                    }
 
                     // Workout Streak
                     WorkoutStreakCard(
@@ -154,8 +166,20 @@ struct TodayView: View {
                     }
                     .padding(.horizontal)
 
-                    // Recovery & Readiness (compact) - only show if has enough data
-                    if !viewModel.isNewUser {
+                    // Enhanced Recovery Card (if dashboard data available)
+                    if !viewModel.isNewUser, let recovery = viewModel.enhancedRecovery {
+                        EnhancedRecoveryCard(recovery: recovery)
+                            .padding(.horizontal)
+                    }
+
+                    // Progress Section (if dashboard data available)
+                    if !viewModel.isNewUser, let progress = viewModel.progressSummary {
+                        ProgressDashboardSection(progress: progress)
+                            .padding(.horizontal)
+                    }
+
+                    // Fallback: Compact Recovery & Readiness (only if no enhanced data)
+                    if !viewModel.isNewUser && viewModel.enhancedRecovery == nil {
                         HStack(spacing: 12) {
                             CompactScoreCard(
                                 title: "Recovery",
@@ -982,6 +1006,13 @@ class TodayViewModel: ObservableObject {
     @Published var readinessScore: Double = 70
     @Published var recommendedIntensity: String = "moderate"
 
+    // Smart Dashboard data
+    @Published var dashboardData: DashboardResponse?
+    @Published var enhancedRecovery: EnhancedRecoveryResponse?
+    @Published var progressSummary: ProgressSummary?
+    @Published var recommendations: [SmartRecommendation] = []
+    @Published var weeklySummary: WeeklySummary?
+
     @Published var isLoading = false
 
     func loadData() async {
@@ -1005,12 +1036,33 @@ class TodayViewModel: ObservableObject {
         // Load sleep patterns
         await loadSleepPatterns()
 
-        // Only load predictions if not a new user (needs data)
+        // Only load predictions/dashboard if not a new user (needs data)
         if !isNewUser {
-            await loadPredictions()
+            await loadDashboardData()
         }
 
         isLoading = false
+    }
+
+    private func loadDashboardData() async {
+        do {
+            let dashboard = try await APIService.shared.getDashboardData()
+            dashboardData = dashboard
+            enhancedRecovery = dashboard.enhancedRecovery
+            progressSummary = dashboard.progress
+            recommendations = dashboard.recommendations
+            weeklySummary = dashboard.weeklySummary
+
+            // Also update the compact scores for backward compatibility
+            recoveryScore = dashboard.enhancedRecovery.score
+            recoveryStatus = dashboard.enhancedRecovery.status
+            readinessScore = dashboard.readinessScore
+            recommendedIntensity = dashboard.readinessIntensity
+        } catch {
+            print("Failed to load dashboard data: \(error)")
+            // Fallback to individual prediction calls
+            await loadPredictions()
+        }
     }
 
     private func loadUserProfile() async {

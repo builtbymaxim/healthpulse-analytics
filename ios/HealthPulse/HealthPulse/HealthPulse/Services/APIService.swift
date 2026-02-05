@@ -230,6 +230,10 @@ class APIService {
         try await request(endpoint: "/predictions/correlations")
     }
 
+    func getDashboardData() async throws -> DashboardResponse {
+        try await request(endpoint: "/predictions/dashboard")
+    }
+
     // MARK: - Metrics
 
     func logMetric(_ metric: HealthMetric) async throws -> HealthMetric {

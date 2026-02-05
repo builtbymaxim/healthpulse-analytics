@@ -603,3 +603,251 @@ struct ProgressPoint: Codable, Identifiable {
         case setsCompleted = "sets_completed"
     }
 }
+
+// MARK: - Smart Dashboard
+
+struct DashboardResponse: Codable {
+    let enhancedRecovery: EnhancedRecoveryResponse
+    let readinessScore: Double
+    let readinessIntensity: String
+    let progress: ProgressSummary
+    let recommendations: [SmartRecommendation]
+    let weeklySummary: WeeklySummary
+
+    enum CodingKeys: String, CodingKey {
+        case enhancedRecovery = "enhanced_recovery"
+        case readinessScore = "readiness_score"
+        case readinessIntensity = "readiness_intensity"
+        case progress
+        case recommendations
+        case weeklySummary = "weekly_summary"
+    }
+}
+
+struct RecoveryFactor: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let value: Double
+    let score: Double
+    let impact: String
+    let recommendation: String?
+
+    var impactColor: Color {
+        switch impact {
+        case "positive": return .green
+        case "negative": return .red
+        default: return .orange
+        }
+    }
+
+    var displayName: String {
+        switch name {
+        case "sleep_hours": return "Sleep"
+        case "training_load": return "Training Load"
+        case "hrv": return "HRV"
+        default: return name.capitalized
+        }
+    }
+
+    var icon: String {
+        switch name {
+        case "sleep_hours": return "bed.double.fill"
+        case "training_load": return "dumbbell.fill"
+        case "hrv": return "heart.fill"
+        default: return "chart.bar.fill"
+        }
+    }
+}
+
+struct EnhancedRecoveryResponse: Codable {
+    let score: Double
+    let status: String
+    let factors: [RecoveryFactor]
+    let primaryRecommendation: String
+    let sleepDeficitHours: Double?
+    let estimatedFullRecoveryHours: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case score, status, factors
+        case primaryRecommendation = "primary_recommendation"
+        case sleepDeficitHours = "sleep_deficit_hours"
+        case estimatedFullRecoveryHours = "estimated_full_recovery_hours"
+    }
+
+    var statusColor: Color {
+        switch status {
+        case "recovered": return .green
+        case "moderate": return .orange
+        case "fatigued": return .red
+        default: return .gray
+        }
+    }
+}
+
+struct LiftProgress: Codable, Identifiable {
+    var id: String { exerciseName }
+    let exerciseName: String
+    let currentValue: Double
+    let changeValue: Double
+    let changePercent: Double
+    let period: String
+
+    enum CodingKeys: String, CodingKey {
+        case exerciseName = "exercise_name"
+        case currentValue = "current_value"
+        case changeValue = "change_value"
+        case changePercent = "change_percent"
+        case period
+    }
+
+    var changeColor: Color {
+        if changeValue > 0 { return .green }
+        if changeValue < 0 { return .red }
+        return .secondary
+    }
+
+    var changeSymbol: String {
+        if changeValue > 0 { return "+" }
+        return ""
+    }
+}
+
+struct MuscleBalance: Codable, Identifiable {
+    var id: String { category }
+    let category: String
+    let volume7d: Double
+    let daysSinceTrained: Int?
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case category
+        case volume7d = "volume_7d"
+        case daysSinceTrained = "days_since_trained"
+        case status
+    }
+
+    var statusColor: Color {
+        switch status {
+        case "recovered": return .green
+        case "recovering": return .orange
+        case "needs_attention": return .red
+        default: return .gray
+        }
+    }
+}
+
+struct ProgressSummary: Codable {
+    let keyLifts: [LiftProgress]
+    let totalVolumeWeek: Double
+    let volumeTrendPct: Double
+    let recentPrs: [[String: AnyCodable]]
+    let muscleBalance: [MuscleBalance]
+
+    enum CodingKeys: String, CodingKey {
+        case keyLifts = "key_lifts"
+        case totalVolumeWeek = "total_volume_week"
+        case volumeTrendPct = "volume_trend_pct"
+        case recentPrs = "recent_prs"
+        case muscleBalance = "muscle_balance"
+    }
+
+    var volumeTrendColor: Color {
+        if volumeTrendPct > 5 { return .green }
+        if volumeTrendPct < -5 { return .red }
+        return .secondary
+    }
+}
+
+struct SmartRecommendation: Codable, Identifiable {
+    let id: String
+    let category: String
+    let priority: Int
+    let title: String
+    let message: String
+    let actionRoute: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, category, priority, title, message
+        case actionRoute = "action_route"
+    }
+
+    var categoryColor: Color {
+        switch category {
+        case "workout": return .green
+        case "sleep": return .indigo
+        case "nutrition": return .orange
+        case "recovery": return .blue
+        default: return .gray
+        }
+    }
+
+    var categoryIcon: String {
+        switch category {
+        case "workout": return "dumbbell.fill"
+        case "sleep": return "bed.double.fill"
+        case "nutrition": return "fork.knife"
+        case "recovery": return "heart.circle.fill"
+        default: return "lightbulb.fill"
+        }
+    }
+}
+
+struct WeeklySummary: Codable {
+    let workoutsCompleted: Int
+    let workoutsPlanned: Int
+    let avgSleepScore: Double
+    let nutritionAdherencePct: Double
+    let bestDay: String?
+    let highlights: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case workoutsCompleted = "workouts_completed"
+        case workoutsPlanned = "workouts_planned"
+        case avgSleepScore = "avg_sleep_score"
+        case nutritionAdherencePct = "nutrition_adherence_pct"
+        case bestDay = "best_day"
+        case highlights
+    }
+
+    var workoutCompletionPct: Double {
+        guard workoutsPlanned > 0 else { return 0 }
+        return Double(workoutsCompleted) / Double(workoutsPlanned) * 100
+    }
+}
+
+// Helper for decoding dynamic JSON values
+struct AnyCodable: Codable {
+    let value: Any
+
+    init(_ value: Any) {
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let double = try? container.decode(Double.self) {
+            value = double
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else {
+            value = ""
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let string = value as? String {
+            try container.encode(string)
+        } else if let int = value as? Int {
+            try container.encode(int)
+        } else if let double = value as? Double {
+            try container.encode(double)
+        } else if let bool = value as? Bool {
+            try container.encode(bool)
+        }
+    }
+}

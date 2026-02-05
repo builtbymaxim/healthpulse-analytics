@@ -8,6 +8,10 @@ from enum import Enum
 
 from app.auth import get_current_user, CurrentUser
 from app.services.prediction_service import get_prediction_service
+from app.services.dashboard_service import (
+    get_dashboard_service,
+    DashboardResponse,
+)
 
 router = APIRouter()
 
@@ -316,3 +320,22 @@ async def trigger_analysis(
         message=f"Analysis complete. Updated {len(updated)} predictions.",
         predictions_updated=updated,
     )
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+async def get_dashboard_data(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get comprehensive dashboard data in a single call.
+
+    Aggregates data from multiple services to reduce API calls:
+    - Enhanced recovery with contributing factors
+    - Training readiness score
+    - Progress summary (key lifts, volume, PRs, muscle balance)
+    - Smart recommendations
+    - Weekly summary
+
+    This endpoint combines what would otherwise require 5+ separate API calls.
+    """
+    service = get_dashboard_service()
+    return await service.get_dashboard(current_user.id)
