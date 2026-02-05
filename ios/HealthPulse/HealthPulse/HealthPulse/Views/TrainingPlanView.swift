@@ -25,7 +25,8 @@ struct TrainingPlanView: View {
                             ActivePlanCard(
                                 plan: activePlan,
                                 onChangePlan: { viewModel.showTemplates = true },
-                                onDeactivate: { viewModel.deactivatePlan() }
+                                onDeactivate: { viewModel.deactivatePlan() },
+                                onEdit: { viewModel.showEditSchedule = true }
                             )
                         } else {
                             NoPlanCard(onSelectPlan: { viewModel.showTemplates = true })
@@ -54,6 +55,19 @@ struct TrainingPlanView: View {
             .sheet(isPresented: $viewModel.showTemplates) {
                 TemplateSelectionView(viewModel: viewModel)
             }
+            .sheet(isPresented: $viewModel.showEditSchedule) {
+                if let plan = viewModel.activePlan {
+                    EditScheduleSheet(
+                        planId: plan.id,
+                        planName: plan.name,
+                        currentSchedule: plan.schedule,
+                        availableWorkouts: viewModel.availableWorkouts,
+                        onSave: { newSchedule in
+                            viewModel.updateSchedule(newSchedule)
+                        }
+                    )
+                }
+            }
             .task {
                 await viewModel.loadData()
             }
@@ -70,6 +84,7 @@ struct ActivePlanCard: View {
     let plan: TrainingPlanSummary
     let onChangePlan: () -> Void
     let onDeactivate: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -83,6 +98,19 @@ struct ActivePlanCard: View {
                 }
 
                 Spacer()
+
+                Button {
+                    onEdit()
+                    HapticsManager.shared.light()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .font(.subheadline)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.green.opacity(0.1))
+                        .foregroundStyle(.green)
+                        .clipShape(Capsule())
+                }
 
                 Menu {
                     Button("Change Plan", action: onChangePlan)
@@ -409,6 +437,133 @@ struct TemplateCard: View {
     }
 }
 
+// MARK: - Edit Schedule Sheet
+
+struct EditScheduleSheet: View {
+    let planId: UUID
+    let planName: String
+    let currentSchedule: [String: String]
+    let availableWorkouts: [String]
+    let onSave: ([String: String]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var editedSchedule: [String: String?]
+    @State private var isSaving = false
+
+    private let dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    init(planId: UUID, planName: String, currentSchedule: [String: String], availableWorkouts: [String], onSave: @escaping ([String: String]) -> Void) {
+        self.planId = planId
+        self.planName = planName
+        self.currentSchedule = currentSchedule
+        self.availableWorkouts = availableWorkouts
+        self.onSave = onSave
+        // Initialize with current schedule (nil for rest days)
+        var initial: [String: String?] = [:]
+        for day in 1...7 {
+            initial[String(day)] = currentSchedule[String(day)]
+        }
+        _editedSchedule = State(initialValue: initial)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(1...7, id: \.self) { day in
+                        HStack {
+                            Text(dayNames[day - 1])
+                                .frame(width: 100, alignment: .leading)
+
+                            Spacer()
+
+                            Menu {
+                                Button("Rest Day") {
+                                    editedSchedule[String(day)] = nil
+                                }
+                                Divider()
+                                ForEach(availableWorkouts, id: \.self) { workout in
+                                    Button(workout) {
+                                        editedSchedule[String(day)] = workout
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if let workout = editedSchedule[String(day)] ?? nil {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                        Text(workout)
+                                            .foregroundStyle(.primary)
+                                    } else {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(width: 8, height: 8)
+                                        Text("Rest")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Weekly Schedule")
+                } footer: {
+                    Text("Tap a day to change the workout or set it as a rest day.")
+                }
+
+                Section {
+                    let workoutDays = editedSchedule.values.compactMap { $0 }.count
+                    HStack {
+                        Text("Workout Days")
+                        Spacer()
+                        Text("\(workoutDays) per week")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Rest Days")
+                        Spacer()
+                        Text("\(7 - workoutDays) per week")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Summary")
+                }
+            }
+            .navigationTitle("Edit Schedule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveSchedule()
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+    }
+
+    private func saveSchedule() {
+        isSaving = true
+        // Convert to non-optional dict (excluding rest days)
+        var finalSchedule: [String: String] = [:]
+        for (day, workout) in editedSchedule {
+            if let workout = workout {
+                finalSchedule[day] = workout
+            }
+        }
+        onSave(finalSchedule)
+        dismiss()
+    }
+}
+
 // MARK: - View Model
 
 @MainActor
@@ -416,9 +571,11 @@ class TrainingPlanViewModel: ObservableObject {
     @Published var activePlan: TrainingPlanSummary?
     @Published var templates: [PlanTemplate] = []
     @Published var recentSessions: [WorkoutSession] = []
+    @Published var availableWorkouts: [String] = []
     @Published var isLoading = false
     @Published var isLoadingTemplates = false
     @Published var showTemplates = false
+    @Published var showEditSchedule = false
     @Published var error: String?
 
     func loadData() async {
@@ -428,10 +585,23 @@ class TrainingPlanViewModel: ObservableObject {
         do {
             async let planTask = APIService.shared.getActiveTrainingPlan()
             async let sessionsTask = APIService.shared.getWorkoutSessions(days: 30)
+            async let templatesTask = APIService.shared.getTrainingPlanTemplates()
 
-            let (plan, sessions) = try await (planTask, sessionsTask)
+            let (plan, sessions, allTemplates) = try await (planTask, sessionsTask, templatesTask)
             activePlan = plan
             recentSessions = sessions
+
+            // Extract available workouts from templates
+            if let plan = plan {
+                // Find the matching template to get workout names
+                if let matchingTemplate = allTemplates.first(where: { $0.name == plan.name }),
+                   let workouts = matchingTemplate.workouts {
+                    availableWorkouts = workouts.map { $0.name }
+                } else {
+                    // Fallback: use current schedule workout names
+                    availableWorkouts = Array(Set(plan.schedule.values)).sorted()
+                }
+            }
         } catch {
             self.error = error.localizedDescription
             print("Failed to load training plan data: \(error)")
@@ -487,6 +657,35 @@ class TrainingPlanViewModel: ObservableObject {
             } catch {
                 ToastManager.shared.error("Failed to deactivate plan")
                 print("Failed to deactivate plan: \(error)")
+            }
+        }
+    }
+
+    func updateSchedule(_ newSchedule: [String: String]) {
+        guard let plan = activePlan else { return }
+
+        Task {
+            do {
+                _ = try await APIService.shared.updateTrainingPlan(
+                    planId: plan.id,
+                    schedule: newSchedule
+                )
+
+                // Update local state
+                activePlan = TrainingPlanSummary(
+                    id: plan.id,
+                    name: plan.name,
+                    description: plan.description,
+                    daysPerWeek: newSchedule.count,
+                    schedule: newSchedule,
+                    isActive: plan.isActive
+                )
+
+                ToastManager.shared.success("Schedule updated!")
+                HapticsManager.shared.success()
+            } catch {
+                ToastManager.shared.error("Failed to update schedule")
+                print("Failed to update schedule: \(error)")
             }
         }
     }

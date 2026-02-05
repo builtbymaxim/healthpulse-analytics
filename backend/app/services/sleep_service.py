@@ -111,15 +111,19 @@ class SleepService:
         )
 
     async def get_sleep_history(self, user_id: UUID, days: int = 7) -> list[SleepEntry]:
-        """Get sleep history for the past N days."""
+        """Get sleep history for the past N days (optimized single query)."""
         end_date = date.today()
         start_date = end_date - timedelta(days=days)
+
+        # Batch fetch all metrics for the entire date range in ONE query
+        all_metrics = await self._get_sleep_metrics_batch(user_id, start_date, end_date)
 
         entries = []
         current = start_date
 
         while current <= end_date:
-            metrics = await self._get_sleep_metrics(user_id, current, current)
+            date_str = current.isoformat()
+            metrics = all_metrics.get(date_str, {})
 
             duration = metrics.get("sleep_duration", 0)
             if duration > 0:
@@ -132,7 +136,7 @@ class SleepService:
                     sleep_score = self._calculate_sleep_score(duration, quality, deep or 0, rem or 0)
 
                 entries.append(SleepEntry(
-                    date=current.isoformat(),
+                    date=date_str,
                     duration_hours=round(duration, 1),
                     quality=quality,
                     deep_sleep_hours=deep,
@@ -260,7 +264,7 @@ class SleepService:
         return {"message": "Sleep logged successfully", "date": target_date.isoformat()}
 
     async def _get_sleep_metrics(self, user_id: UUID, start: date, end: date) -> dict:
-        """Get sleep metrics for a date range."""
+        """Get sleep metrics for a date range (single date)."""
         result = (
             self.supabase.table("health_metrics")
             .select("metric_type, value, timestamp")
@@ -279,6 +283,42 @@ class SleepService:
                 metrics[mtype] = m["value"]
 
         return metrics
+
+    async def _get_sleep_metrics_batch(self, user_id: UUID, start: date, end: date) -> dict[str, dict]:
+        """Get sleep metrics for a date range, grouped by date (single query for multiple days).
+
+        Returns a dict like: {"2024-01-15": {"sleep_duration": 7.5, "sleep_quality": 85}, ...}
+        """
+        result = (
+            self.supabase.table("health_metrics")
+            .select("metric_type, value, timestamp")
+            .eq("user_id", str(user_id))
+            .in_("metric_type", ["sleep_duration", "sleep_quality", "deep_sleep", "rem_sleep"])
+            .gte("timestamp", start.isoformat())
+            .lte("timestamp", (end + timedelta(days=1)).isoformat())
+            .order("timestamp", desc=True)
+            .execute()
+        )
+
+        # Group metrics by date
+        metrics_by_date: dict[str, dict[str, float]] = {}
+        for m in result.data or []:
+            # Extract date from timestamp (e.g., "2024-01-15T00:00:00" -> "2024-01-15")
+            timestamp_str = m.get("timestamp", "")
+            metric_date = timestamp_str[:10] if timestamp_str else None
+
+            if not metric_date:
+                continue
+
+            if metric_date not in metrics_by_date:
+                metrics_by_date[metric_date] = {}
+
+            mtype = m["metric_type"]
+            # Only take the first (most recent due to ordering) value for each metric type per date
+            if mtype not in metrics_by_date[metric_date]:
+                metrics_by_date[metric_date][mtype] = m["value"]
+
+        return metrics_by_date
 
     def _calculate_sleep_score(
         self, duration: float, quality: float, deep: float, rem: float

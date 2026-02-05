@@ -553,6 +553,11 @@ class APIService {
         try await request(endpoint: "/training-plans/active", method: "DELETE")
     }
 
+    func updateTrainingPlan(planId: UUID, name: String? = nil, schedule: [String: String]? = nil) async throws -> UpdatePlanResponse {
+        let body = UpdatePlanRequest(name: name, schedule: schedule)
+        return try await request(endpoint: "/training-plans/\(planId)", method: "PUT", body: body)
+    }
+
     func logWorkoutSession(_ session: WorkoutSessionRequest) async throws -> WorkoutSessionResponse {
         try await request(endpoint: "/training-plans/sessions", method: "POST", body: session)
     }

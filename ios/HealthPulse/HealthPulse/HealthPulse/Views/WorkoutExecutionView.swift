@@ -35,15 +35,46 @@ struct WorkoutExecutionView: View {
                     isRunning: viewModel.isTimerRunning
                 )
 
-                // Exercise list
+                // Exercise list grouped by key lifts vs accessories
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(viewModel.exerciseLogs.indices, id: \.self) { index in
-                            ExerciseLogCard(
-                                exerciseLog: $viewModel.exerciseLogs[index],
-                                onAddSet: { viewModel.addSet(to: index) },
-                                onDeleteSet: { setIndex in viewModel.deleteSet(from: index, setIndex: setIndex) }
+                        // Key Lifts Section
+                        let keyLiftIndices = viewModel.exerciseLogs.indices.filter { viewModel.exerciseLogs[$0].isKeyLift }
+                        if !keyLiftIndices.isEmpty {
+                            SectionHeader(
+                                icon: "star.fill",
+                                iconColor: .yellow,
+                                title: "Key Lifts",
+                                subtitle: "Track every set in detail"
                             )
+
+                            ForEach(keyLiftIndices, id: \.self) { index in
+                                ExerciseLogCard(
+                                    exerciseLog: $viewModel.exerciseLogs[index],
+                                    onAddSet: { viewModel.addSet(to: index) },
+                                    onDeleteSet: { setIndex in viewModel.deleteSet(from: index, setIndex: setIndex) }
+                                )
+                            }
+                        }
+
+                        // Accessories Section
+                        let accessoryIndices = viewModel.exerciseLogs.indices.filter { !viewModel.exerciseLogs[$0].isKeyLift }
+                        if !accessoryIndices.isEmpty {
+                            SectionHeader(
+                                icon: "dumbbell.fill",
+                                iconColor: .secondary,
+                                title: "Accessories",
+                                subtitle: "Quick check-off or add sets"
+                            )
+                            .padding(.top, keyLiftIndices.isEmpty ? 0 : 8)
+
+                            ForEach(accessoryIndices, id: \.self) { index in
+                                ExerciseLogCard(
+                                    exerciseLog: $viewModel.exerciseLogs[index],
+                                    onAddSet: { viewModel.addSet(to: index) },
+                                    onDeleteSet: { setIndex in viewModel.deleteSet(from: index, setIndex: setIndex) }
+                                )
+                            }
                         }
 
                         // Add Exercise button
@@ -162,10 +193,41 @@ struct WorkoutHeader: View {
     }
 }
 
+// MARK: - Section Header
+
+struct SectionHeader: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .font(.subheadline)
+
+            Text(title)
+                .font(.headline)
+
+            Text("–")
+                .foregroundStyle(.tertiary)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
 // MARK: - Exercise Log Card
 
 struct ExerciseLogCard: View {
     @Binding var exerciseLog: ExerciseLogEntry
+    @State private var showRPEInfo = false
 
     let onAddSet: () -> Void
     let onDeleteSet: (Int) -> Void
@@ -213,25 +275,14 @@ struct ExerciseLogCard: View {
             // Sets for key lifts
             if exerciseLog.isKeyLift || !exerciseLog.sets.isEmpty {
                 VStack(spacing: 8) {
-                    // Column headers
-                    HStack {
-                        Text("Set")
-                            .frame(width: 35, alignment: .leading)
-                        Text("Weight")
-                            .frame(width: 80)
-                        Text("Reps")
-                            .frame(width: 60)
-                        Text("RPE")
-                            .frame(width: 50)
-                        Spacer()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    // Column headers (dynamic based on input type)
+                    columnHeaders
 
                     ForEach(exerciseLog.sets.indices, id: \.self) { setIndex in
                         SetLogRow(
                             setNumber: setIndex + 1,
                             setLog: $exerciseLog.sets[setIndex],
+                            inputType: exerciseLog.inputType,
                             onDelete: { onDeleteSet(setIndex) }
                         )
                     }
@@ -254,6 +305,58 @@ struct ExerciseLogCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
     }
+
+    // Dynamic column headers based on exercise input type
+    private var columnHeaders: some View {
+        HStack {
+            Text("Set")
+                .frame(width: 35, alignment: .leading)
+
+            switch exerciseLog.inputType {
+            case .weightAndReps:
+                Text("Weight")
+                    .frame(width: 80)
+                Text("Reps")
+                    .frame(width: 60)
+                rpeHeaderWithInfo
+
+            case .repsOnly:
+                Text("Reps")
+                    .frame(width: 60)
+                rpeHeaderWithInfo
+
+            case .timeOnly:
+                Text("Duration")
+                    .frame(width: 80)
+
+            case .distanceAndTime:
+                Text("Distance")
+                    .frame(width: 80)
+                Text("Time")
+                    .frame(width: 80)
+            }
+
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .sheet(isPresented: $showRPEInfo) {
+            RPEInfoSheet()
+        }
+    }
+
+    private var rpeHeaderWithInfo: some View {
+        HStack(spacing: 2) {
+            Text("RPE")
+            Button {
+                showRPEInfo = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.caption2)
+            }
+        }
+        .frame(width: 50)
+    }
 }
 
 // MARK: - Set Log Row
@@ -261,6 +364,7 @@ struct ExerciseLogCard: View {
 struct SetLogRow: View {
     let setNumber: Int
     @Binding var setLog: SetLogEntry
+    let inputType: ExerciseInputType
     let onDelete: () -> Void
 
     var body: some View {
@@ -269,43 +373,26 @@ struct SetLogRow: View {
                 .font(.subheadline.bold())
                 .frame(width: 35, alignment: .leading)
 
-            // Weight input
-            HStack(spacing: 4) {
-                TextField("0", value: $setLog.weight, format: .number)
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 60)
-                Text("kg")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 80)
+            // Conditional inputs based on exercise type
+            switch inputType {
+            case .weightAndReps:
+                weightInput
+                repsInput
+                rpeSelector
 
-            // Reps input
-            TextField("0", value: $setLog.reps, format: .number)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 60)
+            case .repsOnly:
+                repsInput
+                rpeSelector
+                Spacer()
 
-            // RPE selector
-            Menu {
-                ForEach(6...10, id: \.self) { rpe in
-                    Button("RPE \(rpe)") {
-                        setLog.rpe = rpe
-                    }
-                }
-                Button("Clear") {
-                    setLog.rpe = nil
-                }
-            } label: {
-                Text(setLog.rpe != nil ? "\(setLog.rpe!)" : "-")
-                    .font(.subheadline)
-                    .frame(width: 40)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            case .timeOnly:
+                durationInput
+                Spacer()
+
+            case .distanceAndTime:
+                distanceInput
+                durationInput
             }
-            .frame(width: 50)
 
             Spacer()
 
@@ -316,14 +403,145 @@ struct SetLogRow: View {
             }
         }
     }
+
+    // MARK: - Input Components
+
+    private var weightInput: some View {
+        HStack(spacing: 4) {
+            TextField("", value: $setLog.weight, format: .number)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .overlay(alignment: .leading) {
+                    if setLog.weight == nil {
+                        Text("0")
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+            Text("kg")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 80)
+    }
+
+    private var repsInput: some View {
+        TextField("", value: $setLog.reps, format: .number)
+            .keyboardType(.numberPad)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 60)
+            .overlay(alignment: .leading) {
+                if setLog.reps == nil {
+                    Text("0")
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+
+    private var rpeSelector: some View {
+        Menu {
+            ForEach(6...10, id: \.self) { rpe in
+                Button("RPE \(rpe)") {
+                    setLog.rpe = rpe
+                }
+            }
+            Button("Clear") {
+                setLog.rpe = nil
+            }
+        } label: {
+            Text(setLog.rpe != nil ? "\(setLog.rpe!)" : "-")
+                .font(.subheadline)
+                .frame(width: 40)
+                .padding(.vertical, 6)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .frame(width: 50)
+    }
+
+    private var durationInput: some View {
+        HStack(spacing: 4) {
+            TextField("", value: $setLog.duration, format: .number)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .overlay(alignment: .leading) {
+                    if setLog.duration == nil {
+                        Text("0")
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+            Text("sec")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 80)
+    }
+
+    private var distanceInput: some View {
+        HStack(spacing: 4) {
+            TextField("", value: $setLog.distance, format: .number)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .overlay(alignment: .leading) {
+                    if setLog.distance == nil {
+                        Text("0")
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+            Text("km")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 80)
+    }
 }
 
 // MARK: - Exercise Log Entry (View Model)
+
+/// Infer exercise input type from reps string (e.g., "60s" → timeOnly)
+private func inferInputType(from reps: String?, exerciseName: String) -> ExerciseInputType {
+    // Check reps string for time indicator
+    if let reps = reps {
+        let lowercased = reps.lowercased()
+        if lowercased.hasSuffix("s") || lowercased.contains("sec") {
+            return .timeOnly
+        }
+        if lowercased.contains("km") || lowercased.contains("mi") || lowercased.contains("m ") {
+            return .distanceAndTime
+        }
+    }
+
+    // Check known bodyweight exercises
+    let bodyweightExercises = ["push-up", "pushup", "pull-up", "pullup", "chin-up", "chinup",
+                                "dip", "burpee", "sit-up", "situp", "crunch", "lunge"]
+    let timedExercises = ["plank", "wall sit", "dead hang", "hollow hold", "l-sit"]
+
+    let nameLower = exerciseName.lowercased()
+    if timedExercises.contains(where: { nameLower.contains($0) }) {
+        return .timeOnly
+    }
+    if bodyweightExercises.contains(where: { nameLower.contains($0) }) {
+        return .repsOnly
+    }
+
+    return .weightAndReps
+}
 
 struct ExerciseLogEntry: Identifiable {
     let id = UUID()
     let name: String
     let isKeyLift: Bool
+    let inputType: ExerciseInputType
     let targetSetsReps: String?
     var sets: [SetLogEntry]
     var isCompleted: Bool
@@ -331,6 +549,8 @@ struct ExerciseLogEntry: Identifiable {
     init(from planned: PlannedExercise, isKeyLift: Bool = false) {
         self.name = planned.name
         self.isKeyLift = isKeyLift
+        self.inputType = inferInputType(from: planned.reps, exerciseName: planned.name)
+
         if let sets = planned.sets, let reps = planned.reps {
             self.targetSetsReps = "\(sets) x \(reps)"
             // Pre-populate empty sets based on target
@@ -343,9 +563,10 @@ struct ExerciseLogEntry: Identifiable {
     }
 
     // For adding custom exercises during workout
-    init(name: String, isKeyLift: Bool, targetSetsReps: String?, sets: [SetLogEntry], isCompleted: Bool) {
+    init(name: String, isKeyLift: Bool, inputType: ExerciseInputType = .weightAndReps, targetSetsReps: String?, sets: [SetLogEntry], isCompleted: Bool) {
         self.name = name
         self.isKeyLift = isKeyLift
+        self.inputType = inputType
         self.targetSetsReps = targetSetsReps
         self.sets = sets
         self.isCompleted = isCompleted
@@ -354,8 +575,10 @@ struct ExerciseLogEntry: Identifiable {
 
 struct SetLogEntry: Identifiable {
     let id = UUID()
-    var weight: Double = 0
-    var reps: Int = 0
+    var weight: Double?                 // For weight_and_reps (nil = empty field)
+    var reps: Int?                      // For weight_and_reps, reps_only
+    var duration: Int?                  // For time_only (seconds)
+    var distance: Double?               // For distance_and_time (km)
     var rpe: Int?
     var completedAt: Date?
 }
@@ -390,7 +613,21 @@ class WorkoutExecutionViewModel: ObservableObject {
     var canComplete: Bool {
         // At least one set logged or one exercise completed
         exerciseLogs.contains { log in
-            log.isCompleted || log.sets.contains { $0.weight > 0 && $0.reps > 0 }
+            if log.isCompleted { return true }
+
+            // Check sets based on input type
+            return log.sets.contains { set in
+                switch log.inputType {
+                case .weightAndReps:
+                    return (set.weight ?? 0) > 0 && (set.reps ?? 0) > 0
+                case .repsOnly:
+                    return (set.reps ?? 0) > 0
+                case .timeOnly:
+                    return (set.duration ?? 0) > 0
+                case .distanceAndTime:
+                    return (set.distance ?? 0) > 0 || (set.duration ?? 0) > 0
+                }
+            }
         }
     }
 
@@ -421,9 +658,11 @@ class WorkoutExecutionViewModel: ObservableObject {
     }
 
     func addExercise(name: String) {
+        let detectedInputType = inferInputType(from: nil, exerciseName: name)
         let newExercise = ExerciseLogEntry(
             name: name,
             isKeyLift: false,  // Added exercises are accessories
+            inputType: detectedInputType,
             targetSetsReps: nil,
             sets: [SetLogEntry()],
             isCompleted: false
@@ -439,16 +678,27 @@ class WorkoutExecutionViewModel: ObservableObject {
             do {
                 // Convert exercise logs to API format
                 let exercises = exerciseLogs.compactMap { log -> ExerciseLog? in
-                    // Filter out empty sets
-                    let validSets = log.sets.filter { $0.weight > 0 && $0.reps > 0 }
+                    // Filter out empty sets based on input type
+                    let validSets = log.sets.filter { set in
+                        switch log.inputType {
+                        case .weightAndReps:
+                            return (set.weight ?? 0) > 0 && (set.reps ?? 0) > 0
+                        case .repsOnly:
+                            return (set.reps ?? 0) > 0
+                        case .timeOnly:
+                            return (set.duration ?? 0) > 0
+                        case .distanceAndTime:
+                            return (set.distance ?? 0) > 0 || (set.duration ?? 0) > 0
+                        }
+                    }
 
                     // Skip exercises with no data
                     guard log.isCompleted || !validSets.isEmpty else { return nil }
 
                     let setLogs = validSets.map { entry in
                         SetLog(
-                            weight: entry.weight,
-                            reps: entry.reps,
+                            weight: entry.weight ?? 0,
+                            reps: entry.reps ?? 0,
                             rpe: entry.rpe,
                             completedAt: entry.completedAt ?? Date()
                         )
@@ -553,6 +803,72 @@ struct PRCelebrationView: View {
     }
 }
 
+// MARK: - RPE Info Sheet
+
+struct RPEInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Rate of Perceived Exertion")
+                        .font(.title2.bold())
+
+                    Text("RPE is a scale from 1-10 that measures how hard a set felt. It helps you track intensity without needing exact percentages.")
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        rpeRow(10, "Maximum effort - couldn't do another rep")
+                        rpeRow(9, "Very hard - maybe 1 rep left")
+                        rpeRow(8, "Hard - 2 reps left in the tank")
+                        rpeRow(7, "Moderate - 3 reps left")
+                        rpeRow(6, "Light - 4+ reps left")
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Text("💡 Tip: Most working sets should be RPE 7-9. Leave RPE 10 for PR attempts.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                }
+                .padding()
+            }
+            .navigationTitle("What is RPE?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Got it") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func rpeRow(_ value: Int, _ description: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(value)")
+                .font(.headline.bold())
+                .foregroundStyle(rpeColor(value))
+                .frame(width: 30)
+            Text(description)
+                .font(.subheadline)
+        }
+    }
+
+    private func rpeColor(_ value: Int) -> Color {
+        switch value {
+        case 10: return .red
+        case 9: return .orange
+        case 8: return .yellow
+        case 7: return .green
+        default: return .blue
+        }
+    }
+}
+
 // MARK: - Add Exercise Sheet
 
 struct AddExerciseSheet: View {
@@ -580,82 +896,109 @@ struct AddExerciseSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView("Loading exercises...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List {
-                        // Quick add common exercises
-                        if searchText.isEmpty {
-                            Section("Common Exercises") {
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                                    ForEach(commonExercises.prefix(8), id: \.self) { exercise in
-                                        Button {
-                                            addExercise(exercise)
-                                        } label: {
-                                            Text(exercise)
-                                                .font(.caption)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
-                                                .background(Color.green.opacity(0.1))
-                                                .foregroundStyle(.green)
-                                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        }
-                                    }
-                                }
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-
-                        // Search results or full list
-                        Section(searchText.isEmpty ? "All Exercises" : "Search Results") {
-                            if filteredExercises.isEmpty && !searchText.isEmpty {
-                                // Allow adding custom exercise
-                                Button {
-                                    addExercise(searchText)
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "plus.circle.fill")
-                                            .foregroundStyle(.green)
-                                        Text("Add \"\(searchText)\" as custom exercise")
-                                    }
-                                }
-                            } else {
-                                ForEach(filteredExercises) { exercise in
-                                    Button {
-                                        addExercise(exercise.name)
-                                    } label: {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name)
-                                                    .foregroundStyle(.primary)
-                                                Text(exercise.category.capitalized)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "plus.circle")
-                                                .foregroundStyle(.green)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            mainContent
+                .navigationTitle("Add Exercise")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
                     }
-                    .searchable(text: $searchText, prompt: "Search exercises")
+                }
+                .task {
+                    await loadExercises()
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if isLoading {
+            ProgressView("Loading exercises...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            exerciseList
+        }
+    }
+
+    private var exerciseList: some View {
+        List {
+            if searchText.isEmpty {
+                commonExercisesSection
+            }
+            searchResultsSection
+        }
+        .searchable(text: $searchText, prompt: "Search exercises")
+    }
+
+    private var commonExercisesSection: some View {
+        Section("Common Exercises") {
+            commonExercisesGrid
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+        }
+    }
+
+    private var commonExercisesGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(commonExercises.prefix(8), id: \.self) { exercise in
+                commonExerciseButton(exercise)
+            }
+        }
+    }
+
+    private func commonExerciseButton(_ exercise: String) -> some View {
+        Button {
+            addExercise(exercise)
+        } label: {
+            Text(exercise)
+                .font(.caption)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.1))
+                .foregroundStyle(.green)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private var searchResultsSection: some View {
+        Section(searchText.isEmpty ? "All Exercises" : "Search Results") {
+            if filteredExercises.isEmpty && !searchText.isEmpty {
+                customExerciseButton
+            } else {
+                ForEach(filteredExercises) { exercise in
+                    exerciseRow(exercise)
                 }
             }
-            .navigationTitle("Add Exercise")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+        }
+    }
+
+    private var customExerciseButton: some View {
+        Button {
+            addExercise(searchText)
+        } label: {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Add \"\(searchText)\" as custom exercise")
             }
-            .task {
-                await loadExercises()
+        }
+    }
+
+    private func exerciseRow(_ exercise: Exercise) -> some View {
+        Button {
+            addExercise(exercise.name)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(exercise.name)
+                        .foregroundStyle(.primary)
+                    Text(exercise.category.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(.green)
             }
         }
     }

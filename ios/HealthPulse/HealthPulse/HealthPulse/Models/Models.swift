@@ -451,6 +451,15 @@ struct ActivatePlanResponse: Codable {
     }
 }
 
+struct UpdatePlanRequest: Codable {
+    let name: String?
+    let schedule: [String: String]?
+}
+
+struct UpdatePlanResponse: Codable {
+    let success: Bool
+}
+
 struct WorkoutSessionRequest: Codable {
     let planId: UUID?
     let plannedWorkoutName: String?

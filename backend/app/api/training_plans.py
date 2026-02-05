@@ -31,6 +31,13 @@ class LogWorkoutSessionRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class UpdatePlanRequest(BaseModel):
+    """Request to update a training plan."""
+    name: Optional[str] = None
+    schedule: Optional[dict[str, str | None]] = None  # day_of_week -> workout_name or null
+    customizations: Optional[dict] = None  # Exercise swaps, modifications
+
+
 # Response Models
 class TodayWorkoutResponse(BaseModel):
     """Today's planned workout."""
@@ -252,6 +259,105 @@ async def deactivate_plan(
     ).eq("user_id", str(current_user.id)).eq("is_active", True).execute()
 
     return {"success": True}
+
+
+@router.put("/{plan_id}")
+async def update_training_plan(
+    plan_id: UUID,
+    request: UpdatePlanRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Update a user's training plan (schedule, name, customizations)."""
+    supabase = get_supabase_client()
+
+    # Verify the plan belongs to the user
+    existing = (
+        supabase.table("user_training_plans")
+        .select("id")
+        .eq("id", str(plan_id))
+        .eq("user_id", str(current_user.id))
+        .limit(1)
+        .execute()
+    )
+
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Training plan not found")
+
+    # Build update data
+    update_data = {"updated_at": datetime.now().isoformat()}
+
+    if request.name is not None:
+        update_data["name"] = request.name
+
+    if request.schedule is not None:
+        update_data["schedule"] = request.schedule
+
+    if request.customizations is not None:
+        update_data["customizations"] = request.customizations
+
+    # Perform update
+    result = (
+        supabase.table("user_training_plans")
+        .update(update_data)
+        .eq("id", str(plan_id))
+        .eq("user_id", str(current_user.id))
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to update plan")
+
+    return {"success": True, "plan": result.data[0]}
+
+
+@router.get("/{plan_id}")
+async def get_training_plan_details(
+    plan_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get full details of a user's training plan including template workouts."""
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("user_training_plans")
+        .select("*, plan_templates(*)")
+        .eq("id", str(plan_id))
+        .eq("user_id", str(current_user.id))
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Training plan not found")
+
+    plan = result.data[0]
+    template = plan.get("plan_templates", {})
+
+    # Merge template workouts with any customizations
+    workouts = template.get("workouts", []) if template else []
+    customizations = plan.get("customizations", {}) or {}
+
+    # Apply any exercise customizations
+    if customizations.get("exerciseSwaps"):
+        swaps = customizations["exerciseSwaps"]
+        for workout in workouts:
+            for exercise in workout.get("exercises", []):
+                orig_name = exercise.get("name", "")
+                if orig_name in swaps:
+                    exercise["name"] = swaps[orig_name]
+                    exercise["swapped_from"] = orig_name
+
+    return {
+        "id": plan["id"],
+        "name": plan["name"],
+        "description": plan.get("description"),
+        "schedule": plan.get("schedule", {}),
+        "workouts": workouts,
+        "customizations": customizations,
+        "is_active": plan.get("is_active", False),
+        "template_name": template.get("name") if template else None,
+        "days_per_week": template.get("days_per_week") if template else len(plan.get("schedule", {})),
+    }
 
 
 @router.post("/sessions")

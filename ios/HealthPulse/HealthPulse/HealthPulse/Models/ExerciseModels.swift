@@ -43,6 +43,19 @@ struct Exercise: Codable, Identifiable, Hashable {
         instructions = try container.decodeIfPresent(String.self, forKey: .instructions)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
+
+    // Memberwise initializer for creating Exercise instances in code
+    init(id: UUID, name: String, category: ExerciseCategory, muscleGroups: [String], equipment: EquipmentType? = nil, inputType: ExerciseInputType = .weightAndReps, isCompound: Bool = false, instructions: String? = nil, createdAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.muscleGroups = muscleGroups
+        self.equipment = equipment
+        self.inputType = inputType
+        self.isCompound = isCompound
+        self.instructions = instructions
+        self.createdAt = createdAt
+    }
 }
 
 enum ExerciseCategory: String, Codable, CaseIterable {
