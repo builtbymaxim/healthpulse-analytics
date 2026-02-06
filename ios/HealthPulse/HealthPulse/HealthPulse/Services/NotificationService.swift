@@ -169,7 +169,7 @@ class NotificationService: ObservableObject {
     func scheduleWorkoutReminder() async {
         // Fetch today's workout plan to know which days have workouts
         do {
-            let todayWorkout: TodayWorkoutResponse = try await APIService.shared.request(endpoint: "/training-plans/today")
+            let todayWorkout = try await APIService.shared.getTodaysWorkout()
 
             // Remove old workout reminders
             center.removePendingNotificationRequests(withIdentifiers: ["workout_daily"])
@@ -259,19 +259,5 @@ class NotificationService: ObservableObject {
 
     func cancelNotification(identifier: String) {
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
-    }
-}
-
-// MARK: - TodayWorkoutResponse for decoding
-
-private struct TodayWorkoutResponse: Codable {
-    let hasPlan: Bool
-    let isRestDay: Bool
-    let workoutName: String?
-
-    enum CodingKeys: String, CodingKey {
-        case hasPlan = "has_plan"
-        case isRestDay = "is_rest_day"
-        case workoutName = "workout_name"
     }
 }

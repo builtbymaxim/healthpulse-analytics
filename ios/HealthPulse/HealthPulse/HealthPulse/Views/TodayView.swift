@@ -1018,23 +1018,17 @@ class TodayViewModel: ObservableObject {
     func loadData() async {
         isLoading = true
 
-        // Load user profile to determine if new user
+        // Load user profile first to determine if new user
         await loadUserProfile()
 
-        // Load today's workout from training plan
-        await loadTodaysWorkout()
+        // Load independent data sources in parallel
+        async let workoutTask: () = loadTodaysWorkout()
+        async let nutritionTask: () = loadNutrition()
+        async let weeklyNutritionTask: () = loadWeeklyNutrition()
+        async let workoutsTask: () = loadWorkouts()
+        async let sleepTask: () = loadSleepPatterns()
 
-        // Load nutrition summary
-        await loadNutrition()
-
-        // Load weekly nutrition adherence (real data)
-        await loadWeeklyNutrition()
-
-        // Load workout data
-        await loadWorkouts()
-
-        // Load sleep patterns
-        await loadSleepPatterns()
+        _ = await (workoutTask, nutritionTask, weeklyNutritionTask, workoutsTask, sleepTask)
 
         // Only load predictions/dashboard if not a new user (needs data)
         if !isNewUser {

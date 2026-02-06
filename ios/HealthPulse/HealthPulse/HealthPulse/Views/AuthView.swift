@@ -14,6 +14,7 @@ struct AuthView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var heartbeatPhase: Int = 0
+    @State private var heartbeatTimer: Timer?
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,10 @@ struct AuthView: View {
                             .shadow(color: AppTheme.primary.opacity(0.4), radius: 30, x: 0, y: 0)
                             .onAppear {
                                 startHeartbeat()
+                            }
+                            .onDisappear {
+                                heartbeatTimer?.invalidate()
+                                heartbeatTimer = nil
                             }
 
                         Text("Track. Train. Transform.")
@@ -167,7 +172,8 @@ struct AuthView: View {
     }
 
     private func startHeartbeat() {
-        Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { timer in
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
             withAnimation(.easeOut(duration: 0.12)) {
                 heartbeatPhase += 1
                 if heartbeatPhase > 10 {  // 4 beats + 6 rest phases = ~1.5s cycle

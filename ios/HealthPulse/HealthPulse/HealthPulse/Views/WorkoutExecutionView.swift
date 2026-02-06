@@ -16,6 +16,7 @@ struct WorkoutExecutionView: View {
     @StateObject private var viewModel: WorkoutExecutionViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showExercisePicker = false
+    @State private var showCancelConfirmation = false
 
     init(workout: TodayWorkoutResponse, planId: UUID?, onComplete: @escaping ([PRInfo]) -> Void) {
         self.workout = workout
@@ -128,10 +129,18 @@ struct WorkoutExecutionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        viewModel.stopTimer()
-                        dismiss()
+                        showCancelConfirmation = true
                     }
                 }
+            }
+            .alert("Cancel Workout?", isPresented: $showCancelConfirmation) {
+                Button("Keep Going", role: .cancel) { }
+                Button("Discard", role: .destructive) {
+                    viewModel.stopTimer()
+                    dismiss()
+                }
+            } message: {
+                Text("Your workout progress will be lost.")
             }
             .onAppear {
                 viewModel.startTimer()

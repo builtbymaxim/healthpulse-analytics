@@ -40,11 +40,15 @@ struct RunningWorkoutView: View {
 
     var formattedTime: String {
         let totalSeconds = displayCentiseconds / 100
-        let minutes = totalSeconds / 60
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
-        let centis = displayCentiseconds % 100
 
-        return String(format: "%02d:%02d:%02d", minutes, seconds, centis)
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        let centis = displayCentiseconds % 100
+        return String(format: "%02d:%02d.%02d", minutes, seconds, centis)
     }
 
     var formattedDistance: String {
@@ -495,7 +499,7 @@ struct RunningWorkoutView: View {
 
     private func startDisplayTimer() {
         stopDisplayTimer()
-        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { _ in
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             guard let start = runStartDate else { return }
             var elapsed = Date().timeIntervalSince(start) - totalPausedInterval
             if isPaused, let pauseStart = pauseStartDate {

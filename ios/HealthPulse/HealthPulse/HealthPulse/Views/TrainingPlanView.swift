@@ -68,6 +68,14 @@ struct TrainingPlanView: View {
                     )
                 }
             }
+            .alert("Deactivate Plan?", isPresented: $viewModel.showDeactivateConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Deactivate", role: .destructive) {
+                    viewModel.confirmDeactivatePlan()
+                }
+            } message: {
+                Text("This will remove your current training plan. You can activate a new one anytime.")
+            }
             .task {
                 await viewModel.loadData()
             }
@@ -576,6 +584,7 @@ class TrainingPlanViewModel: ObservableObject {
     @Published var isLoadingTemplates = false
     @Published var showTemplates = false
     @Published var showEditSchedule = false
+    @Published var showDeactivateConfirmation = false
     @Published var error: String?
 
     func loadData() async {
@@ -649,6 +658,10 @@ class TrainingPlanViewModel: ObservableObject {
     }
 
     func deactivatePlan() {
+        showDeactivateConfirmation = true
+    }
+
+    func confirmDeactivatePlan() {
         Task {
             do {
                 _ = try await APIService.shared.deactivateTrainingPlan()

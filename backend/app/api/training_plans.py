@@ -540,12 +540,11 @@ async def _check_and_update_prs(
                     "workout_session_id": session_id,
                 }
 
-                # Delete existing if any, then insert new
-                supabase.table("personal_records").delete().eq(
-                    "user_id", str(user_id)
-                ).eq("exercise_name", exercise_name).eq("record_type", pr_type).execute()
-
-                supabase.table("personal_records").insert(pr_data).execute()
+                # Atomic upsert on unique constraint
+                supabase.table("personal_records").upsert(
+                    pr_data,
+                    on_conflict="user_id,exercise_name,record_type"
+                ).execute()
 
                 prs_achieved.append({
                     "exercise_name": exercise_name,

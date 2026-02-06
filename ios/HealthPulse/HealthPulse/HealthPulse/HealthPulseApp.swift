@@ -22,7 +22,7 @@ struct HealthPulseApp: App {
                 .task {
                     await notificationService.requestAuthorization()
                 }
-                .onChange(of: authService.isAuthenticated) { authenticated in
+                .onChange(of: authService.isAuthenticated) { _, authenticated in
                     if authenticated {
                         Task {
                             await notificationService.scheduleAllNotifications()

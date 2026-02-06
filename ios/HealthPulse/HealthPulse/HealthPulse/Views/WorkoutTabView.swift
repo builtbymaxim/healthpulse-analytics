@@ -11,6 +11,7 @@ struct WorkoutTabView: View {
     @State private var showStrengthSheet = false
     @State private var showRunningSheet = false
     @State private var showGeneralWorkout = false
+    @State private var selectedWorkoutType: WorkoutType = .cycling
     @State private var showTrainingPlanView = false
     @State private var showWorkoutExecution = false
     @State private var showPRCelebration = false
@@ -76,12 +77,13 @@ struct WorkoutTabView: View {
                         // Secondary workout types
                         HStack(spacing: 12) {
                             ForEach([
-                                ("figure.outdoor.cycle", "Cycling", Color.blue),
-                                ("figure.yoga", "Yoga", Color.purple),
-                                ("figure.pool.swim", "Swimming", Color.cyan),
-                                ("figure.highintensity.intervaltraining", "HIIT", Color.red)
-                            ], id: \.0) { icon, title, color in
+                                ("figure.outdoor.cycle", "Cycling", Color.blue, WorkoutType.cycling),
+                                ("figure.yoga", "Yoga", Color.purple, WorkoutType.yoga),
+                                ("figure.pool.swim", "Swimming", Color.cyan, WorkoutType.swimming),
+                                ("figure.highintensity.intervaltraining", "HIIT", Color.red, WorkoutType.hiit)
+                            ], id: \.0) { icon, title, color, type in
                                 SmallWorkoutButton(icon: icon, title: title, color: color) {
+                                    selectedWorkoutType = type
                                     showGeneralWorkout = true
                                     HapticsManager.shared.light()
                                 }
@@ -195,7 +197,7 @@ struct WorkoutTabView: View {
                 }
             }
             .sheet(isPresented: $showGeneralWorkout) {
-                GeneralWorkoutSheet { workout in
+                GeneralWorkoutSheet(initialType: selectedWorkoutType) { workout in
                     ToastManager.shared.success("Workout logged!")
                     // Optimistically add to local state immediately
                     recentWorkouts.insert(workout, at: 0)
@@ -500,6 +502,7 @@ struct RecentWorkoutRow: View {
 
 struct GeneralWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
+    var initialType: WorkoutType = .cycling
     let onSave: (Workout) -> Void
 
     @State private var workoutType: WorkoutType = .cycling
@@ -514,6 +517,7 @@ struct GeneralWorkoutSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Workout Type")
                         .font(.headline)
+
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 12) {
                         ForEach(WorkoutType.allCases.filter { $0 != .strength }, id: \.self) { type in
@@ -583,6 +587,9 @@ struct GeneralWorkoutSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+            .onAppear {
+                workoutType = initialType
             }
         }
     }

@@ -119,13 +119,18 @@ async def sign_in(request: SignInRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RefreshRequest(BaseModel):
+    """Refresh token request."""
+    refresh_token: str
+
+
 @router.post("/refresh")
-async def refresh_token(refresh_token: str):
+async def refresh_token(request: RefreshRequest):
     """Refresh an expired access token."""
     supabase = get_supabase_anon()
 
     try:
-        response = supabase.auth.refresh_session(refresh_token)
+        response = supabase.auth.refresh_session(request.refresh_token)
 
         if response.session is None:
             raise HTTPException(status_code=401, detail="Invalid refresh token")

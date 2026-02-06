@@ -86,17 +86,26 @@ struct TrendsView: View {
             .onChange(of: selectedPeriod) {
                 Task { await loadData() }
             }
+            .onChange(of: selectedMetric) {
+                Task { await loadData() }
+            }
+            .refreshable {
+                await loadData()
+            }
         }
     }
 
     private var chartData: [ChartDataPoint] {
-        // Generate sample data for demo
-        let calendar = Calendar.current
-        return (0..<selectedPeriod).reversed().map { daysAgo in
-            let date = calendar.date(byAdding: .day, value: -daysAgo, to: Date())!
-            let value = Double.random(in: 60...90)
-            return ChartDataPoint(date: date, value: value)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        if !wellnessHistory.isEmpty {
+            return wellnessHistory.map { score in
+                let date = dateFormatter.date(from: score.date) ?? Date()
+                return ChartDataPoint(date: date, value: score.overallScore)
+            }
         }
+        return []
     }
 
     private func loadData() async {

@@ -1036,13 +1036,13 @@ struct OnboardingView: View {
 
     private func dayAbbreviation(_ day: Int) -> String {
         switch day {
-        case 1: return "M"
-        case 2: return "T"
-        case 3: return "W"
-        case 4: return "T"
-        case 5: return "F"
-        case 6: return "S"
-        case 7: return "S"
+        case 1: return "Mo"
+        case 2: return "Tu"
+        case 3: return "We"
+        case 4: return "Th"
+        case 5: return "Fr"
+        case 6: return "Sa"
+        case 7: return "Su"
         default: return ""
         }
     }
