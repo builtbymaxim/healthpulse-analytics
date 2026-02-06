@@ -6,11 +6,14 @@ and nutrition_service into a single composite response to reduce API calls.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, date, timedelta
 from uuid import UUID
 from pydantic import BaseModel
 
 from app.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 from app.services.prediction_service import get_prediction_service
 from app.services.exercise_service import get_exercise_service
 from app.services.sleep_service import get_sleep_service
@@ -112,11 +115,42 @@ class DashboardService:
 
     async def get_dashboard(self, user_id: UUID) -> DashboardResponse:
         """Get comprehensive dashboard data in a single call."""
-        # Fetch all data in parallel would be ideal, but we'll do sequential for simplicity
-        enhanced_recovery = await self._get_enhanced_recovery(user_id)
-        readiness = await self.prediction_service.get_readiness_prediction(user_id)
-        progress = await self._get_progress_summary(user_id)
-        weekly = await self._get_weekly_summary(user_id)
+        # Each section is wrapped in try/except so partial failures
+        # don't crash the entire dashboard.
+
+        try:
+            enhanced_recovery = await self._get_enhanced_recovery(user_id)
+        except Exception as e:
+            logger.warning("Dashboard: enhanced_recovery failed: %s", e)
+            enhanced_recovery = EnhancedRecoveryResponse(
+                score=50, status="unknown", factors=[],
+                primary_recommendation="Unable to calculate recovery right now.",
+            )
+
+        try:
+            readiness = await self.prediction_service.get_readiness_prediction(user_id)
+        except Exception as e:
+            logger.warning("Dashboard: readiness failed: %s", e)
+            readiness = {"score": 50, "recommended_intensity": "moderate"}
+
+        try:
+            progress = await self._get_progress_summary(user_id)
+        except Exception as e:
+            logger.warning("Dashboard: progress failed: %s", e)
+            progress = ProgressSummary(
+                key_lifts=[], total_volume_week=0, volume_trend_pct=0,
+                recent_prs=[], muscle_balance=[],
+            )
+
+        try:
+            weekly = await self._get_weekly_summary(user_id)
+        except Exception as e:
+            logger.warning("Dashboard: weekly_summary failed: %s", e)
+            weekly = WeeklySummary(
+                workouts_completed=0, workouts_planned=0, avg_sleep_score=0,
+                nutrition_adherence_pct=0, highlights=[],
+            )
+
         recommendations = self._generate_recommendations(
             enhanced_recovery, readiness, progress, weekly
         )

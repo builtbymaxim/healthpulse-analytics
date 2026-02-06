@@ -2,41 +2,60 @@
 //  RunningWorkoutView.swift
 //  HealthPulse
 //
-//  GPS-based running workout tracker
+//  GPS-based running workout tracker with background execution support.
+//  Uses wall-clock timing so elapsed time stays accurate across backgrounding.
 //
 
+import ActivityKit
 import SwiftUI
 import CoreLocation
 import Combine
 
 struct RunningWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     let onSave: (Workout) -> Void
 
     @StateObject private var locationManager = RunLocationManager()
     @State private var isRunning = false
     @State private var isPaused = false
-    @State private var elapsedCentiseconds: Int = 0  // Track centiseconds for precision
-    @State private var timer: Timer?
     @State private var showStopConfirmation = false
     @State private var isSaving = false
 
-    // For backward compatibility
-    var elapsedSeconds: Int { elapsedCentiseconds / 100 }
+    // Wall-clock based timing
+    @State private var runStartDate: Date?
+    @State private var totalPausedInterval: TimeInterval = 0
+    @State private var pauseStartDate: Date?
+    @State private var displayCentiseconds: Int = 0
+    @State private var displayTimer: Timer?
 
-    // Computed properties
+    // Live Activity
+    @State private var liveActivity: Activity<RunningActivityAttributes>?
+
+    private let workoutPersistence = ActiveWorkoutManager.shared
+
+    var elapsedSeconds: Int { displayCentiseconds / 100 }
+
+    // MARK: - Formatted Display Values
+
     var formattedTime: String {
-        let totalSeconds = elapsedCentiseconds / 100
+        let totalSeconds = displayCentiseconds / 100
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        let centis = elapsedCentiseconds % 100
+        let centis = displayCentiseconds % 100
 
         return String(format: "%02d:%02d:%02d", minutes, seconds, centis)
     }
 
     var formattedDistance: String {
-        let km = locationManager.totalDistance / 1000
-        return String(format: "%.2f", km)
+        if locationManager.totalDistance < 1000 {
+            return String(format: "%.0f", locationManager.totalDistance)
+        }
+        return String(format: "%.2f", locationManager.totalDistance / 1000)
+    }
+
+    var distanceUnit: String {
+        locationManager.totalDistance < 1000 ? "m" : "km"
     }
 
     var formattedPace: String {
@@ -83,7 +102,7 @@ struct RunningWorkoutView: View {
                                         .font(.system(size: 48, weight: .bold, design: .rounded))
                                         .foregroundStyle(.green)
 
-                                    Text("km")
+                                    Text(distanceUnit)
                                         .font(.title3)
                                         .foregroundStyle(.gray)
                                 }
@@ -201,17 +220,24 @@ struct RunningWorkoutView: View {
                     discardRun()
                 }
                 Button("Continue Running", role: .cancel) {
-                    resumeRun()  // Resume timer after canceling
+                    resumeRun()
                 }
             } message: {
                 Text("Do you want to save this run?")
             }
             .onAppear {
                 locationManager.requestPermission()
+                restoreWorkoutIfNeeded()
             }
             .onDisappear {
-                stopTimer()
+                stopDisplayTimer()
                 locationManager.stopTracking()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                handleScenePhaseChange(to: newPhase)
+            }
+            .onChange(of: locationManager.totalDistance) { _, _ in
+                updateLiveActivity()
             }
             .overlay {
                 if isSaving {
@@ -235,37 +261,119 @@ struct RunningWorkoutView: View {
         .preferredColorScheme(.dark)
     }
 
+    // MARK: - Wall-Clock Elapsed Time
+
+    private func computeElapsedCentiseconds() -> Int {
+        guard let start = runStartDate else { return 0 }
+        var elapsed = Date().timeIntervalSince(start) - totalPausedInterval
+        if isPaused, let pauseStart = pauseStartDate {
+            elapsed -= Date().timeIntervalSince(pauseStart)
+        }
+        return max(0, Int(elapsed * 100))
+    }
+
+    // MARK: - Scene Phase Handling
+
+    private func handleScenePhaseChange(to phase: ScenePhase) {
+        guard isRunning else { return }
+
+        switch phase {
+        case .background:
+            stopDisplayTimer()
+            persistState()
+
+        case .active:
+            displayCentiseconds = computeElapsedCentiseconds()
+            if !isPaused {
+                startDisplayTimer()
+            }
+
+        default:
+            break
+        }
+    }
+
+    // MARK: - Persistence
+
+    private func persistState() {
+        workoutPersistence.saveState(
+            totalPausedInterval: totalPausedInterval,
+            pauseStartDate: pauseStartDate,
+            totalDistance: locationManager.totalDistance,
+            isPaused: isPaused
+        )
+    }
+
+    private func restoreWorkoutIfNeeded() {
+        guard workoutPersistence.isWorkoutActive,
+              let startDate = workoutPersistence.runStartDate else { return }
+
+        runStartDate = startDate
+        totalPausedInterval = workoutPersistence.totalPausedInterval
+        isPaused = workoutPersistence.isPaused
+        pauseStartDate = workoutPersistence.pauseStartDate
+        locationManager.totalDistance = workoutPersistence.totalDistance
+        isRunning = true
+
+        displayCentiseconds = computeElapsedCentiseconds()
+
+        if !isPaused {
+            startDisplayTimer()
+            locationManager.startTracking()
+        }
+    }
+
     // MARK: - Actions
 
     private func startRun() {
+        let now = Date()
         isRunning = true
         isPaused = false
-        elapsedCentiseconds = 0
+        runStartDate = now
+        totalPausedInterval = 0
+        pauseStartDate = nil
+        displayCentiseconds = 0
         locationManager.startTracking()
-        startTimer()
+        startDisplayTimer()
+
+        workoutPersistence.startWorkout(startDate: now)
+        startLiveActivity()
         HapticsManager.shared.heavy()
     }
 
     private func pauseRun() {
         isPaused = true
-        stopTimer()
+        pauseStartDate = Date()
+        stopDisplayTimer()
+        displayCentiseconds = computeElapsedCentiseconds()
         locationManager.pauseTracking()
+        persistState()
+        updateLiveActivity()
         HapticsManager.shared.medium()
     }
 
     private func resumeRun() {
+        if let pauseStart = pauseStartDate {
+            totalPausedInterval += Date().timeIntervalSince(pauseStart)
+        }
         isPaused = false
-        startTimer()
+        pauseStartDate = nil
+        startDisplayTimer()
         locationManager.resumeTracking()
+        persistState()
+        updateLiveActivity()
         HapticsManager.shared.medium()
     }
 
     private func finishRun() {
-        // Stop tracking immediately
-        stopTimer()
+        stopDisplayTimer()
         locationManager.stopTracking()
         isRunning = false
         isSaving = true
+        endLiveActivity()
+
+        let finalCentiseconds = computeElapsedCentiseconds()
+        let finalSeconds = finalCentiseconds / 100
 
         // Estimate calories: ~60 cal per km for running
         let distanceKm = locationManager.totalDistance / 1000
@@ -276,13 +384,15 @@ struct RunningWorkoutView: View {
             id: UUID(),
             userId: UUID(),
             workoutType: .running,
-            startedAt: Date().addingTimeInterval(-Double(elapsedSeconds)),
-            durationMinutes: max(elapsedSeconds / 60, 1),
+            startedAt: runStartDate ?? Date().addingTimeInterval(-Double(finalSeconds)),
+            durationMinutes: max(finalSeconds / 60, 1),
             intensity: .moderate,
             caloriesBurned: estimatedCalories > 0 ? estimatedCalories : nil,
             notes: distanceKm > 0 ? String(format: "%.2f km", distanceKm) : nil,
             createdAt: Date()
         )
+
+        workoutPersistence.clearWorkout()
 
         // Save to API
         Task {
@@ -308,24 +418,96 @@ struct RunningWorkoutView: View {
     }
 
     private func discardRun() {
-        stopTimer()
+        stopDisplayTimer()
         locationManager.stopTracking()
+        isRunning = false
+        workoutPersistence.clearWorkout()
+        endLiveActivity()
         HapticsManager.shared.warning()
         dismiss()
     }
 
-    private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { _ in
-            // Only increment if actively running and not paused
-            if isRunning && !isPaused {
-                elapsedCentiseconds += 1
-            }
+    // MARK: - Live Activity
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        let state = RunningActivityAttributes.ContentState(
+            distanceMeters: 0,
+            paceFormatted: "--:--",
+            isPaused: false,
+            timerDate: Date(),
+            pausedElapsedSeconds: 0
+        )
+        let content = ActivityContent(state: state, staleDate: nil)
+
+        do {
+            liveActivity = try Activity.request(
+                attributes: RunningActivityAttributes(),
+                content: content,
+                pushType: nil
+            )
+        } catch {
+            print("Failed to start Live Activity: \(error)")
         }
     }
 
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+    private func updateLiveActivity() {
+        guard let activity = liveActivity else { return }
+
+        let elapsedInterval = Double(computeElapsedCentiseconds()) / 100.0
+
+        let state = RunningActivityAttributes.ContentState(
+            distanceMeters: locationManager.totalDistance,
+            paceFormatted: formattedPace,
+            isPaused: isPaused,
+            timerDate: Date().addingTimeInterval(-elapsedInterval),
+            pausedElapsedSeconds: isPaused ? Int(elapsedInterval) : 0
+        )
+        let content = ActivityContent(state: state, staleDate: nil)
+
+        Task {
+            await activity.update(content)
+        }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+
+        let elapsedInterval = Double(computeElapsedCentiseconds()) / 100.0
+
+        let state = RunningActivityAttributes.ContentState(
+            distanceMeters: locationManager.totalDistance,
+            paceFormatted: formattedPace,
+            isPaused: true,
+            timerDate: Date(),
+            pausedElapsedSeconds: Int(elapsedInterval)
+        )
+        let content = ActivityContent(state: state, staleDate: nil)
+
+        Task {
+            await activity.end(content, dismissalPolicy: .immediate)
+        }
+        liveActivity = nil
+    }
+
+    // MARK: - Display Timer
+
+    private func startDisplayTimer() {
+        stopDisplayTimer()
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { _ in
+            guard let start = runStartDate else { return }
+            var elapsed = Date().timeIntervalSince(start) - totalPausedInterval
+            if isPaused, let pauseStart = pauseStartDate {
+                elapsed -= Date().timeIntervalSince(pauseStart)
+            }
+            displayCentiseconds = max(0, Int(elapsed * 100))
+        }
+    }
+
+    private func stopDisplayTimer() {
+        displayTimer?.invalidate()
+        displayTimer = nil
     }
 }
 
@@ -345,7 +527,9 @@ class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 5 // Update every 5 meters
-        locationManager.allowsBackgroundLocationUpdates = false
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.showsBackgroundLocationIndicator = true
+        locationManager.pausesLocationUpdatesAutomatically = false
         locationManager.activityType = .fitness
     }
 
@@ -389,6 +573,14 @@ class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
             // Only add if reasonable (prevents GPS jumps)
             if distance < 100 {
                 totalDistance += distance
+                // Persist distance on each GPS update (critical for background)
+                let persistence = ActiveWorkoutManager.shared
+                persistence.saveState(
+                    totalPausedInterval: persistence.totalPausedInterval,
+                    pauseStartDate: persistence.pauseStartDate,
+                    totalDistance: totalDistance,
+                    isPaused: persistence.isPaused
+                )
             }
         }
 

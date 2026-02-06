@@ -13,6 +13,14 @@
 	<array>
 		<string>_http._tcp</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>HealthPulse needs location access to track your runs even when the app is in the background.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>HealthPulse reads your health data to track workouts, sleep, heart rate, and activity levels for personalized fitness insights.</string>
 	<key>NSHealthUpdateUsageDescription</key>

@@ -261,6 +261,70 @@ async def deactivate_plan(
     return {"success": True}
 
 
+@router.post("/sessions")
+async def log_workout_session(
+    request: LogWorkoutSessionRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Log a completed workout session with exercises and sets."""
+    supabase = get_supabase_client()
+
+    session_data = {
+        "user_id": str(current_user.id),
+        "plan_id": str(request.plan_id) if request.plan_id else None,
+        "planned_workout_name": request.planned_workout_name,
+        "started_at": request.started_at.isoformat(),
+        "completed_at": request.completed_at.isoformat() if request.completed_at else None,
+        "duration_minutes": request.duration_minutes,
+        "exercises": request.exercises,
+        "overall_rating": request.overall_rating,
+        "notes": request.notes,
+    }
+
+    result = supabase.table("workout_sessions").insert(session_data).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to log workout session")
+
+    session_id = result.data[0]["id"]
+
+    # Check for PRs and update exercise progress
+    prs_achieved = await _check_and_update_prs(
+        supabase, current_user.id, request.exercises, session_id
+    )
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "prs_achieved": prs_achieved,
+    }
+
+
+@router.get("/sessions")
+async def get_workout_sessions(
+    days: int = 30,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get recent workout sessions."""
+    supabase = get_supabase_client()
+
+    from_date = (datetime.now() - timedelta(days=days)).isoformat()
+
+    result = (
+        supabase.table("workout_sessions")
+        .select("*")
+        .eq("user_id", str(current_user.id))
+        .gte("started_at", from_date)
+        .order("started_at", desc=True)
+        .execute()
+    )
+
+    return result.data or []
+
+
+# NOTE: /{plan_id} routes MUST come after all specific routes (/sessions, /progress, etc.)
+# to avoid catching path segments like "sessions" as a UUID parameter.
+
 @router.put("/{plan_id}")
 async def update_training_plan(
     plan_id: UUID,
@@ -358,67 +422,6 @@ async def get_training_plan_details(
         "template_name": template.get("name") if template else None,
         "days_per_week": template.get("days_per_week") if template else len(plan.get("schedule", {})),
     }
-
-
-@router.post("/sessions")
-async def log_workout_session(
-    request: LogWorkoutSessionRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-):
-    """Log a completed workout session with exercises and sets."""
-    supabase = get_supabase_client()
-
-    session_data = {
-        "user_id": str(current_user.id),
-        "plan_id": str(request.plan_id) if request.plan_id else None,
-        "planned_workout_name": request.planned_workout_name,
-        "started_at": request.started_at.isoformat(),
-        "completed_at": request.completed_at.isoformat() if request.completed_at else None,
-        "duration_minutes": request.duration_minutes,
-        "exercises": request.exercises,
-        "overall_rating": request.overall_rating,
-        "notes": request.notes,
-    }
-
-    result = supabase.table("workout_sessions").insert(session_data).execute()
-
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to log workout session")
-
-    session_id = result.data[0]["id"]
-
-    # Check for PRs and update exercise progress
-    prs_achieved = await _check_and_update_prs(
-        supabase, current_user.id, request.exercises, session_id
-    )
-
-    return {
-        "success": True,
-        "session_id": session_id,
-        "prs_achieved": prs_achieved,
-    }
-
-
-@router.get("/sessions")
-async def get_workout_sessions(
-    days: int = 30,
-    current_user: CurrentUser = Depends(get_current_user),
-):
-    """Get recent workout sessions."""
-    supabase = get_supabase_client()
-
-    from_date = (datetime.now() - timedelta(days=days)).isoformat()
-
-    result = (
-        supabase.table("workout_sessions")
-        .select("*")
-        .eq("user_id", str(current_user.id))
-        .gte("started_at", from_date)
-        .order("started_at", desc=True)
-        .execute()
-    )
-
-    return result.data or []
 
 
 @router.get("/progress/{exercise_name}")

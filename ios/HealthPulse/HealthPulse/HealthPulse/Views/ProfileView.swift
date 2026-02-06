@@ -286,24 +286,61 @@ struct BaselineSettingsView: View {
 }
 
 struct NotificationSettingsView: View {
-    @State private var dailyReminder = true
-    @State private var weeklySummary = true
-    @State private var achievements = true
-    @State private var insights = true
+    @EnvironmentObject var notificationService: NotificationService
 
     var body: some View {
         Form {
-            Section("Reminders") {
-                Toggle("Daily Check-in Reminder", isOn: $dailyReminder)
-                Toggle("Weekly Summary", isOn: $weeklySummary)
+            if !notificationService.isAuthorized {
+                Section {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Notifications are disabled. Enable them in Settings.")
+                            .font(.subheadline)
+                    }
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
             }
 
-            Section("Activity") {
-                Toggle("Achievement Alerts", isOn: $achievements)
-                Toggle("New Insights", isOn: $insights)
+            Section {
+                Toggle("Meal Reminders", isOn: $notificationService.mealRemindersEnabled)
+
+                if notificationService.mealRemindersEnabled {
+                    DatePicker("Breakfast", selection: $notificationService.breakfastTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Lunch", selection: $notificationService.lunchTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Dinner", selection: $notificationService.dinnerTime, displayedComponents: .hourAndMinute)
+                }
+            } header: {
+                Text("Nutrition")
+            } footer: {
+                if notificationService.mealRemindersEnabled {
+                    Text("Get reminded to log each meal at the times you choose.")
+                }
+            }
+
+            Section("Workouts") {
+                Toggle("Workout Day Reminder (8 AM)", isOn: $notificationService.workoutReminderEnabled)
+            }
+
+            Section("Reviews") {
+                Toggle("Weekly Review (Sun 6 PM)", isOn: $notificationService.weeklyReviewEnabled)
+                Toggle("Monthly Review (1st, 10 AM)", isOn: $notificationService.monthlyReviewEnabled)
             }
         }
         .navigationTitle("Notifications")
+        .task {
+            await notificationService.checkAuthorizationStatus()
+        }
+        .onDisappear {
+            notificationService.savePreferences()
+            Task {
+                await notificationService.scheduleAllNotifications()
+            }
+        }
     }
 }
 
@@ -769,4 +806,5 @@ struct AboutView: View {
     ProfileView()
         .environmentObject(AuthService.shared)
         .environmentObject(HealthKitService.shared)
+        .environmentObject(NotificationService.shared)
 }

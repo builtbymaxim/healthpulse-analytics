@@ -6,8 +6,40 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
+		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		94F5E00C2F06A000005ABCFC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 94F5E0062F06A000005ABCF6;
+			remoteInfo = RunningActivityWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		94F5E00A2F06A000005ABCFA /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		944B82402F04187B005ABFD3 /* HealthPulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthPulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunningActivityWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningActivityAttributes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -17,6 +49,13 @@
 				Info.plist,
 			);
 			target = 944B823F2F04187B005ABFD3 /* HealthPulse */;
+		};
+		94F5E00E2F06A000005ABCFE /* Exceptions for "RunningActivityWidget" folder in "RunningActivityWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -29,10 +68,25 @@
 			path = HealthPulse;
 			sourceTree = "<group>";
 		};
+		94F5E0022F06A000005ABCF2 /* RunningActivityWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				94F5E00E2F06A000005ABCFE /* Exceptions for "RunningActivityWidget" folder in "RunningActivityWidgetExtension" target */,
+			);
+			path = RunningActivityWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		944B823D2F04187B005ABFD3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94F5E0042F06A000005ABCF4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +100,8 @@
 			isa = PBXGroup;
 			children = (
 				944B82422F04187B005ABFD3 /* HealthPulse */,
+				94F5E0022F06A000005ABCF2 /* RunningActivityWidget */,
+				94F5E0102F06A000005ABCF0 /* Shared */,
 				944B82412F04187B005ABFD3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,8 +110,17 @@
 			isa = PBXGroup;
 			children = (
 				944B82402F04187B005ABFD3 /* HealthPulse.app */,
+				94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		94F5E0102F06A000005ABCF0 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -68,10 +133,12 @@
 				944B823C2F04187B005ABFD3 /* Sources */,
 				944B823D2F04187B005ABFD3 /* Frameworks */,
 				944B823E2F04187B005ABFD3 /* Resources */,
+				94F5E00A2F06A000005ABCFA /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				94F5E00D2F06A000005ABCFD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				944B82422F04187B005ABFD3 /* HealthPulse */,
@@ -82,6 +149,28 @@
 			productName = HealthPulse;
 			productReference = 944B82402F04187B005ABFD3 /* HealthPulse.app */;
 			productType = "com.apple.product-type.application";
+		};
+		94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 94F5E0092F06A000005ABCF9 /* Build configuration list for PBXNativeTarget "RunningActivityWidgetExtension" */;
+			buildPhases = (
+				94F5E0032F06A000005ABCF3 /* Sources */,
+				94F5E0042F06A000005ABCF4 /* Frameworks */,
+				94F5E0052F06A000005ABCF5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				94F5E0022F06A000005ABCF2 /* RunningActivityWidget */,
+			);
+			name = RunningActivityWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = RunningActivityWidgetExtension;
+			productReference = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -94,6 +183,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					944B823F2F04187B005ABFD3 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					94F5E0062F06A000005ABCF6 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -113,12 +205,20 @@
 			projectRoot = "";
 			targets = (
 				944B823F2F04187B005ABFD3 /* HealthPulse */,
+				94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		944B823E2F04187B005ABFD3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94F5E0052F06A000005ABCF5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -132,10 +232,27 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94F5E0032F06A000005ABCF3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		94F5E00D2F06A000005ABCFD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */;
+			targetProxy = 94F5E00C2F06A000005ABCFC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		944B82492F04187D005ABFD3 /* Debug */ = {
@@ -339,6 +456,64 @@
 			};
 			name = Release;
 		};
+		94F5E0072F06A000005ABCF7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GLU69QBKBN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RunningActivityWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Running Activity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse.RunningActivityWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		94F5E0082F06A000005ABCF8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GLU69QBKBN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RunningActivityWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Running Activity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse.RunningActivityWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -356,6 +531,15 @@
 			buildConfigurations = (
 				944B824C2F04187D005ABFD3 /* Debug */,
 				944B824D2F04187D005ABFD3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		94F5E0092F06A000005ABCF9 /* Build configuration list for PBXNativeTarget "RunningActivityWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				94F5E0072F06A000005ABCF7 /* Debug */,
+				94F5E0082F06A000005ABCF8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
