@@ -493,64 +493,81 @@ class DashboardService:
         return result.data[0] if result.data else None
 
     async def _get_key_lift_progress(self, user_id: UUID) -> list[LiftProgress]:
-        """Get progress on key lifts."""
-        # Key compound lifts to track
+        """Get progress on key lifts (batched: 3 queries instead of 15)."""
         key_exercises = ["Bench Press", "Squat", "Deadlift", "Overhead Press", "Barbell Row"]
+
+        # 1) Batch lookup: find all key exercises in one query
+        or_filter = ",".join(f"name.ilike.%{name}%" for name in key_exercises)
+        exercise_result = (
+            self.supabase.table("exercises")
+            .select("id, name")
+            .or_(or_filter)
+            .execute()
+        )
+        if not exercise_result.data:
+            return []
+
+        # Map exercise_id -> canonical name (first match per key exercise)
+        exercise_map: dict[str, str] = {}  # id -> display name
+        for name in key_exercises:
+            for ex in exercise_result.data:
+                if name.lower() in ex["name"].lower() and ex["id"] not in exercise_map:
+                    exercise_map[ex["id"]] = name
+                    break
+
+        if not exercise_map:
+            return []
+
+        exercise_ids = list(exercise_map.keys())
+        month_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        two_months_ago = (datetime.now() - timedelta(days=60)).isoformat()
+
+        # 2) Batch: current month sets for all exercises
+        current_result = (
+            self.supabase.table("workout_sets")
+            .select("exercise_id, weight_kg, reps")
+            .eq("user_id", str(user_id))
+            .in_("exercise_id", exercise_ids)
+            .eq("is_warmup", False)
+            .gte("performed_at", month_ago)
+            .order("weight_kg", desc=True)
+            .execute()
+        )
+
+        # 3) Batch: previous month sets for all exercises
+        previous_result = (
+            self.supabase.table("workout_sets")
+            .select("exercise_id, weight_kg, reps")
+            .eq("user_id", str(user_id))
+            .in_("exercise_id", exercise_ids)
+            .eq("is_warmup", False)
+            .gte("performed_at", two_months_ago)
+            .lt("performed_at", month_ago)
+            .order("weight_kg", desc=True)
+            .execute()
+        )
+
+        # Group by exercise_id and take the best (first, since ordered desc)
+        current_best: dict[str, float] = {}
+        for row in current_result.data or []:
+            eid = row["exercise_id"]
+            if eid not in current_best:
+                current_best[eid] = row["weight_kg"]
+
+        previous_best: dict[str, float] = {}
+        for row in previous_result.data or []:
+            eid = row["exercise_id"]
+            if eid not in previous_best:
+                previous_best[eid] = row["weight_kg"]
+
+        # Build results
         lifts = []
-
-        for exercise_name in key_exercises:
-            # Get exercise by name
-            exercise_result = (
-                self.supabase.table("exercises")
-                .select("id")
-                .ilike("name", f"%{exercise_name}%")
-                .limit(1)
-                .execute()
-            )
-
-            if not exercise_result.data:
-                continue
-
-            exercise_id = exercise_result.data[0]["id"]
-
-            # Get recent sets for this exercise
-            month_ago = (datetime.now() - timedelta(days=30)).isoformat()
-            two_months_ago = (datetime.now() - timedelta(days=60)).isoformat()
-
-            # Current month best
-            current_result = (
-                self.supabase.table("workout_sets")
-                .select("weight_kg, reps")
-                .eq("user_id", str(user_id))
-                .eq("exercise_id", exercise_id)
-                .eq("is_warmup", False)
-                .gte("performed_at", month_ago)
-                .order("weight_kg", desc=True)
-                .limit(1)
-                .execute()
-            )
-
-            # Previous month best
-            previous_result = (
-                self.supabase.table("workout_sets")
-                .select("weight_kg, reps")
-                .eq("user_id", str(user_id))
-                .eq("exercise_id", exercise_id)
-                .eq("is_warmup", False)
-                .gte("performed_at", two_months_ago)
-                .lt("performed_at", month_ago)
-                .order("weight_kg", desc=True)
-                .limit(1)
-                .execute()
-            )
-
-            if current_result.data:
-                current_weight = current_result.data[0]["weight_kg"]
-                previous_weight = previous_result.data[0]["weight_kg"] if previous_result.data else current_weight
-
+        for eid, exercise_name in exercise_map.items():
+            if eid in current_best:
+                current_weight = current_best[eid]
+                previous_weight = previous_best.get(eid, current_weight)
                 change = current_weight - previous_weight
                 change_pct = (change / previous_weight * 100) if previous_weight > 0 else 0
-
                 lifts.append(LiftProgress(
                     exercise_name=exercise_name,
                     current_value=current_weight,
@@ -559,7 +576,7 @@ class DashboardService:
                     period="month",
                 ))
 
-        return lifts[:4]  # Top 4 lifts
+        return lifts[:4]
 
     async def _get_planned_workouts_count(self, user_id: UUID) -> int:
         """Get number of planned workouts this week from active training plan."""
@@ -580,19 +597,23 @@ class DashboardService:
         return sum(1 for v in schedule.values() if v is not None)
 
     async def _get_nutrition_adherence(self, user_id: UUID, days: int) -> float:
-        """Calculate nutrition adherence percentage over given days."""
+        """Calculate nutrition adherence percentage (1 query instead of N)."""
         today = date.today()
-        days_with_entries = 0
+        start_date = today - timedelta(days=days - 1)
 
-        for i in range(days):
-            target_date = today - timedelta(days=i)
-            entries = await self.nutrition_service.get_food_entries(
-                user_id, target_date=target_date
-            )
-            if entries:
-                days_with_entries += 1
+        # Single query: get all food entries in the date range
+        result = (
+            self.supabase.table("food_entries")
+            .select("entry_date")
+            .eq("user_id", str(user_id))
+            .gte("entry_date", start_date.isoformat())
+            .lte("entry_date", today.isoformat())
+            .execute()
+        )
 
-        return (days_with_entries / days) * 100 if days > 0 else 0
+        # Count distinct dates with entries
+        dates_with_entries = len({row["entry_date"] for row in (result.data or [])})
+        return (dates_with_entries / days) * 100 if days > 0 else 0
 
 
 # Singleton instance

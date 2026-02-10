@@ -9,6 +9,7 @@ import Foundation
 
 extension Notification.Name {
     static let authenticationFailed = Notification.Name("authenticationFailed")
+    static let tokensRefreshed = Notification.Name("tokensRefreshed")
 }
 
 class APIService {
@@ -16,6 +17,8 @@ class APIService {
 
     private let baseURL: String
     private var authToken: String?
+    private var refreshToken: String?
+    private let refreshCoordinator = TokenRefreshCoordinator()
 
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -38,6 +41,52 @@ class APIService {
 
     func setAuthToken(_ token: String?) {
         self.authToken = token
+    }
+
+    func setRefreshToken(_ token: String?) {
+        self.refreshToken = token
+    }
+
+    /// Attempt to refresh the access token using the stored refresh token.
+    /// Returns true if refresh succeeded, false if it failed (should logout).
+    private func refreshAccessToken() async -> Bool {
+        guard let currentRefreshToken = refreshToken else { return false }
+
+        // Use the coordinator to serialize concurrent refresh attempts
+        return await refreshCoordinator.refresh { [weak self] in
+            guard let self = self else { return false }
+
+            guard let url = URL(string: "\(self.baseURL)/auth/refresh") else { return false }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            struct RefreshBody: Encodable { let refresh_token: String }
+            req.httpBody = try? self.encoder.encode(RefreshBody(refresh_token: currentRefreshToken))
+
+            guard let (data, response) = try? await URLSession.shared.data(for: req),
+                  let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  let authResponse = try? self.decoder.decode(AuthResponse.self, from: data),
+                  let newAccessToken = authResponse.accessToken else {
+                return false
+            }
+
+            self.authToken = newAccessToken
+            self.refreshToken = authResponse.refreshToken
+
+            // Notify AuthService to persist the new tokens in Keychain
+            NotificationCenter.default.post(
+                name: .tokensRefreshed,
+                object: nil,
+                userInfo: [
+                    "access_token": newAccessToken,
+                    "refresh_token": authResponse.refreshToken as Any
+                ]
+            )
+            return true
+        }
     }
 
     // MARK: - Generic Request
@@ -73,11 +122,21 @@ class APIService {
         case 200...299:
             return try decoder.decode(T.self, from: data)
         case 401:
-            // Notify app that auth failed - should trigger logout
-            print("API 401 Unauthorized for \(endpoint)")
-            if let errorBody = String(data: data, encoding: .utf8) {
-                print("  Response: \(errorBody)")
+            // Attempt silent token refresh before logging out
+            print("API 401 Unauthorized for \(endpoint) — attempting token refresh")
+            if await refreshAccessToken() {
+                // Retry the original request with the new token
+                var retryRequest = request
+                if let newToken = authToken {
+                    retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                }
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                if let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
+                    return try decoder.decode(T.self, from: retryData)
+                }
             }
+            // Refresh failed or retry failed — force logout
+            print("Token refresh failed for \(endpoint) — logging out")
             NotificationCenter.default.post(name: .authenticationFailed, object: nil)
             throw APIError.unauthorized
         case 404:
@@ -145,7 +204,22 @@ class APIService {
             }
             return try decoder.decode(T.self, from: data)
         case 401:
-            print("API 401 Unauthorized for \(endpoint)")
+            print("API 401 Unauthorized for \(endpoint) — attempting token refresh")
+            if await refreshAccessToken() {
+                var retryRequest = request
+                if let newToken = authToken {
+                    retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                }
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                if let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
+                    if let str = String(data: retryData, encoding: .utf8), str.trimmingCharacters(in: .whitespaces) == "null" {
+                        return nil
+                    }
+                    if retryData.isEmpty { return nil }
+                    return try decoder.decode(T.self, from: retryData)
+                }
+            }
+            print("Token refresh failed for \(endpoint) — logging out")
             NotificationCenter.default.post(name: .authenticationFailed, object: nil)
             throw APIError.unauthorized
         case 404:
@@ -238,6 +312,31 @@ class APIService {
 
     func logMetric(_ metric: HealthMetric) async throws -> HealthMetric {
         try await request(endpoint: "/metrics", method: "POST", body: metric)
+    }
+
+    struct MetricBatchItem: Encodable {
+        let metricType: String
+        let value: Double
+        let unit: String?
+        let source: String
+
+        enum CodingKeys: String, CodingKey {
+            case metricType = "metric_type"
+            case value, unit, source
+        }
+    }
+
+    struct MetricBatchRequest: Encodable {
+        let metrics: [MetricBatchItem]
+    }
+
+    func logMetricsBatch(_ items: [MetricBatchItem]) async throws {
+        struct BatchResponse: Decodable { let id: UUID }
+        let _: [BatchResponse] = try await request(
+            endpoint: "/metrics/batch",
+            method: "POST",
+            body: MetricBatchRequest(metrics: items)
+        )
     }
 
     func getMetrics(type: MetricType? = nil, days: Int = 7) async throws -> [HealthMetric] {
@@ -601,6 +700,36 @@ struct WeeklyNutritionDay: Decodable {
         case calorieTarget = "calorie_target"
         case calorieProgressPct = "calorie_progress_pct"
         case nutritionScore = "nutrition_score"
+    }
+}
+
+// MARK: - Token Refresh Coordinator
+
+/// Serializes concurrent token refresh attempts so only one refresh call
+/// happens at a time. Subsequent callers wait for the in-flight result.
+actor TokenRefreshCoordinator {
+    private var isRefreshing = false
+    private var pendingContinuations: [CheckedContinuation<Bool, Never>] = []
+
+    func refresh(using refreshAction: @escaping () async -> Bool) async -> Bool {
+        if isRefreshing {
+            // Another refresh is in flight — wait for it
+            return await withCheckedContinuation { continuation in
+                pendingContinuations.append(continuation)
+            }
+        }
+
+        isRefreshing = true
+        let success = await refreshAction()
+        isRefreshing = false
+
+        // Resume all waiters with the result
+        for continuation in pendingContinuations {
+            continuation.resume(returning: success)
+        }
+        pendingContinuations.removeAll()
+
+        return success
     }
 }
 

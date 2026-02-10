@@ -107,10 +107,27 @@ struct DailyCheckinView: View {
 
     private func submitCheckin() {
         isSubmitting = true
-        // TODO: Submit to API
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            isSubmitting = false
-            showSuccess = true
+        Task {
+            do {
+                let metrics: [APIService.MetricBatchItem] = [
+                    .init(metricType: "energy_level", value: energy, unit: nil, source: "manual"),
+                    .init(metricType: "sleep", value: sleepHours, unit: "hours", source: "manual"),
+                    .init(metricType: "sleep_quality", value: sleepQuality, unit: nil, source: "manual"),
+                    .init(metricType: "soreness", value: soreness, unit: nil, source: "manual"),
+                ]
+                try await APIService.shared.logMetricsBatch(metrics)
+                await MainActor.run {
+                    isSubmitting = false
+                    showSuccess = true
+                    HapticsManager.shared.success()
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    HapticsManager.shared.error()
+                    ToastManager.shared.error(error.localizedDescription)
+                }
+            }
         }
     }
 }
@@ -442,11 +459,34 @@ struct MetricLogView: View {
     }
 
     private func submitMetric() {
+        guard let numericValue = Double(value) else { return }
         isSubmitting = true
-        // TODO: Submit to API
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            isSubmitting = false
-            showSuccess = true
+        Task {
+            do {
+                let metric = HealthMetric(
+                    id: UUID(),
+                    userId: UUID(), // Server will set the real user ID
+                    metricType: metricType,
+                    value: numericValue,
+                    unit: unitForMetric.isEmpty ? nil : unitForMetric,
+                    source: .manual,
+                    metadata: nil,
+                    recordedAt: Date(),
+                    createdAt: Date()
+                )
+                _ = try await APIService.shared.logMetric(metric)
+                await MainActor.run {
+                    isSubmitting = false
+                    showSuccess = true
+                    HapticsManager.shared.success()
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    HapticsManager.shared.error()
+                    ToastManager.shared.error(error.localizedDescription)
+                }
+            }
         }
     }
 }

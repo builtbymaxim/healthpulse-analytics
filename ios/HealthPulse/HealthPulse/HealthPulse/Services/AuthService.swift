@@ -21,6 +21,7 @@ class AuthService: ObservableObject {
     private init() {
         checkStoredSession()
         setupAuthFailureListener()
+        setupTokenRefreshListener()
     }
 
     private func setupAuthFailureListener() {
@@ -31,6 +32,24 @@ class AuthService: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.handleAuthFailure()
+            }
+        }
+    }
+
+    private func setupTokenRefreshListener() {
+        NotificationCenter.default.addObserver(
+            forName: .tokensRefreshed,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if let accessToken = notification.userInfo?["access_token"] as? String {
+                    KeychainService.save(key: "auth_token", value: accessToken)
+                }
+                if let refreshToken = notification.userInfo?["refresh_token"] as? String {
+                    KeychainService.save(key: "refresh_token", value: refreshToken)
+                }
             }
         }
     }
@@ -52,6 +71,9 @@ class AuthService: ObservableObject {
 
         if let token = KeychainService.load(key: "auth_token") {
             APIService.shared.setAuthToken(token)
+            if let refreshToken = KeychainService.load(key: "refresh_token") {
+                APIService.shared.setRefreshToken(refreshToken)
+            }
             isAuthenticated = true
             Task {
                 await loadProfile()
@@ -67,7 +89,7 @@ class AuthService: ObservableObject {
             let response = try await APIService.shared.signUp(email: email, password: password)
 
             if let token = response.accessToken {
-                await handleAuthSuccess(token: token)
+                await handleAuthSuccess(token: token, refreshToken: response.refreshToken)
             } else if response.requiresConfirmation == true {
                 error = "Check your email for confirmation link"
             } else {
@@ -89,7 +111,7 @@ class AuthService: ObservableObject {
         do {
             let response = try await APIService.shared.signIn(email: email, password: password)
             if let token = response.accessToken {
-                await handleAuthSuccess(token: token)
+                await handleAuthSuccess(token: token, refreshToken: response.refreshToken)
             } else {
                 error = "Sign in failed"
             }
@@ -104,14 +126,20 @@ class AuthService: ObservableObject {
 
     func signOut() {
         KeychainService.delete(key: "auth_token")
+        KeychainService.delete(key: "refresh_token")
         APIService.shared.setAuthToken(nil)
+        APIService.shared.setRefreshToken(nil)
         isAuthenticated = false
         currentUser = nil
     }
 
-    private func handleAuthSuccess(token: String) async {
+    private func handleAuthSuccess(token: String, refreshToken: String? = nil) async {
         KeychainService.save(key: "auth_token", value: token)
         APIService.shared.setAuthToken(token)
+        if let refreshToken = refreshToken {
+            KeychainService.save(key: "refresh_token", value: refreshToken)
+            APIService.shared.setRefreshToken(refreshToken)
+        }
         isAuthenticated = true
         await loadProfile()
     }

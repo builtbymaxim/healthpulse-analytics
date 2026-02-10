@@ -567,34 +567,41 @@ class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard isTracking, let newLocation = locations.last else { return }
 
-        hasLocation = true
-
         // Filter out inaccurate readings
-        guard newLocation.horizontalAccuracy < 20 else { return }
-
-        if let last = lastLocation {
-            let distance = newLocation.distance(from: last)
-            // Only add if reasonable (prevents GPS jumps)
-            if distance < 100 {
-                totalDistance += distance
-                // Persist distance on each GPS update (critical for background)
-                let persistence = ActiveWorkoutManager.shared
-                persistence.saveState(
-                    totalPausedInterval: persistence.totalPausedInterval,
-                    pauseStartDate: persistence.pauseStartDate,
-                    totalDistance: totalDistance,
-                    isPaused: persistence.isPaused
-                )
-            }
+        guard newLocation.horizontalAccuracy < 20 else {
+            // Still mark that we have a location (even if inaccurate)
+            DispatchQueue.main.async { self.hasLocation = true }
+            return
         }
 
+        let last = lastLocation
         lastLocation = newLocation
+
+        DispatchQueue.main.async {
+            self.hasLocation = true
+
+            if let last = last {
+                let distance = newLocation.distance(from: last)
+                // Only add if reasonable (prevents GPS jumps)
+                if distance < 100 {
+                    self.totalDistance += distance
+                    // Persist distance on each GPS update (critical for background)
+                    let persistence = ActiveWorkoutManager.shared
+                    persistence.saveState(
+                        totalPausedInterval: persistence.totalPausedInterval,
+                        pauseStartDate: persistence.pauseStartDate,
+                        totalDistance: self.totalDistance,
+                        isPaused: persistence.isPaused
+                    )
+                }
+            }
+        }
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            hasLocation = false
+            DispatchQueue.main.async { self.hasLocation = false }
             locationManager.startUpdatingLocation()
         default:
             break

@@ -9,6 +9,7 @@
 import Foundation
 import UserNotifications
 
+@MainActor
 class NotificationService: ObservableObject {
     static let shared = NotificationService()
 
@@ -102,9 +103,7 @@ class NotificationService: ObservableObject {
     func requestAuthorization() async {
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-            await MainActor.run {
-                isAuthorized = granted
-            }
+            isAuthorized = granted
         } catch {
             print("Notification authorization failed: \(error)")
         }
@@ -112,9 +111,7 @@ class NotificationService: ObservableObject {
 
     func checkAuthorizationStatus() async {
         let settings = await center.notificationSettings()
-        await MainActor.run {
-            isAuthorized = settings.authorizationStatus == .authorized
-        }
+        isAuthorized = settings.authorizationStatus == .authorized
     }
 
     // MARK: - Schedule All Notifications

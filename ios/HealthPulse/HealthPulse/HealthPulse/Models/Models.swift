@@ -100,7 +100,7 @@ enum MetricType: String, Codable, CaseIterable {
     case bodyFat = "body_fat"
     case stress
     case mood
-    case energy
+    case energy = "energy_level"
     case soreness
     case water
     case caffeine
