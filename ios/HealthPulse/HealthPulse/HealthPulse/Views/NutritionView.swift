@@ -69,7 +69,10 @@ struct NutritionView: View {
     }
 
     private func loadData() async {
-        isLoading = true
+        // Only show full loading on initial load, not during pull-to-refresh
+        if summary == nil {
+            isLoading = true
+        }
         error = nil
 
         do {

@@ -530,7 +530,7 @@ struct FilterChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.blue : Color(.secondarySystemBackground))
+            .background(isSelected ? AppTheme.primary : Color(.secondarySystemBackground))
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }

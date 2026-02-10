@@ -81,76 +81,20 @@ struct InsightsView: View {
     }
 
     private func loadData() async {
-        isLoading = true
+        if insights.isEmpty {
+            isLoading = true
+        }
 
-        // Load demo data
-        insights = [
-            Insight(
-                id: UUID(),
-                category: .recommendation,
-                title: "Optimize Your Sleep",
-                description: "Your recovery scores are 15% higher on days following 7.5+ hours of sleep.",
-                data: nil,
-                createdAt: Date()
-            ),
-            Insight(
-                id: UUID(),
-                category: .trend,
-                title: "Wellness Improving",
-                description: "Your overall wellness has improved by 8% over the past 2 weeks.",
-                data: nil,
-                createdAt: Date()
-            ),
-            Insight(
-                id: UUID(),
-                category: .achievement,
-                title: "Consistency Streak",
-                description: "You've logged data for 7 days in a row. Great job!",
-                data: nil,
-                createdAt: Date()
-            )
-        ]
-
-        correlations = [
-            Correlation(
-                factorA: "sleep",
-                factorB: "recovery",
-                correlation: 0.72,
-                insight: "Strong positive relationship between sleep and recovery scores.",
-                dataPoints: 30,
-                confidence: 0.85
-            ),
-            Correlation(
-                factorA: "stress",
-                factorB: "hrv",
-                correlation: -0.58,
-                insight: "Higher stress levels are associated with lower HRV readings.",
-                dataPoints: 25,
-                confidence: 0.78
-            ),
-            Correlation(
-                factorA: "exercise",
-                factorB: "mood",
-                correlation: 0.45,
-                insight: "Workout days tend to correlate with better mood scores.",
-                dataPoints: 20,
-                confidence: 0.65
-            )
-        ]
-
-        // Try to load from API
         do {
-            let apiInsights = try await APIService.shared.getInsights()
-            if !apiInsights.isEmpty {
-                insights = apiInsights
-            }
+            async let insightsTask = APIService.shared.getInsights()
+            async let correlationsTask = APIService.shared.getCorrelations()
 
-            let apiCorrelations = try await APIService.shared.getCorrelations()
-            if !apiCorrelations.isEmpty {
-                correlations = apiCorrelations
-            }
+            let (apiInsights, apiCorrelations) = try await (insightsTask, correlationsTask)
+            insights = apiInsights
+            correlations = apiCorrelations
         } catch {
             print("Failed to load from API: \(error)")
+            // insights/correlations stay empty, showing the empty state cards
         }
 
         isLoading = false

@@ -44,7 +44,13 @@ class AuthService: ObservableObject {
     }
 
     private func checkStoredSession() {
-        if let token = UserDefaults.standard.string(forKey: "auth_token") {
+        // Migrate legacy UserDefaults token to Keychain
+        if let legacyToken = UserDefaults.standard.string(forKey: "auth_token") {
+            KeychainService.save(key: "auth_token", value: legacyToken)
+            UserDefaults.standard.removeObject(forKey: "auth_token")
+        }
+
+        if let token = KeychainService.load(key: "auth_token") {
             APIService.shared.setAuthToken(token)
             isAuthenticated = true
             Task {
@@ -97,14 +103,14 @@ class AuthService: ObservableObject {
     }
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: "auth_token")
+        KeychainService.delete(key: "auth_token")
         APIService.shared.setAuthToken(nil)
         isAuthenticated = false
         currentUser = nil
     }
 
     private func handleAuthSuccess(token: String) async {
-        UserDefaults.standard.set(token, forKey: "auth_token")
+        KeychainService.save(key: "auth_token", value: token)
         APIService.shared.setAuthToken(token)
         isAuthenticated = true
         await loadProfile()

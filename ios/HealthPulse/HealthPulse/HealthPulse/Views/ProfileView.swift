@@ -186,48 +186,55 @@ struct BaselineSettingsView: View {
     @State private var isLoading = true
 
     var body: some View {
-        Form {
-            Section("Heart Rate") {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("HRV Baseline")
-                        Spacer()
-                        Text("\(Int(hrvBaseline)) ms")
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: $hrvBaseline, in: 20...100, step: 1)
-                }
+        Group {
+            if isLoading {
+                ProgressView("Loading settings...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Form {
+                    Section("Heart Rate") {
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("HRV Baseline")
+                                Spacer()
+                                Text("\(Int(hrvBaseline)) ms")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(value: $hrvBaseline, in: 20...100, step: 1)
+                        }
 
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("Resting HR Baseline")
-                        Spacer()
-                        Text("\(Int(rhrBaseline)) bpm")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("Resting HR Baseline")
+                                Spacer()
+                                Text("\(Int(rhrBaseline)) bpm")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(value: $rhrBaseline, in: 40...100, step: 1)
+                        }
                     }
-                    Slider(value: $rhrBaseline, in: 40...100, step: 1)
-                }
-            }
 
-            Section("Goals") {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("Target Sleep")
-                        Spacer()
-                        Text("\(targetSleep, specifier: "%.1f") hours")
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: $targetSleep, in: 5...10, step: 0.5)
-                }
+                    Section("Goals") {
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("Target Sleep")
+                                Spacer()
+                                Text("\(targetSleep, specifier: "%.1f") hours")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(value: $targetSleep, in: 5...10, step: 0.5)
+                        }
 
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("Daily Step Goal")
-                        Spacer()
-                        Text("\(Int(stepGoal).formatted())")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("Daily Step Goal")
+                                Spacer()
+                                Text("\(Int(stepGoal).formatted())")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(value: $stepGoal, in: 5000...20000, step: 1000)
+                        }
                     }
-                    Slider(value: $stepGoal, in: 5000...20000, step: 1000)
                 }
             }
         }
@@ -237,7 +244,7 @@ struct BaselineSettingsView: View {
                 Button("Save") {
                     saveSettings()
                 }
-                .disabled(isSaving)
+                .disabled(isSaving || isLoading)
             }
         }
         .task {

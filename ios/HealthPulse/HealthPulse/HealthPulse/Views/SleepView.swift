@@ -107,7 +107,10 @@ struct SleepView: View {
     }
 
     private func loadData() async {
-        isLoading = true
+        // Only show skeleton loading on initial load, not during pull-to-refresh
+        if summary == nil && history.isEmpty {
+            isLoading = true
+        }
         error = nil
 
         do {
@@ -236,7 +239,7 @@ struct SleepStagesCard: View {
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(stages, id: \.stage) { item in
-                        let pct = item.hours / summary.durationHours
+                        let pct = summary.durationHours > 0 ? item.hours / summary.durationHours : 0
                         Rectangle()
                             .fill(item.stage.color)
                             .frame(width: geo.size.width * pct)
