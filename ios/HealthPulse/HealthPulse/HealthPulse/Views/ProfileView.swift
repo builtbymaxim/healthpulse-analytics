@@ -82,6 +82,12 @@ struct ProfileView: View {
                     }
 
                     NavigationLink {
+                        CalendarSettingsView()
+                    } label: {
+                        Label("Calendar Sync", systemImage: "calendar")
+                    }
+
+                    NavigationLink {
                         UnitsSettingsView()
                     } label: {
                         Label("Units", systemImage: "ruler")
@@ -346,6 +352,104 @@ struct NotificationSettingsView: View {
             notificationService.savePreferences()
             Task {
                 await notificationService.scheduleAllNotifications()
+            }
+        }
+    }
+}
+
+struct CalendarSettingsView: View {
+    @EnvironmentObject var calendarSyncService: CalendarSyncService
+    @State private var isSyncing = false
+
+    var body: some View {
+        Form {
+            if !calendarSyncService.isAuthorized && calendarSyncService.calendarSyncEnabled {
+                Section {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Calendar access is required. Enable it in Settings.")
+                            .font(.subheadline)
+                    }
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Toggle("Sync Workouts to Calendar", isOn: $calendarSyncService.calendarSyncEnabled)
+                    .onChange(of: calendarSyncService.calendarSyncEnabled) { _, enabled in
+                        if enabled && !calendarSyncService.isAuthorized {
+                            Task {
+                                await calendarSyncService.requestAccess()
+                                if !calendarSyncService.isAuthorized {
+                                    calendarSyncService.calendarSyncEnabled = false
+                                }
+                            }
+                        } else if !enabled {
+                            calendarSyncService.removeAllEvents()
+                        }
+                    }
+            } header: {
+                Text("Calendar Integration")
+            } footer: {
+                Text("Adds your training plan workouts to a dedicated HealthPulse calendar for the next 4 weeks. Automatically refreshes weekly.")
+            }
+
+            if calendarSyncService.calendarSyncEnabled {
+                Section("Workout Time") {
+                    DatePicker(
+                        "Default Start Time",
+                        selection: $calendarSyncService.defaultWorkoutTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                }
+
+                Section {
+                    Button {
+                        isSyncing = true
+                        Task {
+                            let plan = try? await APIService.shared.getActiveTrainingPlan()
+                            await calendarSyncService.syncCalendar(
+                                schedule: plan?.schedule,
+                                planName: plan?.name
+                            )
+                            isSyncing = false
+                            HapticsManager.shared.success()
+                            ToastManager.shared.success("Calendar synced!")
+                        }
+                    } label: {
+                        HStack {
+                            Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+                            if isSyncing {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isSyncing)
+                } footer: {
+                    Text("Removes old events and creates new ones for the next 4 weeks based on your current training plan.")
+                }
+            }
+        }
+        .navigationTitle("Calendar Sync")
+        .task {
+            calendarSyncService.checkAuthorizationStatus()
+        }
+        .onDisappear {
+            calendarSyncService.savePreferences()
+            if calendarSyncService.calendarSyncEnabled {
+                Task {
+                    let plan = try? await APIService.shared.getActiveTrainingPlan()
+                    await calendarSyncService.syncCalendar(
+                        schedule: plan?.schedule,
+                        planName: plan?.name
+                    )
+                }
             }
         }
     }

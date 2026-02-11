@@ -10,7 +10,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 
 | Layer | Technology |
 |-------|-----------|
-| **iOS App** | Swift / SwiftUI, HealthKit, ActivityKit (Live Activities), Keychain |
+| **iOS App** | Swift / SwiftUI, HealthKit, EventKit, ActivityKit (Live Activities), Keychain |
 | **Backend API** | Python 3.11, FastAPI, Pydantic v2, Uvicorn |
 | **Database** | Supabase (PostgreSQL with RLS + Auth) |
 | **ML** | scikit-learn, XGBoost, pandas, numpy |
@@ -68,6 +68,18 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Notification system: meal reminders (adjustable times), workout day reminders, weekly/monthly reviews
 - Notification preferences UI with per-type toggles and meal time pickers
 
+### Phase 6 — Calendar Integration
+- Dedicated "HealthPulse" calendar via EventKit (iCloud preferred, green color)
+- Auto-create events for next 4 weeks when plan is activated or edited
+- Events include workout name, exercise list, estimated duration, 30-min alarm
+- Preferred workout time picker during plan activation flow
+- Calendar conflict checking (shows overlapping events per training day)
+- Conflict indicators in EditScheduleSheet when calendar sync is enabled
+- Calendar settings page: toggle sync, change workout time, "Sync Now" button
+- Weekly auto-refresh (re-syncs every 7 days on app foreground)
+- Clean removal of events on plan deactivation, full calendar cleanup on logout
+- iOS 17 `requestFullAccessToEvents()` with iOS 16 fallback
+
 ---
 
 ## Current Features
@@ -110,9 +122,11 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - 6 plan templates (Full Body, Upper/Lower, PPL, Home Bodyweight, C25K, Hybrid)
 - Plan setup wizard: goal → modality → equipment → schedule
 - Weekly schedule view with workout cards
-- Plan editing (swap exercises, change days)
+- Plan editing (swap exercises, change days) with calendar conflict indicators
 - Deactivate plan with confirmation
 - Today's workout card linking to execution
+- Calendar sync: auto-create events in dedicated HealthPulse calendar (4 weeks rolling)
+- Plan activation sheet: time picker + conflict checking before activating
 
 ### Nutrition
 - Daily calorie and macro tracking
@@ -209,6 +223,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `HealthKitService` | Apple Health read/write |
 | `KeychainService` | Secure token storage (SecItem) |
 | `NotificationService` | Local notification scheduling + preferences |
+| `CalendarSyncService` | EventKit calendar sync + conflict checking |
 | `ActiveWorkoutManager` | Workout state persistence for background execution |
 | `TabRouter` | Programmatic tab navigation |
 
@@ -288,11 +303,6 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 ---
 
 ## Roadmap
-
-### Phase 6 — Calendar Integration
-- Sync training plan schedule to Apple Calendar via EventKit
-- Auto-create/update events when plan is activated or edited
-- Deep link from calendar events back into workout execution
 
 ### Phase 7 — Progressive Overload
 - Linear progression (default): +2.5 kg upper body / +5 kg lower body per session

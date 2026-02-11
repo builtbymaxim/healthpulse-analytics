@@ -23,6 +23,10 @@
 	<string>HealthPulse reads your health data to track workouts, sleep, heart rate, and activity levels for personalized fitness insights.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>HealthPulse saves your workouts and health metrics to Apple Health.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>HealthPulse adds your scheduled workouts to your calendar so you never miss a training day.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>HealthPulse adds your scheduled workouts to your calendar so you never miss a training day.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>HealthPulse connects to your local server for data sync.</string>
 </dict>

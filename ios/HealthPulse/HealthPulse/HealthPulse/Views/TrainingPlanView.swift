@@ -301,6 +301,7 @@ struct TemplateSelectionView: View {
     @ObservedObject var viewModel: TrainingPlanViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTemplate: PlanTemplate?
+    @State private var showActivationSheet = false
 
     var body: some View {
         NavigationStack {
@@ -345,18 +346,199 @@ struct TemplateSelectionView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Activate") {
-                        if let template = selectedTemplate {
-                            viewModel.activatePlan(template: template)
-                            HapticsManager.shared.success()
-                            dismiss()
-                        }
+                        showActivationSheet = true
                     }
                     .disabled(selectedTemplate == nil)
+                }
+            }
+            .sheet(isPresented: $showActivationSheet) {
+                if let template = selectedTemplate {
+                    PlanActivationSheet(
+                        template: template,
+                        viewModel: viewModel,
+                        onActivated: { dismiss() }
+                    )
                 }
             }
             .task {
                 await viewModel.loadTemplates()
             }
+        }
+    }
+}
+
+// MARK: - Plan Activation Sheet
+
+struct PlanActivationSheet: View {
+    let template: PlanTemplate
+    @ObservedObject var viewModel: TrainingPlanViewModel
+    let onActivated: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var workoutTime: Date
+    @State private var addToCalendar = true
+    @State private var conflicts: [Int: [String]] = [:]
+    @State private var isCheckingConflicts = false
+    @State private var isActivating = false
+
+    private let dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    private let calendarService = CalendarSyncService.shared
+
+    init(template: PlanTemplate, viewModel: TrainingPlanViewModel, onActivated: @escaping () -> Void) {
+        self.template = template
+        self.viewModel = viewModel
+        self.onActivated = onActivated
+        _workoutTime = State(initialValue: CalendarSyncService.shared.defaultWorkoutTime)
+    }
+
+    /// Build the schedule dict from template workouts
+    private var schedule: [String: String] {
+        var s: [String: String] = [:]
+        if let workouts = template.workouts {
+            for workout in workouts {
+                s[String(workout.day)] = workout.name
+            }
+        }
+        return s
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Time picker
+                Section {
+                    DatePicker("Preferred Workout Time",
+                               selection: $workoutTime,
+                               displayedComponents: .hourAndMinute)
+                } footer: {
+                    Text("Calendar events will be created at this time.")
+                }
+
+                // Schedule with conflict indicators
+                Section {
+                    ForEach(1...7, id: \.self) { day in
+                        if let workoutName = schedule[String(day)] {
+                            HStack {
+                                Text(dayNames[day - 1])
+                                    .frame(width: 90, alignment: .leading)
+
+                                Text(workoutName)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                if let conflictTitles = conflicts[day], !conflictTitles.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundStyle(.orange)
+                                            .font(.caption)
+                                        Text(conflictTitles.first ?? "Conflict")
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                            .lineLimit(1)
+                                    }
+                                } else if !isCheckingConflicts {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                            .font(.caption)
+                                        Text("Free")
+                                            .font(.caption)
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Schedule")
+                        if isCheckingConflicts {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                    }
+                } footer: {
+                    if !conflicts.isEmpty {
+                        Text("Orange warnings show existing calendar events at your chosen workout time.")
+                    }
+                }
+
+                // Calendar toggle
+                Section {
+                    Toggle("Add workouts to calendar", isOn: $addToCalendar)
+                } footer: {
+                    Text("Creates events in a dedicated HealthPulse calendar for the next 4 weeks.")
+                }
+            }
+            .navigationTitle("Activate \(template.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Activate") {
+                        activatePlan()
+                    }
+                    .disabled(isActivating)
+                    .bold()
+                }
+            }
+            .onChange(of: workoutTime) { _, _ in
+                refreshConflicts()
+            }
+            .task {
+                refreshConflicts()
+            }
+        }
+    }
+
+    private func refreshConflicts() {
+        isCheckingConflicts = true
+        // Update the service's time temporarily for conflict checking
+        let originalTime = calendarService.defaultWorkoutTime
+        calendarService.defaultWorkoutTime = workoutTime
+
+        let durationMinutes = template.workouts?.first?.estimatedMinutes ?? 60
+        conflicts = calendarService.checkConflicts(schedule: schedule, durationMinutes: durationMinutes)
+
+        calendarService.defaultWorkoutTime = originalTime
+        isCheckingConflicts = false
+    }
+
+    private func activatePlan() {
+        isActivating = true
+
+        // Save preferred workout time
+        calendarService.defaultWorkoutTime = workoutTime
+        calendarService.savePreferences()
+
+        // Handle calendar sync preference
+        if addToCalendar {
+            calendarService.calendarSyncEnabled = true
+            calendarService.savePreferences()
+
+            Task {
+                // Request access if needed
+                if !calendarService.isAuthorized {
+                    await calendarService.requestAccess()
+                }
+
+                // Activate the plan (ViewModel's activatePlan triggers calendar sync)
+                viewModel.activatePlan(template: template)
+
+                isActivating = false
+                dismiss()
+                onActivated()
+            }
+        } else {
+            viewModel.activatePlan(template: template)
+            isActivating = false
+            dismiss()
+            onActivated()
         }
     }
 }
@@ -457,8 +639,10 @@ struct EditScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editedSchedule: [String: String?]
     @State private var isSaving = false
+    @State private var conflicts: [Int: [String]] = [:]
 
     private let dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    private let calendarService = CalendarSyncService.shared
 
     init(planId: UUID, planName: String, currentSchedule: [String: String], availableWorkouts: [String], onSave: @escaping ([String: String]) -> Void) {
         self.planId = planId
@@ -474,6 +658,17 @@ struct EditScheduleSheet: View {
         _editedSchedule = State(initialValue: initial)
     }
 
+    /// Current schedule as non-optional dict for conflict checking
+    private var activeSchedule: [String: String] {
+        var s: [String: String] = [:]
+        for (day, workout) in editedSchedule {
+            if let workout = workout {
+                s[day] = workout
+            }
+        }
+        return s
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -485,14 +680,23 @@ struct EditScheduleSheet: View {
 
                             Spacer()
 
+                            // Conflict indicator
+                            if let conflictTitles = conflicts[day], !conflictTitles.isEmpty {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption2)
+                            }
+
                             Menu {
                                 Button("Rest Day") {
                                     editedSchedule[String(day)] = nil
+                                    refreshConflicts()
                                 }
                                 Divider()
                                 ForEach(availableWorkouts, id: \.self) { workout in
                                     Button(workout) {
                                         editedSchedule[String(day)] = workout
+                                        refreshConflicts()
                                     }
                                 }
                             } label: {
@@ -520,7 +724,11 @@ struct EditScheduleSheet: View {
                 } header: {
                     Text("Weekly Schedule")
                 } footer: {
-                    Text("Tap a day to change the workout or set it as a rest day.")
+                    if !conflicts.isEmpty {
+                        Text("Days with ⚠ have calendar events at your workout time.")
+                    } else {
+                        Text("Tap a day to change the workout or set it as a rest day.")
+                    }
                 }
 
                 Section {
@@ -555,19 +763,20 @@ struct EditScheduleSheet: View {
                     .disabled(isSaving)
                 }
             }
+            .task {
+                refreshConflicts()
+            }
         }
+    }
+
+    private func refreshConflicts() {
+        guard calendarService.calendarSyncEnabled, calendarService.isAuthorized else { return }
+        conflicts = calendarService.checkConflicts(schedule: activeSchedule)
     }
 
     private func saveSchedule() {
         isSaving = true
-        // Convert to non-optional dict (excluding rest days)
-        var finalSchedule: [String: String] = [:]
-        for (day, workout) in editedSchedule {
-            if let workout = workout {
-                finalSchedule[day] = workout
-            }
-        }
-        onSave(finalSchedule)
+        onSave(activeSchedule)
         dismiss()
     }
 }
@@ -650,6 +859,10 @@ class TrainingPlanViewModel: ObservableObject {
                 // Reload data
                 await loadData()
                 ToastManager.shared.success("Plan activated!")
+                HapticsManager.shared.success()
+
+                // Sync to calendar
+                await CalendarSyncService.shared.syncCalendar(schedule: schedule, planName: template.name)
             } catch {
                 ToastManager.shared.error("Failed to activate plan")
                 print("Failed to activate plan: \(error)")
@@ -667,6 +880,9 @@ class TrainingPlanViewModel: ObservableObject {
                 _ = try await APIService.shared.deactivateTrainingPlan()
                 activePlan = nil
                 ToastManager.shared.success("Plan deactivated")
+
+                // Remove calendar events
+                await CalendarSyncService.shared.syncCalendar(schedule: nil, planName: nil)
             } catch {
                 ToastManager.shared.error("Failed to deactivate plan")
                 print("Failed to deactivate plan: \(error)")
@@ -696,6 +912,9 @@ class TrainingPlanViewModel: ObservableObject {
 
                 ToastManager.shared.success("Schedule updated!")
                 HapticsManager.shared.success()
+
+                // Update calendar events
+                await CalendarSyncService.shared.syncCalendar(schedule: newSchedule, planName: plan.name)
             } catch {
                 ToastManager.shared.error("Failed to update schedule")
                 print("Failed to update schedule: \(error)")

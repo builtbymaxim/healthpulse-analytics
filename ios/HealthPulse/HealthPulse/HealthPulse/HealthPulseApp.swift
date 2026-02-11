@@ -12,6 +12,8 @@ struct HealthPulseApp: App {
     @StateObject private var authService = AuthService.shared
     @StateObject private var healthKitService = HealthKitService.shared
     @StateObject private var notificationService = NotificationService.shared
+    @StateObject private var calendarSyncService = CalendarSyncService.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -19,6 +21,7 @@ struct HealthPulseApp: App {
                 .environmentObject(authService)
                 .environmentObject(healthKitService)
                 .environmentObject(notificationService)
+                .environmentObject(calendarSyncService)
                 .task {
                     await notificationService.requestAuthorization()
                 }
@@ -27,8 +30,17 @@ struct HealthPulseApp: App {
                         Task {
                             await notificationService.scheduleAllNotifications()
                         }
+                        calendarSyncService.checkAuthorizationStatus()
                     } else {
                         notificationService.cancelAllNotifications()
+                        calendarSyncService.cleanupOnLogout()
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        Task {
+                            await calendarSyncService.syncIfNeeded()
+                        }
                     }
                 }
         }
