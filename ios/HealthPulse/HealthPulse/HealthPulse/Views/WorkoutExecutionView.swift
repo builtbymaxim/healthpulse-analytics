@@ -17,6 +17,10 @@ struct WorkoutExecutionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showExercisePicker = false
     @State private var showCancelConfirmation = false
+    @State private var showCompletion = false
+    @State private var completionPRs: [PRInfo] = []
+    @State private var completionSummary: (duration: Int, exercises: Int, sets: Int)?
+    @State private var saveError: String?
 
     init(workout: TodayWorkoutResponse, planId: UUID?, onComplete: @escaping ([PRInfo]) -> Void) {
         self.workout = workout
@@ -104,25 +108,33 @@ struct WorkoutExecutionView: View {
                 }
 
                 // Complete workout button
-                Button {
-                    viewModel.completeWorkout { prs in
-                        onComplete(prs)
-                        dismiss()
+                VStack(spacing: 6) {
+                    Button {
+                        triggerComplete()
+                    } label: {
+                        if viewModel.isSaving {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Complete Workout")
+                                .font(.headline)
+                        }
                     }
-                } label: {
-                    if viewModel.isSaving {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Complete Workout")
-                            .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(viewModel.canComplete ? Color.green : Color.gray)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .disabled(!viewModel.canComplete || viewModel.isSaving)
+
+                    if !viewModel.canComplete {
+                        Text("Log at least one set to complete")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(viewModel.canComplete ? Color.green : Color.gray)
-                .foregroundStyle(.white)
-                .disabled(!viewModel.canComplete || viewModel.isSaving)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -148,6 +160,44 @@ struct WorkoutExecutionView: View {
             .onDisappear {
                 viewModel.stopTimer()
             }
+            .fullScreenCover(isPresented: $showCompletion) {
+                if let summary = completionSummary {
+                    WorkoutCompletionView(summary: summary) {
+                        showCompletion = false
+                        if !completionPRs.isEmpty {
+                            // PRs will show via the onComplete callback
+                        }
+                        onComplete(completionPRs)
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Save Failed", isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )) {
+                Button("Try Again") {
+                    saveError = nil
+                    triggerComplete()
+                }
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(saveError ?? "Could not save your workout. Please try again.")
+            }
+        }
+    }
+
+    private func triggerComplete() {
+        viewModel.completeWorkout(onError: { message in
+            saveError = message
+        }) { prs in
+            let exerciseCount = viewModel.exerciseLogs.filter { log in
+                log.isCompleted || log.sets.contains { ($0.weight ?? 0) > 0 || ($0.reps ?? 0) > 0 || ($0.duration ?? 0) > 0 }
+            }.count
+            let setCount = viewModel.exerciseLogs.flatMap(\.sets).filter { ($0.weight ?? 0) > 0 || ($0.reps ?? 0) > 0 || ($0.duration ?? 0) > 0 }.count
+            completionSummary = (duration: Int(viewModel.elapsedTime / 60), exercises: exerciseCount, sets: setCount)
+            completionPRs = prs
+            showCompletion = true
         }
     }
 }
@@ -679,7 +729,7 @@ class WorkoutExecutionViewModel: ObservableObject {
         exerciseLogs.append(newExercise)
     }
 
-    func completeWorkout(completion: @escaping ([PRInfo]) -> Void) {
+    func completeWorkout(onError: ((String) -> Void)? = nil, completion: @escaping ([PRInfo]) -> Void) {
         isSaving = true
         stopTimer()
 
@@ -743,11 +793,133 @@ class WorkoutExecutionViewModel: ObservableObject {
                 await MainActor.run {
                     isSaving = false
                     HapticsManager.shared.error()
-                    ToastManager.shared.error("Failed to save workout")
+                    startTimer()
+                    let message = (error as? APIError)?.message ?? "Could not save your workout. Please check your connection and try again."
                     print("Failed to save workout: \(error)")
+                    onError?(message)
                 }
             }
         }
+    }
+}
+
+// MARK: - Workout Completion View
+
+struct WorkoutCompletionView: View {
+    let summary: (duration: Int, exercises: Int, sets: Int)
+    let onDone: () -> Void
+
+    @State private var checkmarkScale: CGFloat = 0.3
+    @State private var checkmarkOpacity: Double = 0
+    @State private var textOpacity: Double = 0
+
+    private static let messages = [
+        "Crushed it!",
+        "Another one in the books!",
+        "Consistency wins. Always.",
+        "Stronger than yesterday.",
+        "That's how champions train.",
+        "You showed up. That's what matters.",
+        "One step closer to your goals.",
+        "Hard work pays off.",
+        "Your future self will thank you.",
+        "Discipline over motivation.",
+        "Progress, not perfection.",
+        "The only bad workout is the one that didn't happen.",
+        "You earned this rest.",
+        "Keep stacking those wins.",
+        "Beast mode: activated."
+    ]
+
+    private let message: String
+
+    init(summary: (duration: Int, exercises: Int, sets: Int), onDone: @escaping () -> Void) {
+        self.summary = summary
+        self.onDone = onDone
+        self.message = Self.messages.randomElement() ?? "Well done!"
+    }
+
+    var body: some View {
+        ZStack {
+            Color.green.opacity(0.15)
+                .ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                Spacer()
+
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 80))
+                    .foregroundStyle(.green)
+                    .scaleEffect(checkmarkScale)
+                    .opacity(checkmarkOpacity)
+
+                VStack(spacing: 8) {
+                    Text("Workout Complete")
+                        .font(.title.bold())
+
+                    Text(message)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .opacity(textOpacity)
+
+                // Summary stats
+                HStack(spacing: 24) {
+                    SummaryStatView(value: "\(summary.duration)", label: "min", icon: "clock")
+                    SummaryStatView(value: "\(summary.exercises)", label: "exercises", icon: "figure.strengthtraining.traditional")
+                    SummaryStatView(value: "\(summary.sets)", label: "sets", icon: "checkmark.circle")
+                }
+                .opacity(textOpacity)
+                .padding(.top, 8)
+
+                Spacer()
+
+                Button {
+                    onDone()
+                } label: {
+                    Text("Done")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.green)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.horizontal)
+                .opacity(textOpacity)
+                .padding(.bottom, 32)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
+                checkmarkScale = 1.0
+                checkmarkOpacity = 1.0
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.4)) {
+                textOpacity = 1.0
+            }
+        }
+    }
+}
+
+private struct SummaryStatView: View {
+    let value: String
+    let label: String
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.green)
+            Text(value)
+                .font(.title2.bold())
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

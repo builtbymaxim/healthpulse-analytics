@@ -101,6 +101,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Auto-fill previous weights, PR detection
 - Rest timer between sets
 - Cancel confirmation dialog
+- Completion celebration screen with motivational messages + workout summary
+- Save error alert with retry option
 - Workout detail view with history
 - Training plan integration (plan workouts + ad-hoc)
 
@@ -267,11 +269,58 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | Dashboard N+1: batched _get_key_lift_progress (15→3 queries) and _get_nutrition_adherence (7→1 query) | Performance |
 | DailyCheckin/MetricLog: replaced stubs with real API calls (logMetricsBatch, logMetric) | Bug |
 
+### Workout Completion UX Fix
+
+| Fix | Category |
+|-----|----------|
+| "Complete Workout" button: rounded corners, hint text when disabled | UX |
+| Workout completion celebration screen with animated checkmark + motivational messages | UX |
+| Workout summary stats (duration, exercises, sets) on completion | UX |
+| Save error: alert with retry instead of silent toast | UX/Bug |
+| Timer restarts on save failure so workout isn't lost | Bug |
+
 ### Lower-Priority (not yet scheduled)
 
 - `CLLocationManager` should be created on main thread
 - Health readiness check hardcodes `"database": "ok"` instead of verifying
 - Various minor UX polish items from audit
+
+---
+
+## Roadmap
+
+### Phase 6 — Calendar Integration
+- Sync training plan schedule to Apple Calendar via EventKit
+- Auto-create/update events when plan is activated or edited
+- Deep link from calendar events back into workout execution
+
+### Phase 7 — Progressive Overload
+- Linear progression (default): +2.5 kg upper body / +5 kg lower body per session
+- Auto-suggest next weight based on completed sets and RPE
+- Deload detection: auto-reduce after 2 consecutive failures
+- Progress tracking per exercise with visual trend
+
+### Phase 8 — Body Composition
+- Body measurement tracking (chest, waist, hips, arms, legs)
+- Progress photo capture with date overlay
+- Before/after comparison view
+- Body fat estimation from measurements (Navy method)
+
+### Phase 9 — App Distribution
+- TestFlight for friend sharing (requires Apple Developer Program)
+- GDPR compliance (data export, deletion, privacy policy)
+- EU Digital Markets Act alternative marketplace preparation
+
+### Phase 10 — Meal Plans
+- Pre-built meal templates aligned to macro targets
+- Macro-balanced recipe suggestions based on nutrition goals
+- Quick-add from meal plan templates
+
+### Phase 11 — Social Features
+- Friends system (add/remove, activity feed)
+- Workout sharing (share completed workouts)
+- Challenges (weekly step/workout challenges)
+- Leaderboards (friends-only, opt-in)
 
 ---
 
@@ -282,13 +331,7 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | **Home Screen Widgets** | WidgetKit widgets for daily stats, workout reminder, nutrition progress | Medium |
 | **Apple Watch** | WatchOS companion for workout tracking and quick stats | High |
 | **Strava Integration** | Import/export workouts with Strava API | Medium |
-| **Social Features** | Friends, workout sharing, challenges, leaderboards | High |
 | **Data Export** | Export health data as CSV/PDF reports | Low |
-| **App Store Prep** | Screenshots, description, privacy policy, review compliance | Medium |
-| **Calendar Integration** | Sync training plan schedule to Apple/Google Calendar | Medium |
-| **Progressive Overload** | Automatic weight/rep progression suggestions based on performance | Medium |
-| **Meal Plans** | Pre-built meal templates with macro-aligned recipes | High |
-| **Body Composition** | Progress photos, measurement tracking, body fat estimation | Medium |
 
 ---
 
