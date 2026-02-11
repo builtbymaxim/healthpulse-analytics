@@ -293,6 +293,25 @@ struct ExerciseHistory: Codable {
     }
 }
 
+// MARK: - Weight Suggestion (Progressive Overload)
+
+struct WeightSuggestion: Codable {
+    let suggestedWeightKg: Double?
+    let lastWeightKg: Double?
+    let lastReps: Int?
+    let lastRpe: Double?
+    let status: String  // "increase", "maintain", "deload", "new"
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case suggestedWeightKg = "suggested_weight_kg"
+        case lastWeightKg = "last_weight_kg"
+        case lastReps = "last_reps"
+        case lastRpe = "last_rpe"
+        case status, reason
+    }
+}
+
 // MARK: - Analytics
 
 struct VolumeAnalytics: Codable {

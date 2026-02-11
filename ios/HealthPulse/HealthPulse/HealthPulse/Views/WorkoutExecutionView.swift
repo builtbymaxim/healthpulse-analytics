@@ -160,6 +160,9 @@ struct WorkoutExecutionView: View {
             .onDisappear {
                 viewModel.stopTimer()
             }
+            .task {
+                await viewModel.fetchSuggestions()
+            }
             .fullScreenCover(isPresented: $showCompletion) {
                 if let summary = completionSummary {
                     WorkoutCompletionView(summary: summary) {
@@ -314,6 +317,12 @@ struct ExerciseLogCard: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    // Weight suggestion hint
+                    if let suggestion = exerciseLog.suggestion {
+                        SuggestionHint(suggestion: suggestion) {
+                            applySuggestion(suggestion)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -415,6 +424,71 @@ struct ExerciseLogCard: View {
             }
         }
         .frame(width: 50)
+    }
+
+    private func applySuggestion(_ suggestion: WeightSuggestion) {
+        guard let weight = suggestion.suggestedWeightKg, weight > 0 else { return }
+        for i in exerciseLog.sets.indices {
+            if exerciseLog.sets[i].weight == nil || exerciseLog.sets[i].weight == suggestion.lastWeightKg {
+                exerciseLog.sets[i].weight = weight
+            }
+        }
+        HapticsManager.shared.light()
+    }
+}
+
+// MARK: - Suggestion Hint
+
+struct SuggestionHint: View {
+    let suggestion: WeightSuggestion
+    let onTap: () -> Void
+
+    var body: some View {
+        if suggestion.status != "new", let suggested = suggestion.suggestedWeightKg {
+            Button(action: onTap) {
+                HStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.caption2)
+                    Text(label(suggested: suggested))
+                        .font(.caption)
+                }
+                .foregroundStyle(color)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var icon: String {
+        switch suggestion.status {
+        case "increase": return "arrow.up.right"
+        case "deload": return "arrow.down.right"
+        default: return "arrow.right"
+        }
+    }
+
+    private var color: Color {
+        switch suggestion.status {
+        case "increase": return .green
+        case "deload": return .orange
+        default: return .secondary
+        }
+    }
+
+    private func label(suggested: Double) -> String {
+        let suggestedStr = formatWeight(suggested)
+        if let last = suggestion.lastWeightKg {
+            let lastStr = formatWeight(last)
+            switch suggestion.status {
+            case "increase": return "\(suggestedStr)kg (was \(lastStr)kg)"
+            case "deload": return "\(suggestedStr)kg (deload from \(lastStr)kg)"
+            default: return "\(suggestedStr)kg (maintain)"
+            }
+        }
+        return "\(suggestedStr)kg"
+    }
+
+    private func formatWeight(_ w: Double) -> String {
+        w.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", w) : String(format: "%.1f", w)
     }
 }
 
@@ -604,6 +678,7 @@ struct ExerciseLogEntry: Identifiable {
     let targetSetsReps: String?
     var sets: [SetLogEntry]
     var isCompleted: Bool
+    var suggestion: WeightSuggestion?
 
     init(from planned: PlannedExercise, isKeyLift: Bool = false) {
         self.name = planned.name
@@ -727,6 +802,34 @@ class WorkoutExecutionViewModel: ObservableObject {
             isCompleted: false
         )
         exerciseLogs.append(newExercise)
+    }
+
+    func fetchSuggestions() async {
+        let names = exerciseLogs
+            .filter { $0.inputType == .weightAndReps }
+            .map(\.name)
+
+        guard !names.isEmpty else { return }
+
+        do {
+            let suggestions = try await APIService.shared.getExerciseSuggestions(exerciseNames: names)
+
+            for i in exerciseLogs.indices {
+                guard let suggestion = suggestions[exerciseLogs[i].name] else { continue }
+                exerciseLogs[i].suggestion = suggestion
+
+                // Pre-fill empty weight fields with suggested weight
+                if let weight = suggestion.suggestedWeightKg, weight > 0 {
+                    for j in exerciseLogs[i].sets.indices {
+                        if exerciseLogs[i].sets[j].weight == nil {
+                            exerciseLogs[i].sets[j].weight = weight
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("Failed to fetch suggestions: \(error)")
+        }
     }
 
     func completeWorkout(onError: ((String) -> Void)? = nil, completion: @escaping ([PRInfo]) -> Void) {

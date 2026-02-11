@@ -673,6 +673,11 @@ class APIService {
         let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? exerciseName
         return try await request(endpoint: "/training-plans/progress/\(encoded)?days=\(days)")
     }
+
+    func getExerciseSuggestions(exerciseNames: [String]) async throws -> [String: WeightSuggestion] {
+        let body = ["exercise_names": exerciseNames]
+        return try await request(endpoint: "/training-plans/suggestions", method: "POST", body: body)
+    }
 }
 
 // Helper for empty responses

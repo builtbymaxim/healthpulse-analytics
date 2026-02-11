@@ -80,6 +80,15 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Clean removal of events on plan deactivation, full calendar cleanup on logout
 - iOS 17 `requestFullAccessToEvents()` with iOS 16 fallback
 
+### Phase 7 — Progressive Overload
+- Backend-driven weight suggestion system (progression_service.py)
+- Auto-suggest next weight based on completed sets and RPE from recent sessions
+- Linear progression: +2.5kg upper body / +5kg lower body per session (RPE ≤ 8)
+- Maintain current weight when RPE is 9-10 or reps fall below target
+- Deload detection: auto-reduce -10% after 2+ consecutive stagnant sessions with high RPE
+- Suggestions shown inline in both plan workout and standalone strength logging views
+- Pre-fills empty weight fields with suggested weight when workout starts
+
 ---
 
 ## Current Features
@@ -115,6 +124,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Cancel confirmation dialog
 - Completion celebration screen with motivational messages + workout summary
 - Save error alert with retry option
+- Progressive overload: auto-suggested weights based on recent session history
+- Inline suggestion hints (increase/maintain/deload) with tap-to-fill
 - Workout detail view with history
 - Training plan integration (plan workouts + ad-hoc)
 
@@ -177,7 +188,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `nutrition.py` | `/api/v1/nutrition` | POST/GET `/food`, `/goal`; GET `/summary`, `/summary/weekly` |
 | `sleep.py` | `/api/v1/sleep` | POST/GET `/`; GET `/summary`, `/history`, `/analytics` |
 | `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/recovery`, `/readiness` |
-| `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`; PUT `/{id}` |
+| `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`, `/suggestions`; PUT `/{id}` |
 | `health.py` | `/` | GET `/health`, `/ready` |
 
 ### Backend Services
@@ -189,6 +200,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `nutrition_calculator.py` | BMR/TDEE + macro target calculations |
 | `nutrition_service.py` | Food entry CRUD + daily summaries |
 | `exercise_service.py` | Exercise library + strength analytics |
+| `progression_service.py` | Progressive overload weight suggestions |
 | `sleep_service.py` | Sleep metrics + scoring |
 | `wellness_calculator.py` | Wellness/recovery/readiness scoring |
 
@@ -303,12 +315,6 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 ---
 
 ## Roadmap
-
-### Phase 7 — Progressive Overload
-- Linear progression (default): +2.5 kg upper body / +5 kg lower body per session
-- Auto-suggest next weight based on completed sets and RPE
-- Deload detection: auto-reduce after 2 consecutive failures
-- Progress tracking per exercise with visual trend
 
 ### Phase 8 — Body Composition
 - Body measurement tracking (chest, waist, hips, arms, legs)

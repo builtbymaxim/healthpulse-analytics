@@ -26,6 +26,7 @@ struct StrengthWorkoutLogView: View {
     @State private var showPRAlert = false
     @State private var prExerciseName = ""
     @State private var showRestTimer = false
+    @State private var suggestions: [String: WeightSuggestion] = [:]
 
     var body: some View {
         NavigationStack {
@@ -41,6 +42,7 @@ struct StrengthWorkoutLogView: View {
                                 SetRowView(
                                     set: $sets[index],
                                     setNumber: index + 1,
+                                    suggestion: set.exercise.flatMap { suggestions[$0.name] },
                                     onSelectExercise: {
                                         selectedExerciseIndex = index
                                         showingExercisePicker = true
@@ -172,6 +174,10 @@ struct StrengthWorkoutLogView: View {
                             sets[index].exerciseId = exercise.id
                         }
                         showingExercisePicker = false
+                        // Fetch suggestion for this exercise if not cached
+                        if suggestions[exercise.name] == nil {
+                            Task { await fetchSuggestion(for: exercise.name) }
+                        }
                     }
                 )
             }
@@ -268,6 +274,17 @@ struct StrengthWorkoutLogView: View {
         Exercise(id: UUID(), name: "Crunches", category: .core, muscleGroups: ["core"], equipment: .bodyweight, isCompound: false, createdAt: Date()),
     ]
 
+    private func fetchSuggestion(for exerciseName: String) async {
+        do {
+            let result = try await APIService.shared.getExerciseSuggestions(exerciseNames: [exerciseName])
+            if let suggestion = result[exerciseName] {
+                suggestions[exerciseName] = suggestion
+            }
+        } catch {
+            print("Failed to fetch suggestion for \(exerciseName): \(error)")
+        }
+    }
+
     private func addSet() {
         var newSet = SetInputState()
         // If we have a previous set, pre-fill the exercise
@@ -341,6 +358,7 @@ struct StrengthWorkoutLogView: View {
 struct SetRowView: View {
     @Binding var set: SetInputState
     let setNumber: Int
+    var suggestion: WeightSuggestion?
     let onSelectExercise: () -> Void
     let onDelete: () -> Void
 
@@ -367,6 +385,17 @@ struct SetRowView: View {
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            // Suggestion hint
+            if let suggestion = suggestion, suggestion.status != "new" {
+                SuggestionHint(suggestion: suggestion) {
+                    if let weight = suggestion.suggestedWeightKg {
+                        set.weight = formatWeight(weight)
+                    }
+                    HapticsManager.shared.light()
+                }
+                .padding(.horizontal, 4)
             }
 
             // Weight & Reps inputs (simplified - no RPE, no warmup)
@@ -424,6 +453,10 @@ struct SetRowView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.05), radius: 5)
+    }
+
+    private func formatWeight(_ w: Double) -> String {
+        w.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", w) : String(format: "%.1f", w)
     }
 }
 

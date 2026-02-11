@@ -8,6 +8,7 @@ from typing import Optional
 
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
+from app.services.progression_service import get_suggestions
 
 router = APIRouter()
 
@@ -17,6 +18,11 @@ class ActivatePlanRequest(BaseModel):
     """Request to activate a training plan."""
     template_id: UUID
     schedule: dict[str, str]  # day_of_week -> workout_name
+
+
+class SuggestionsRequest(BaseModel):
+    """Request weight suggestions for a list of exercises."""
+    exercise_names: list[str]
 
 
 class LogWorkoutSessionRequest(BaseModel):
@@ -320,6 +326,17 @@ async def get_workout_sessions(
     )
 
     return result.data or []
+
+
+@router.post("/suggestions")
+async def get_exercise_suggestions(
+    request: SuggestionsRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get weight suggestions for exercises based on recent workout history."""
+    supabase = get_supabase_client()
+    suggestions = await get_suggestions(supabase, current_user.id, request.exercise_names)
+    return suggestions
 
 
 # NOTE: /{plan_id} routes MUST come after all specific routes (/sessions, /progress, etc.)
