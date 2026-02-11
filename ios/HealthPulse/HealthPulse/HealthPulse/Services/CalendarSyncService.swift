@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import EventKit
+import UIKit
 
 @MainActor
 class CalendarSyncService: ObservableObject {
