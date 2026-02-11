@@ -9,6 +9,7 @@
 import Foundation
 import EventKit
 
+@MainActor
 class CalendarSyncService: ObservableObject {
     static let shared = CalendarSyncService()
 
@@ -18,8 +19,8 @@ class CalendarSyncService: ObservableObject {
     @Published var calendarSyncEnabled = false
     @Published var defaultWorkoutTime: Date
 
-    let eventStore = EKEventStore()
-    private let defaults = UserDefaults.standard
+    private nonisolated(unsafe) let eventStore = EKEventStore()
+    private nonisolated(unsafe) let defaults = UserDefaults.standard
 
     // MARK: - UserDefaults Keys
 
@@ -65,7 +66,6 @@ class CalendarSyncService: ObservableObject {
 
     // MARK: - Authorization
 
-    @MainActor
     func requestAccess() async {
         if #available(iOS 17.0, *) {
             let granted = (try? await eventStore.requestFullAccessToEvents()) ?? false
@@ -76,7 +76,6 @@ class CalendarSyncService: ObservableObject {
         }
     }
 
-    @MainActor
     func checkAuthorizationStatus() {
         let status = EKEventStore.authorizationStatus(for: .event)
         if #available(iOS 17.0, *) {
@@ -302,7 +301,6 @@ class CalendarSyncService: ObservableObject {
         removeAllHealthPulseEvents(from: calendar)
     }
 
-    @MainActor
     func cleanupOnLogout() {
         if let storedId = defaults.string(forKey: Keys.healthPulseCalendarId),
            let calendar = eventStore.calendar(withIdentifier: storedId) {
