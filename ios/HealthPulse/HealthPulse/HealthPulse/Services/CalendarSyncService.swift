@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 import EventKit
 
 @MainActor
@@ -19,8 +20,8 @@ class CalendarSyncService: ObservableObject {
     @Published var calendarSyncEnabled = false
     @Published var defaultWorkoutTime: Date
 
-    private nonisolated(unsafe) let eventStore = EKEventStore()
-    private nonisolated(unsafe) let defaults = UserDefaults.standard
+    private let eventStore = EKEventStore()
+    private let defaults = UserDefaults.standard
 
     // MARK: - UserDefaults Keys
 
