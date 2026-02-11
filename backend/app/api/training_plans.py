@@ -498,11 +498,28 @@ async def _check_and_update_prs(
     """Check for personal records and update the database."""
     prs_achieved = []
 
+    # Batch-lookup exercise IDs by name from the exercises library
+    exercise_names = [e.get("name", "") for e in exercises if e.get("name")]
+    if not exercise_names:
+        return prs_achieved
+
+    name_to_id = {}
+    lookup = (
+        supabase.table("exercises")
+        .select("id, name")
+        .in_("name", exercise_names)
+        .execute()
+    )
+    for row in lookup.data or []:
+        name_to_id[row["name"]] = row["id"]
+
     for exercise in exercises:
         exercise_name = exercise.get("name", "")
         sets = exercise.get("sets", [])
 
-        if not sets:
+        # Skip exercises not in the library (custom names without an exercise_id)
+        exercise_id = name_to_id.get(exercise_name)
+        if not exercise_id or not sets:
             continue
 
         # Find max weight at various rep ranges
@@ -529,7 +546,7 @@ async def _check_and_update_prs(
                 supabase.table("personal_records")
                 .select("*")
                 .eq("user_id", str(user_id))
-                .eq("exercise_name", exercise_name)
+                .eq("exercise_id", str(exercise_id))
                 .eq("record_type", pr_type)
                 .limit(1)
                 .execute()
@@ -549,18 +566,17 @@ async def _check_and_update_prs(
                 # Upsert PR
                 pr_data = {
                     "user_id": str(user_id),
-                    "exercise_name": exercise_name,
+                    "exercise_id": str(exercise_id),
                     "record_type": pr_type,
                     "value": weight,
                     "previous_value": previous_value,
                     "achieved_at": datetime.now().isoformat(),
-                    "workout_session_id": session_id,
                 }
 
                 # Atomic upsert on unique constraint
                 supabase.table("personal_records").upsert(
                     pr_data,
-                    on_conflict="user_id,exercise_name,record_type"
+                    on_conflict="user_id,exercise_id,record_type"
                 ).execute()
 
                 prs_achieved.append({
