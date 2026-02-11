@@ -256,19 +256,19 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | InsightsView: remove demo data flash, load only from API | UX |
 | FilterChip color blue → green for consistency | UX |
 
-### Batch 3 — Remaining (5 issues)
+### Batch 3 — Completed (commit `b673daf` + build fix)
+5 fixes across 7 files:
 
-| # | Issue | Severity | Description |
-|---|-------|----------|-------------|
-| 1 | RunLocationManager threading | CRITICAL | CLLocationManager delegate callbacks mutate @Published properties from background thread → crash risk |
-| 2 | NotificationService @MainActor | MODERATE | Missing @MainActor annotation on class with 8 @Published properties |
-| 3 | Token refresh mechanism | HIGH | No refresh token stored; 401 → immediate logout. Users get logged out every hour |
-| 4 | N+1 dashboard queries | HIGH | `_get_key_lift_progress` = 15 queries, `_get_nutrition_adherence` = 7 queries per dashboard load |
-| 5 | DailyCheckin/MetricLog stubs | MODERATE | `submitCheckin()` and `submitMetric()` fake success with 1-sec delay, no API call |
+| Fix | Category |
+|-----|----------|
+| RunLocationManager: wrapped @Published mutations in DispatchQueue.main.async | CRITICAL Bug |
+| NotificationService: added @MainActor, import Combine, fixed async center.add() | Threading |
+| Token refresh: store refresh token in Keychain, silent 401 retry with TokenRefreshCoordinator actor | Security/UX |
+| Dashboard N+1: batched _get_key_lift_progress (15→3 queries) and _get_nutrition_adherence (7→1 query) | Performance |
+| DailyCheckin/MetricLog: replaced stubs with real API calls (logMetricsBatch, logMetric) | Bug |
 
 ### Lower-Priority (not yet scheduled)
 
-- DailyCheckin/MetricLog have no backend endpoints (need new ones or use existing `/metrics/batch`)
 - `CLLocationManager` should be created on main thread
 - Health readiness check hardcodes `"database": "ok"` instead of verifying
 - Various minor UX polish items from audit

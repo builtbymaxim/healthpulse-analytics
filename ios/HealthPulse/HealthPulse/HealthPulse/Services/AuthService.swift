@@ -30,8 +30,9 @@ class AuthService: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                self?.handleAuthFailure()
+                self.handleAuthFailure()
             }
         }
     }
@@ -41,13 +42,14 @@ class AuthService: ObservableObject {
             forName: .tokensRefreshed,
             object: nil,
             queue: .main
-        ) { [weak self] notification in
+        ) { notification in
+            let accessToken = notification.userInfo?["access_token"] as? String
+            let refreshToken = notification.userInfo?["refresh_token"] as? String
             Task { @MainActor in
-                guard let self = self else { return }
-                if let accessToken = notification.userInfo?["access_token"] as? String {
+                if let accessToken {
                     KeychainService.save(key: "auth_token", value: accessToken)
                 }
-                if let refreshToken = notification.userInfo?["refresh_token"] as? String {
+                if let refreshToken {
                     KeychainService.save(key: "refresh_token", value: refreshToken)
                 }
             }

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 import UserNotifications
 
 @MainActor
@@ -185,7 +186,7 @@ class NotificationService: ObservableObject {
                 let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
                 let request = UNNotificationRequest(identifier: "workout_daily", content: content, trigger: trigger)
 
-                center.add(request)
+                try await center.add(request)
             }
         } catch {
             // Fallback: generic workout reminder every day at 8am
@@ -202,7 +203,7 @@ class NotificationService: ObservableObject {
             let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
             let request = UNNotificationRequest(identifier: "workout_daily", content: content, trigger: trigger)
 
-            center.add(request)
+            try? await center.add(request)
         }
     }
 
