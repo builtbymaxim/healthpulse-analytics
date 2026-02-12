@@ -92,6 +92,8 @@ struct ProfileView: View {
                     } label: {
                         Label("Units", systemImage: "ruler")
                     }
+
+                    SocialToggleRow()
                 }
 
                 // Support section
@@ -885,6 +887,39 @@ struct TargetMetricView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+struct SocialToggleRow: View {
+    @EnvironmentObject var authService: AuthService
+    @State private var isEnabled: Bool = false
+    @State private var isSaving = false
+
+    var body: some View {
+        Toggle(isOn: $isEnabled) {
+            Label("Social Features", systemImage: "person.2.fill")
+        }
+        .onAppear {
+            isEnabled = authService.currentUser?.settings?.socialOptIn ?? false
+        }
+        .onChange(of: isEnabled) { _, newValue in
+            guard !isSaving else { return }
+            isSaving = true
+            Task {
+                do {
+                    try await APIService.shared.updateSocialOptIn(newValue)
+                    // Reload profile to update the tab visibility
+                    await authService.loadProfile()
+                    HapticsManager.shared.selection()
+                } catch {
+                    // Revert on failure
+                    isEnabled = !newValue
+                    HapticsManager.shared.error()
+                }
+                isSaving = false
+            }
+        }
+        .disabled(isSaving)
     }
 }
 

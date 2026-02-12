@@ -48,6 +48,7 @@ struct UserSettings: Codable {
     var targetSleepHours: Double?
     var dailyStepGoal: Int?
     var useMetricUnits: Bool
+    var socialOptIn: Bool
 
     enum CodingKeys: String, CodingKey {
         case hrvBaseline = "hrv_baseline"
@@ -55,6 +56,7 @@ struct UserSettings: Codable {
         case targetSleepHours = "target_sleep_hours"
         case dailyStepGoal = "daily_step_goal"
         case useMetricUnits = "use_metric_units"
+        case socialOptIn = "social_opt_in"
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +66,7 @@ struct UserSettings: Codable {
         targetSleepHours = try container.decodeIfPresent(Double.self, forKey: .targetSleepHours)
         dailyStepGoal = try container.decodeIfPresent(Int.self, forKey: .dailyStepGoal)
         useMetricUnits = try container.decodeIfPresent(Bool.self, forKey: .useMetricUnits) ?? true
+        socialOptIn = try container.decodeIfPresent(Bool.self, forKey: .socialOptIn) ?? false
     }
 }
 

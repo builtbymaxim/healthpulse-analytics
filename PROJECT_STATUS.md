@@ -189,6 +189,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `sleep.py` | `/api/v1/sleep` | POST/GET `/`; GET `/summary`, `/history`, `/analytics` |
 | `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/recovery`, `/readiness` |
 | `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`, `/suggestions`; PUT `/{id}` |
+| `social.py` | `/api/v1/social` | POST/GET `/invite-codes`; GET `/partners`, `/leaderboard/{category}`; PUT `/partners/{id}/accept` |
 | `health.py` | `/` | GET `/health`, `/ready` |
 
 ### Backend Services
@@ -224,6 +225,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `SleepView` | Sleep tracking + analytics |
 | `InsightsView` | AI insights + correlations |
 | `TrendsView` | Historical trend charts |
+| `SocialView` | Social tab (partners, invites, leaderboards) |
 | `ProfileView` | Settings, baseline config, notifications, about |
 | `LogView` | Daily check-in + metric logging |
 
@@ -246,6 +248,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 **Workouts:** `workouts`, `workout_sets`, `workout_sessions`, `exercises`, `exercise_progress`, `personal_records`
 **Training:** `plan_templates`, `user_training_plans`
 **Nutrition:** `nutrition_goals`, `food_entries`
+**Social:** `partnerships`, `invite_codes`
 
 All tables have RLS enabled. User data is private; exercise library and plan templates are public read.
 
@@ -332,33 +335,42 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | TodayView greeting | "Good morning/afternoon/evening, {name}!" in welcome checklist |
 | Workout celebration | Personalized messages: "Crushed it, {name}!" mixed with generic ones |
 
+### Phase 8B — Social Features (Training Partners & Leaderboards)
+- Training Partnerships: time-bound, challenge-based connections with mutual consent
+- Invite code system (6-char hex codes, 7-day expiry, single use)
+- Partnership terms: both users agree on challenge type + duration before connecting
+- Challenge types: General, Strength, Consistency, Weight Loss
+- Duration options: 4 weeks, 8 weeks, 3 months, 6 months, ongoing
+- Social tab (6th tab): conditional display — only visible when user opts in
+- Social opt-in during onboarding (step 11) + toggle in Profile settings
+- 4 Leaderboard categories among active partners:
+  - Exercise PRs (per exercise, ranked by 1RM)
+  - Workout Streaks (consecutive training days)
+  - Nutrition Consistency (% days within calorie target)
+  - Training Consistency (% plan adherence)
+- New DB tables: `partnerships`, `invite_codes`
+- Backend social router: 8 endpoints (invite codes, partners, leaderboards)
+- All cross-user queries server-side (backend uses service key, no RLS changes on existing tables)
+
 ---
 
 ## Roadmap
 
-### Phase 8B — Social Features
-- New Social tab (6th tab)
-- Invite link/code system for connecting friends
-- Leaderboards: Exercise PRs, Workout Streaks, Nutrition Consistency, Training Consistency
-- Competitive opt-in during onboarding
-- New DB tables: friendships, invite_codes
-- RLS policy updates for cross-user friend data access
-
-### Phase 9 — Body Composition
-- Body measurement tracking (chest, waist, hips, arms, legs)
-- Progress photo capture with date overlay
-- Before/after comparison view
-- Body fat estimation from measurements (Navy method)
+### Phase 9 — Meal Plans & Recipes
+- Pre-built meal templates aligned to macro targets
+- Macro-balanced recipe suggestions based on nutrition goals
+- Quick-add from meal plan templates
 
 ### Phase 10 — App Distribution
 - TestFlight for friend sharing (requires Apple Developer Program)
 - GDPR compliance (data export, deletion, privacy policy)
 - EU Digital Markets Act alternative marketplace preparation
 
-### Phase 11 — Meal Plans
-- Pre-built meal templates aligned to macro targets
-- Macro-balanced recipe suggestions based on nutrition goals
-- Quick-add from meal plan templates
+### Phase 11 (Optional) — Body Composition
+- Body measurement tracking (chest, waist, hips, arms, legs)
+- Progress photo capture with date overlay
+- Before/after comparison view
+- Body fat estimation from measurements (Navy method)
 
 ---
 
@@ -385,7 +397,7 @@ healthpulse-analytics/
 │   │   ├── api/                 # Route handlers
 │   │   │   ├── auth.py, users.py, metrics.py, workouts.py
 │   │   │   ├── exercises.py, nutrition.py, sleep.py
-│   │   │   ├── predictions.py, training_plans.py, health.py
+│   │   │   ├── predictions.py, training_plans.py, social.py, health.py
 │   │   ├── services/            # Business logic
 │   │   │   ├── dashboard_service.py, prediction_service.py
 │   │   │   ├── nutrition_service.py, nutrition_calculator.py
@@ -398,13 +410,14 @@ healthpulse-analytics/
 ├── ios/
 │   └── HealthPulse/HealthPulse/HealthPulse/
 │       ├── HealthPulseApp.swift  # App entry point
-│       ├── Views/               # All SwiftUI views (19 files)
+│       ├── Views/               # All SwiftUI views (20 files)
 │       ├── Services/            # API, Auth, HealthKit, Keychain, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities
 ├── docs/
 │   ├── database-schema.sql
 │   ├── migration-exercises.sql
+│   ├── migration-social.sql
 │   └── seed-plan-templates.sql
 └── PROJECT_STATUS.md            # This file
 ```

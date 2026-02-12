@@ -51,6 +51,11 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @EnvironmentObject var tabRouter: TabRouter
+    @EnvironmentObject var authService: AuthService
+
+    private var showSocialTab: Bool {
+        authService.currentUser?.settings?.socialOptIn ?? false
+    }
 
     var body: some View {
         TabView(selection: $tabRouter.selectedTab) {
@@ -81,6 +86,15 @@ struct MainTabView: View {
                     Label("Sleep", systemImage: "moon.zzz.fill")
                 }
                 .tag(AppTab.sleep)
+
+            // Social - training partners (conditional)
+            if showSocialTab {
+                SocialView()
+                    .tabItem {
+                        Label("Social", systemImage: "person.2.fill")
+                    }
+                    .tag(AppTab.social)
+            }
 
             // Profile & settings
             ProfileView()

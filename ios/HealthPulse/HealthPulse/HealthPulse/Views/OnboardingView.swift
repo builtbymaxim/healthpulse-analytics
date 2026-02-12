@@ -39,8 +39,9 @@ struct OnboardingView: View {
     @State private var preferredDays: Set<Int> = [1, 2, 4, 5]  // Mon, Tue, Thu, Fri
     @State private var suggestedPlan: PlanTemplatePreview?
     @State private var isLoadingPlan = false
+    @State private var socialOptIn: Bool = false
 
-    let totalSteps = 12
+    let totalSteps = 13
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,7 +64,8 @@ struct OnboardingView: View {
                 scheduleStep.tag(8)
                 planSuggestionStep.tag(9)
                 sleepStep.tag(10)
-                healthKitStep.tag(11)
+                socialOptInStep.tag(11)
+                healthKitStep.tag(12)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentStep)
@@ -1004,6 +1006,109 @@ struct OnboardingView: View {
         }
     }
 
+    private var socialOptInStep: some View {
+        VStack(spacing: 32) {
+            VStack(spacing: 8) {
+                Text("Train with Friends?")
+                    .font(.title.bold())
+                Text("Connect with training partners and challenge each other")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 40)
+
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.green)
+                .padding()
+
+            VStack(spacing: 12) {
+                // Yes option
+                Button {
+                    socialOptIn = true
+                    HapticsManager.shared.selection()
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "trophy.fill")
+                            .font(.title2)
+                            .foregroundStyle(socialOptIn ? .white : .green)
+                            .frame(width: 44, height: 44)
+                            .background(socialOptIn ? Color.green : Color.green.opacity(0.15))
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Yes, let's compete!")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Compare PRs, streaks, and more with friends")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        if socialOptIn {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(socialOptIn ? Color.green : Color.clear, lineWidth: 2)
+                    )
+                }
+
+                // No option
+                Button {
+                    socialOptIn = false
+                    HapticsManager.shared.selection()
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "figure.run")
+                            .font(.title2)
+                            .foregroundStyle(!socialOptIn ? .white : .secondary)
+                            .frame(width: 44, height: 44)
+                            .background(!socialOptIn ? Color.secondary : Color(.tertiarySystemBackground))
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("I prefer solo training")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Focus on your own progress")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        if !socialOptIn {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(!socialOptIn ? Color.secondary.opacity(0.5) : Color.clear, lineWidth: 2)
+                    )
+                }
+            }
+            .padding(.horizontal)
+
+            Text("You can change this anytime in Settings")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+
+            Spacer()
+        }
+    }
+
     private var healthKitStep: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
@@ -1267,7 +1372,8 @@ struct OnboardingView: View {
                     trainingModality: trainingModality.rawValue,
                     equipment: selectedEquipment.map { $0.rawValue },
                     daysPerWeek: daysPerWeek,
-                    preferredDays: Array(preferredDays).sorted()
+                    preferredDays: Array(preferredDays).sorted(),
+                    socialOptIn: socialOptIn
                 )
 
                 try await APIService.shared.saveOnboardingProfile(profileData)
@@ -1363,6 +1469,8 @@ struct OnboardingProfile: Encodable {
     let equipment: [String]?
     let daysPerWeek: Int?
     let preferredDays: [Int]?
+    // Social
+    let socialOptIn: Bool?
 
     enum CodingKeys: String, CodingKey {
         case displayName = "display_name"
@@ -1378,6 +1486,7 @@ struct OnboardingProfile: Encodable {
         case equipment
         case daysPerWeek = "days_per_week"
         case preferredDays = "preferred_days"
+        case socialOptIn = "social_opt_in"
     }
 }
 

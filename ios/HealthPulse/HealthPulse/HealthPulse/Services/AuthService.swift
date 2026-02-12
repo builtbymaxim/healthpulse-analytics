@@ -146,7 +146,7 @@ class AuthService: ObservableObject {
         await loadProfile()
     }
 
-    private func loadProfile() async {
+    func loadProfile() async {
         do {
             currentUser = try await APIService.shared.getProfile()
             // Check if onboarding is complete (user has set basic profile info)

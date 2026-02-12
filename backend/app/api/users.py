@@ -44,6 +44,8 @@ class OnboardingProfile(BaseModel):
     equipment: list[str] | None = None
     days_per_week: int | None = None
     preferred_days: list[int] | None = None
+    # Social
+    social_opt_in: bool | None = None
 
 
 class UserSettings(BaseModel):
@@ -58,6 +60,8 @@ class UserSettings(BaseModel):
     rhr_baseline: float | None = None
     target_sleep_hours: float | None = None
     daily_step_goal: int | None = None
+    # Social
+    social_opt_in: bool | None = None
 
 
 class UserProfileUpdate(BaseModel):
@@ -196,6 +200,11 @@ async def update_user_settings(
     elif "daily_step_goal" in current_settings:
         settings_data["daily_step_goal"] = current_settings["daily_step_goal"]
 
+    if settings.social_opt_in is not None:
+        settings_data["social_opt_in"] = settings.social_opt_in
+    elif "social_opt_in" in current_settings:
+        settings_data["social_opt_in"] = current_settings["social_opt_in"]
+
     update_data = {"settings": settings_data}
 
     if settings.display_name is not None:
@@ -300,6 +309,8 @@ async def complete_onboarding(
             settings["days_per_week"] = profile.days_per_week
         if profile.preferred_days:
             settings["preferred_days"] = profile.preferred_days
+        if profile.social_opt_in is not None:
+            settings["social_opt_in"] = profile.social_opt_in
 
         supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
         print(f"  Settings updated with training preferences")

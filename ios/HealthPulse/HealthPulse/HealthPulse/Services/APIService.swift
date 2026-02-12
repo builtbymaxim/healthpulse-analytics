@@ -678,6 +678,56 @@ class APIService {
         let body = ["exercise_names": exerciseNames]
         return try await request(endpoint: "/training-plans/suggestions", method: "POST", body: body)
     }
+
+    // MARK: - Social
+
+    func createInviteCode() async throws -> InviteCode {
+        try await request(endpoint: "/social/invite-codes", method: "POST")
+    }
+
+    func getInviteCodes() async throws -> [InviteCode] {
+        try await request(endpoint: "/social/invite-codes")
+    }
+
+    func useInviteCode(_ code: String, challengeType: String, durationWeeks: Int?) async throws -> Partner {
+        let body = UseInviteRequest(challengeType: challengeType, durationWeeks: durationWeeks)
+        return try await request(endpoint: "/social/invite-codes/\(code)/use", method: "POST", body: body)
+    }
+
+    func getPartners() async throws -> [Partner] {
+        try await request(endpoint: "/social/partners")
+    }
+
+    func acceptPartnership(_ id: UUID) async throws -> Partner {
+        try await request(endpoint: "/social/partners/\(id)/accept", method: "PUT")
+    }
+
+    func declinePartnership(_ id: UUID) async throws -> EmptyResponse {
+        try await request(endpoint: "/social/partners/\(id)/decline", method: "PUT")
+    }
+
+    func endPartnership(_ id: UUID) async throws -> EmptyResponse {
+        try await request(endpoint: "/social/partners/\(id)", method: "DELETE")
+    }
+
+    func getLeaderboard(category: String, exerciseName: String? = nil) async throws -> [LeaderboardEntry] {
+        var endpoint = "/social/leaderboard/\(category)"
+        if let exerciseName = exerciseName {
+            let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exerciseName
+            endpoint += "?exercise_name=\(encoded)"
+        }
+        return try await request(endpoint: endpoint)
+    }
+
+    func updateSocialOptIn(_ optIn: Bool) async throws {
+        struct SocialSettingsUpdate: Encodable {
+            let socialOptIn: Bool
+            enum CodingKeys: String, CodingKey {
+                case socialOptIn = "social_opt_in"
+            }
+        }
+        let _: User = try await request(endpoint: "/users/me/settings", method: "PUT", body: SocialSettingsUpdate(socialOptIn: optIn))
+    }
 }
 
 // Helper for empty responses
