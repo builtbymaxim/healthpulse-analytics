@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-10
+> Last updated: 2026-02-11
 
 ## Overview
 
@@ -305,6 +305,14 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | Workout summary stats (duration, exercises, sets) on completion | UX |
 | Save error: alert with retry instead of silent toast | UX/Bug |
 | Timer restarts on save failure so workout isn't lost | Bug |
+
+### Backend Bug Fix — Personal Records
+
+| Fix | Category |
+|-----|----------|
+| `_check_and_update_prs`: use `exercise_id` instead of non-existent `exercise_name` column | CRITICAL Bug |
+| Remove non-existent `workout_session_id` from PR upsert data | Bug |
+| Batch-lookup exercise IDs by name before PR checking | Performance |
 
 ### Lower-Priority (not yet scheduled)
 
