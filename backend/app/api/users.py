@@ -30,6 +30,7 @@ class UserProfile(BaseModel):
 
 class OnboardingProfile(BaseModel):
     """Onboarding profile data from iOS app."""
+    display_name: str | None = None
     age: int
     height_cm: float
     gender: str
@@ -254,6 +255,8 @@ async def complete_onboarding(
             "activity_level": profile.activity_level,
             "fitness_goal": profile.fitness_goal,
         }
+        if profile.display_name:
+            update_data["display_name"] = profile.display_name
 
         print(f"  Updating profile: {update_data}")
         result = (

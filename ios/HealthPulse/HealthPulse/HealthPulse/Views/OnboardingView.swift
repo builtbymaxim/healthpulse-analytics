@@ -20,6 +20,7 @@ struct OnboardingView: View {
     @State private var isSaving = false
 
     // User data
+    @State private var displayName: String = ""
     @State private var age: Int = 25
     @State private var heightCm: Double = 170
     @State private var gender: Gender = .male
@@ -39,7 +40,7 @@ struct OnboardingView: View {
     @State private var suggestedPlan: PlanTemplatePreview?
     @State private var isLoadingPlan = false
 
-    let totalSteps = 11
+    let totalSteps = 12
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,16 +53,17 @@ struct OnboardingView: View {
             // Content
             TabView(selection: $currentStep) {
                 welcomeStep.tag(0)
-                physicalProfileStep.tag(1)
-                weightStep.tag(2)
-                goalStep.tag(3)
-                activityStep.tag(4)
-                caloriePreviewStep.tag(5)
-                trainingModalityStep.tag(6)
-                scheduleStep.tag(7)
-                planSuggestionStep.tag(8)
-                sleepStep.tag(9)
-                healthKitStep.tag(10)
+                nameStep.tag(1)
+                physicalProfileStep.tag(2)
+                weightStep.tag(3)
+                goalStep.tag(4)
+                activityStep.tag(5)
+                caloriePreviewStep.tag(6)
+                trainingModalityStep.tag(7)
+                scheduleStep.tag(8)
+                planSuggestionStep.tag(9)
+                sleepStep.tag(10)
+                healthKitStep.tag(11)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentStep)
@@ -183,6 +185,39 @@ struct OnboardingView: View {
                     .foregroundStyle(.green)
             }
             .padding(.bottom, 8)
+        }
+        .padding()
+    }
+
+    private var nameStep: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 80))
+                .foregroundStyle(.green)
+
+            VStack(spacing: 12) {
+                Text("What should we call you?")
+                    .font(.title.bold())
+
+                Text("This is how we'll greet you in the app")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            TextField("Your name", text: $displayName)
+                .font(.title2)
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(.words)
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 40)
+
+            Spacer()
+            Spacer()
         }
         .padding()
     }
@@ -1013,7 +1048,12 @@ struct OnboardingView: View {
     private func handleNext() {
         HapticsManager.shared.medium()
 
-        if currentStep == 4 {
+        // Name step: require non-empty name
+        if currentStep == 1 && displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            return
+        }
+
+        if currentStep == 5 {
             // After activity level, load calorie preview before advancing
             Task {
                 await loadCaloriePreview()
@@ -1021,7 +1061,7 @@ struct OnboardingView: View {
                     withAnimation { currentStep += 1 }
                 }
             }
-        } else if currentStep == 7 {
+        } else if currentStep == 8 {
             // After schedule step, load suggested plan
             Task {
                 await loadSuggestedPlan()
@@ -1213,7 +1253,9 @@ struct OnboardingView: View {
     private func saveProfileInternal() {
         Task {
             do {
+                let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
                 let profileData = OnboardingProfile(
+                    displayName: trimmedName.isEmpty ? nil : trimmedName,
                     age: age,
                     heightCm: heightCm,
                     gender: gender.rawValue,
@@ -1307,6 +1349,7 @@ struct MacroPreviewBox: View {
 // MARK: - Onboarding Profile Model
 
 struct OnboardingProfile: Encodable {
+    let displayName: String?
     let age: Int
     let heightCm: Double
     let gender: String
@@ -1322,6 +1365,7 @@ struct OnboardingProfile: Encodable {
     let preferredDays: [Int]?
 
     enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
         case age
         case heightCm = "height_cm"
         case gender

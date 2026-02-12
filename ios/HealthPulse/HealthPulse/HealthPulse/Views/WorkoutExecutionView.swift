@@ -916,22 +916,28 @@ struct WorkoutCompletionView: View {
     @State private var checkmarkOpacity: Double = 0
     @State private var textOpacity: Double = 0
 
-    private static let messages = [
-        "Crushed it!",
+    // Generic messages (no name)
+    private static let genericMessages = [
         "Another one in the books!",
         "Consistency wins. Always.",
         "Stronger than yesterday.",
         "That's how champions train.",
-        "You showed up. That's what matters.",
-        "One step closer to your goals.",
         "Hard work pays off.",
-        "Your future self will thank you.",
         "Discipline over motivation.",
         "Progress, not perfection.",
         "The only bad workout is the one that didn't happen.",
-        "You earned this rest.",
-        "Keep stacking those wins.",
         "Beast mode: activated."
+    ]
+
+    // Personalized messages (with {name} placeholder)
+    private static let personalizedMessages = [
+        "Crushed it, {name}!",
+        "Great work, {name}!",
+        "You showed up, {name}. That's what matters.",
+        "One step closer to your goals, {name}.",
+        "Your future self will thank you, {name}.",
+        "You earned this rest, {name}.",
+        "Keep stacking those wins, {name}.",
     ]
 
     private let message: String
@@ -939,7 +945,17 @@ struct WorkoutCompletionView: View {
     init(summary: (duration: Int, exercises: Int, sets: Int), onDone: @escaping () -> Void) {
         self.summary = summary
         self.onDone = onDone
-        self.message = Self.messages.randomElement() ?? "Well done!"
+
+        let name = AuthService.shared.currentUser?.displayName
+        if let name, !name.isEmpty {
+            // Mix personalized and generic messages
+            let allMessages = Self.personalizedMessages.map {
+                $0.replacingOccurrences(of: "{name}", with: name)
+            } + Self.genericMessages
+            self.message = allMessages.randomElement() ?? "Well done!"
+        } else {
+            self.message = Self.genericMessages.randomElement() ?? "Well done!"
+        }
     }
 
     var body: some View {

@@ -208,9 +208,10 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 
 | View | Purpose |
 |------|---------|
-| `ContentView` | Root tab navigation |
+| `ContentView` | Root tab navigation + greeting overlay |
 | `AuthView` | Login/signup |
-| `OnboardingView` | Profile setup wizard |
+| `OnboardingView` | Profile setup wizard (12 steps incl. name) |
+| `GreetingView` | Animated daily greeting splash on app open |
 | `TodayView` | Smart dashboard (500+ lines) |
 | `WorkoutTabView` | Workout hub (today's plan + ad-hoc + history) |
 | `WorkoutExecutionView` | Live workout logging |
@@ -320,31 +321,44 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Health readiness check hardcodes `"database": "ok"` instead of verifying
 - Various minor UX polish items from audit
 
+### Phase 8A — Display Name & Personalized Greetings
+
+| Change | Details |
+|--------|---------|
+| Onboarding name step | New step after welcome: "What should we call you?" with text field |
+| Backend onboarding | `display_name` accepted in `POST /me/onboarding` |
+| Animated greeting splash | Full-screen daily rotating motivational message + name on app open (~2s animation) |
+| Background data prefetch | Dashboard loads behind greeting overlay — zero-spinner transition |
+| TodayView greeting | "Good morning/afternoon/evening, {name}!" in welcome checklist |
+| Workout celebration | Personalized messages: "Crushed it, {name}!" mixed with generic ones |
+
 ---
 
 ## Roadmap
 
-### Phase 8 — Body Composition
+### Phase 8B — Social Features
+- New Social tab (6th tab)
+- Invite link/code system for connecting friends
+- Leaderboards: Exercise PRs, Workout Streaks, Nutrition Consistency, Training Consistency
+- Competitive opt-in during onboarding
+- New DB tables: friendships, invite_codes
+- RLS policy updates for cross-user friend data access
+
+### Phase 9 — Body Composition
 - Body measurement tracking (chest, waist, hips, arms, legs)
 - Progress photo capture with date overlay
 - Before/after comparison view
 - Body fat estimation from measurements (Navy method)
 
-### Phase 9 — App Distribution
+### Phase 10 — App Distribution
 - TestFlight for friend sharing (requires Apple Developer Program)
 - GDPR compliance (data export, deletion, privacy policy)
 - EU Digital Markets Act alternative marketplace preparation
 
-### Phase 10 — Meal Plans
+### Phase 11 — Meal Plans
 - Pre-built meal templates aligned to macro targets
 - Macro-balanced recipe suggestions based on nutrition goals
 - Quick-add from meal plan templates
-
-### Phase 11 — Social Features
-- Friends system (add/remove, activity feed)
-- Workout sharing (share completed workouts)
-- Challenges (weekly step/workout challenges)
-- Leaderboards (friends-only, opt-in)
 
 ---
 
@@ -384,7 +398,7 @@ healthpulse-analytics/
 ├── ios/
 │   └── HealthPulse/HealthPulse/HealthPulse/
 │       ├── HealthPulseApp.swift  # App entry point
-│       ├── Views/               # All SwiftUI views (18 files)
+│       ├── Views/               # All SwiftUI views (19 files)
 │       ├── Services/            # API, Auth, HealthKit, Keychain, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities

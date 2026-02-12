@@ -11,13 +11,26 @@ struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var healthKit: HealthKitService
     @StateObject private var tabRouter = TabRouter.shared
+    @State private var showGreeting = true
 
     var body: some View {
         Group {
             if authService.isAuthenticated {
                 if authService.isOnboardingComplete {
-                    MainTabView()
-                        .environmentObject(tabRouter)
+                    ZStack {
+                        MainTabView()
+                            .environmentObject(tabRouter)
+
+                        if showGreeting {
+                            GreetingView(
+                                displayName: authService.currentUser?.displayName
+                            ) {
+                                showGreeting = false
+                            }
+                            .transition(.opacity)
+                            .zIndex(1)
+                        }
+                    }
                 } else {
                     OnboardingView()
                         .environmentObject(healthKit)
@@ -28,6 +41,11 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: authService.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: authService.isOnboardingComplete)
+        .onChange(of: authService.isAuthenticated) { _, authenticated in
+            if authenticated {
+                showGreeting = true
+            }
+        }
     }
 }
 

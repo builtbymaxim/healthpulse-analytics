@@ -24,6 +24,7 @@ struct TodayView: View {
                     // New User Welcome Checklist
                     if viewModel.isNewUser {
                         WelcomeChecklistCard(
+                            displayName: viewModel.displayName,
                             hasLoggedWorkout: viewModel.hasLoggedWorkout,
                             hasLoggedMeal: viewModel.hasLoggedMeal,
                             hasLoggedSleep: viewModel.hasLoggedSleep,
@@ -253,6 +254,7 @@ struct TodayView: View {
 // MARK: - Welcome Checklist Card
 
 struct WelcomeChecklistCard: View {
+    let displayName: String?
     let hasLoggedWorkout: Bool
     let hasLoggedMeal: Bool
     let hasLoggedSleep: Bool
@@ -266,12 +268,28 @@ struct WelcomeChecklistCard: View {
         [hasLoggedWorkout, hasLoggedMeal, hasLoggedSleep, hasSetupTrainingPlan].filter { $0 }.count
     }
 
+    private var personalizedGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let timeGreeting: String
+        if hour < 12 {
+            timeGreeting = "Good morning"
+        } else if hour < 17 {
+            timeGreeting = "Good afternoon"
+        } else {
+            timeGreeting = "Good evening"
+        }
+        if let name = displayName, !name.isEmpty {
+            return "\(timeGreeting), \(name)!"
+        }
+        return "\(timeGreeting)!"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to HealthPulse!")
+                    Text(personalizedGreeting)
                         .font(.headline)
                     Text("Let's build your routine")
                         .font(.subheadline)
@@ -962,6 +980,7 @@ struct WorkoutSummary {
 @MainActor
 class TodayViewModel: ObservableObject {
     // New user tracking
+    @Published var displayName: String?
     @Published var isNewUser: Bool = true
     @Published var hasLoggedWorkout: Bool = false
     @Published var hasLoggedMeal: Bool = false
@@ -1065,6 +1084,7 @@ class TodayViewModel: ObservableObject {
             let calendar = Calendar.current
             let daysSinceCreation = calendar.dateComponents([.day], from: user.createdAt, to: Date()).day ?? 0
 
+            displayName = user.displayName
             // User is "new" if account is < 7 days old
             isNewUser = daysSinceCreation < 7
         } catch {
