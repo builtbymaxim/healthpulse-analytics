@@ -95,15 +95,21 @@ struct MainTabView: View {
                     }
                     .tag(AppTab.social)
             }
-
-            // Profile & settings
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
-                .tag(AppTab.profile)
         }
         .tint(.green)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    tabRouter.showProfile = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .sheet(isPresented: $tabRouter.showProfile) {
+            ProfileView()
+        }
     }
 }
 

@@ -325,12 +325,6 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | Remove non-existent `workout_session_id` from PR upsert data | Bug |
 | Batch-lookup exercise IDs by name before PR checking | Performance |
 
-### Lower-Priority (not yet scheduled)
-
-- `CLLocationManager` should be created on main thread
-- Health readiness check hardcodes `"database": "ok"` instead of verifying
-- Various minor UX polish items from audit
-
 ### Phase 8A — Display Name & Personalized Greetings
 
 | Change | Details |
@@ -348,7 +342,7 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Partnership terms: both users agree on challenge type + duration before connecting
 - Challenge types: General, Strength, Consistency, Weight Loss
 - Duration options: 4 weeks, 8 weeks, 3 months, 6 months, ongoing
-- Social tab (6th tab): conditional display — only visible when user opts in
+- Social tab (5th tab): conditional display — only visible when user opts in
 - Social opt-in during onboarding (step 11) + toggle in Profile settings
 - 4 Leaderboard categories among active partners:
   - Exercise PRs (per exercise, ranked by 1RM)
@@ -404,6 +398,34 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Fixed BarcodeScannerView build error: changed `selectedMealType` from `String` to `MealType` enum
 - Fixed missing `import UIKit` in BarcodeScannerView (UIColor/UILabel) and ProfileView (UIActivityViewController)
 - Fixed missing `import Combine` in WeeklyMealPlanView (ObservableObject/Published)
+
+### UX, Session & Audit Fixes
+
+**UX & Session (5 fixes):**
+
+| Fix | Category |
+|-----|----------|
+| Onboarding flash fix: cache `isOnboardingComplete` in UserDefaults so logged-in users skip onboarding | UX |
+| Proactive token refresh: schedule refresh at 80% of expiry via `Task.sleep`, persist across app launches | Session |
+| AppLogo dark mode: fixed `Contents.json` mapping dark variant to `"value": "dark"` (was backwards) | UX |
+| Onboarding button tap targets: added `.contentShape(Rectangle())` to all option cards | UX |
+| Keyboard dismissal on name step: `@FocusState` binding + dismiss on Continue tap | UX |
+
+**Audit (6 fixes):**
+
+| Fix | Category |
+|-----|----------|
+| `CLLocationManager` main thread init: deferred creation with `DispatchQueue.main.sync` fallback | CRITICAL Bug |
+| Health readiness check: real DB query instead of hardcoded `"ok"` | HIGH Bug |
+| Empty catch blocks → error states with retry UI in MealPlanBrowseView + RecipeLibraryView | MEDIUM Bug |
+| Backend `print()` → `logging` in users.py (15 statements) | MEDIUM Quality |
+| Silent backend exceptions: added `logger.warning/exception` in predictions, nutrition, dashboard, meal plan services | MEDIUM Quality |
+| OAuth buttons → "Coming Soon" labels for Strava/Garmin/Oura/Whoop | LOW UX |
+
+### Social Tab Navigation Fix
+- Moved Profile from tab bar to toolbar gear icon (sheet presentation)
+- Max 5 visible tabs: Dashboard, Nutrition, Workout, Sleep, Social (when enabled)
+- Eliminates iOS "More" tab that appeared with 6 tabs
 
 ---
 
