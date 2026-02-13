@@ -15,6 +15,7 @@ struct NutritionView: View {
     @State private var showingRecipeLibrary = false
     @State private var showingMealPlans = false
     @State private var showingBarcodeScanner = false
+    @State private var showingWeeklyPlanner = false
     @State private var selectedDate = Date()
     @State private var animationTrigger = false  // Triggers animation on food log
 
@@ -63,6 +64,12 @@ struct NutritionView: View {
                             Label("Meal Plans", systemImage: "list.bullet.clipboard.fill")
                         }
 
+                        Button {
+                            showingWeeklyPlanner = true
+                        } label: {
+                            Label("Weekly Planner", systemImage: "calendar")
+                        }
+
                         Divider()
 
                         Button {
@@ -99,6 +106,9 @@ struct NutritionView: View {
                         animationTrigger.toggle()
                     }
                 })
+            }
+            .sheet(isPresented: $showingWeeklyPlanner) {
+                WeeklyMealPlanView()
             }
             .sheet(isPresented: $showingBarcodeScanner) {
                 BarcodeScannerView(onFoodAdded: {

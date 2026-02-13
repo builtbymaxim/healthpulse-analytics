@@ -258,3 +258,149 @@ struct ShoppingListItem: Codable, Identifiable {
         case totalAmount = "total_amount"
     }
 }
+
+// MARK: - Weekly Meal Plan Models (Phase 9A)
+
+struct WeeklyPlanItem: Codable, Identifiable {
+    let id: UUID
+    let planId: UUID
+    let dayOfWeek: Int
+    let mealType: String
+    let recipeId: UUID
+    let servings: Double
+    let sortOrder: Int
+    let recipe: Recipe?
+    let totalCalories: Double
+    let totalProteinG: Double
+    let totalCarbsG: Double
+    let totalFatG: Double
+
+    var mealTypeEnum: MealType? { MealType(rawValue: mealType) }
+
+    enum CodingKeys: String, CodingKey {
+        case id, servings, recipe
+        case planId = "plan_id"
+        case dayOfWeek = "day_of_week"
+        case mealType = "meal_type"
+        case recipeId = "recipe_id"
+        case sortOrder = "sort_order"
+        case totalCalories = "total_calories"
+        case totalProteinG = "total_protein_g"
+        case totalCarbsG = "total_carbs_g"
+        case totalFatG = "total_fat_g"
+    }
+}
+
+struct WeeklyMealPlan: Codable, Identifiable {
+    let id: UUID
+    let userId: UUID
+    let name: String
+    let weekStartDate: String
+    let isRecurring: Bool
+    let createdAt: String?
+    let updatedAt: String?
+    let items: [WeeklyPlanItem]
+
+    var weekStartAsDate: Date? {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.date(from: weekStartDate)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, items
+        case userId = "user_id"
+        case weekStartDate = "week_start_date"
+        case isRecurring = "is_recurring"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct WeeklyMealPlanListItem: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let weekStartDate: String
+    let isRecurring: Bool
+    let totalCalories: Double
+    let itemCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case weekStartDate = "week_start_date"
+        case isRecurring = "is_recurring"
+        case totalCalories = "total_calories"
+        case itemCount = "item_count"
+    }
+}
+
+// MARK: - Weekly Plan Requests
+
+struct CreateWeeklyPlanRequest: Encodable {
+    let name: String
+    let weekStartDate: String
+    let isRecurring: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case weekStartDate = "week_start_date"
+        case isRecurring = "is_recurring"
+    }
+}
+
+struct UpsertPlanItemRequest: Encodable {
+    let dayOfWeek: Int
+    let mealType: String
+    let recipeId: UUID
+    let servings: Double
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case servings
+        case dayOfWeek = "day_of_week"
+        case mealType = "meal_type"
+        case recipeId = "recipe_id"
+        case sortOrder = "sort_order"
+    }
+}
+
+struct AutoFillRequest: Encodable {
+    let templateId: UUID
+    let mode: String
+
+    enum CodingKeys: String, CodingKey {
+        case mode
+        case templateId = "template_id"
+    }
+}
+
+struct ApplyToPlanRequest: Encodable {
+    let mode: String
+}
+
+// MARK: - Macro Summary
+
+struct DayMacroSummary: Codable, Identifiable {
+    var id: Int { dayOfWeek }
+    let dayOfWeek: Int
+    let totalCalories: Double
+    let totalProteinG: Double
+    let totalCarbsG: Double
+    let totalFatG: Double
+
+    enum CodingKeys: String, CodingKey {
+        case dayOfWeek = "day_of_week"
+        case totalCalories = "total_calories"
+        case totalProteinG = "total_protein_g"
+        case totalCarbsG = "total_carbs_g"
+        case totalFatG = "total_fat_g"
+    }
+}
+
+struct ApplyPlanResponse: Decodable {
+    let entriesCreated: Int
+
+    enum CodingKeys: String, CodingKey {
+        case entriesCreated = "entries_created"
+    }
+}

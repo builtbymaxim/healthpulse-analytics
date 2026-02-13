@@ -190,7 +190,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/recovery`, `/readiness` |
 | `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`, `/suggestions`; PUT `/{id}` |
 | `social.py` | `/api/v1/social` | POST/GET `/invite-codes`; GET `/partners`, `/leaderboard/{category}`; PUT `/partners/{id}/accept` |
-| `meal_plans.py` | `/api/v1/meal-plans` | GET `/recipes`, `/templates`, `/suggestions`, `/barcode/{code}`; POST `/quick-add` |
+| `meal_plans.py` | `/api/v1/meal-plans` | GET `/recipes`, `/templates`, `/suggestions`, `/barcode/{code}`; POST `/quick-add`; CRUD `/weekly-plans` (13 endpoints) |
 | `health.py` | `/` | GET `/health`, `/ready` |
 
 ### Backend Services
@@ -231,6 +231,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `RecipeLibraryView` | Recipe browsing, filtering, detail + quick-add |
 | `MealPlanBrowseView` | Meal plan templates, detail + shopping list |
 | `BarcodeScannerView` | Camera barcode scan + Open Food Facts lookup |
+| `WeeklyMealPlanView` | 7-day meal planner grid + macro balance + calendar sync |
 | `ProfileView` | Settings, baseline config, notifications, about |
 | `LogView` | Daily check-in + metric logging |
 
@@ -253,7 +254,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 **Workouts:** `workouts`, `workout_sets`, `workout_sessions`, `exercises`, `exercise_progress`, `personal_records`
 **Training:** `plan_templates`, `user_training_plans`
 **Nutrition:** `nutrition_goals`, `food_entries`
-**Meal Plans:** `recipes`, `meal_plan_templates`, `meal_plan_items`
+**Meal Plans:** `recipes`, `meal_plan_templates`, `meal_plan_items`, `user_weekly_meal_plans`, `user_weekly_plan_items`
 **Social:** `partnerships`, `invite_codes`
 
 All tables have RLS enabled. User data is private; exercise library and plan templates are public read.
@@ -371,15 +372,22 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Backend meal_plans router: 8 endpoints (recipes, templates, quick-add, barcode, shopping list)
 - iOS views: RecipeLibraryView, MealPlanBrowseView, BarcodeScannerView
 
+### Phase 9A — Weekly Meal Planner
+- Weekly meal planner: 7-day × 4-meal-type grid (tap to place/swap/remove recipes)
+- Auto-fill from template (repeat same meals daily or rotate across the week)
+- Macro balance view: per-day cal/P/C/F vs user targets with color indicators
+- Recurring plans with copy-to-next-week
+- Weekly shopping list: consolidated ingredients across all 7 days with share/export
+- Apply to food log: batch-insert today's or full week's meals as food_entries (`source="meal_plan"`)
+- Calendar sync: meal events in HealthPulse iOS calendar (breakfast 8:00, lunch 12:30, dinner 19:00, snack 15:30)
+- Scoped calendar event management (meal events coexist with workout events via notes prefix)
+- New DB tables: `user_weekly_meal_plans`, `user_weekly_plan_items`
+- Backend: 13 new endpoints (weekly plan CRUD, auto-fill, macros, apply, shopping list, copy)
+- iOS: WeeklyMealPlanView (grid + macro balance + recipe picker + template filler + shopping list)
+
 ---
 
 ## Roadmap
-
-### Phase 9A (Future) — Meal Planning Calendar
-- Weekly meal planner: drag-and-drop recipes into 7-day grid
-- Auto-fill from template, swap individual meals
-- Macro balancing view (daily/weekly), smart gap-filling suggestions
-- Recurring plans, weekly shopping list aggregation
 
 ### Phase 10 — App Distribution
 - TestFlight for friend sharing (requires Apple Developer Program)
@@ -430,7 +438,7 @@ healthpulse-analytics/
 ├── ios/
 │   └── HealthPulse/HealthPulse/HealthPulse/
 │       ├── HealthPulseApp.swift  # App entry point
-│       ├── Views/               # All SwiftUI views (23 files)
+│       ├── Views/               # All SwiftUI views (24 files)
 │       ├── Services/            # API, Auth, HealthKit, Keychain, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities
@@ -439,6 +447,7 @@ healthpulse-analytics/
 │   ├── migration-exercises.sql
 │   ├── migration-social.sql
 │   ├── migration-meal-plans.sql
+│   ├── migration-weekly-meal-plans.sql
 │   └── seed-plan-templates.sql
 └── PROJECT_STATUS.md            # This file
 ```

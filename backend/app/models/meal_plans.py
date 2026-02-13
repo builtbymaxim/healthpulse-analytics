@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 from enum import Enum
 from uuid import UUID
-from datetime import datetime
+from datetime import date as DateType, datetime
 
 
 class RecipeCategory(str, Enum):
@@ -110,6 +110,84 @@ class BarcodeProductResponse(BaseModel):
 
 
 class ShoppingListItem(BaseModel):
+    name: str
+    total_amount: float
+    unit: str
+
+
+# ─── Phase 9A: User Weekly Meal Plans ────────────────────────────────────────
+
+
+class WeeklyPlanItemBase(BaseModel):
+    day_of_week: int = Field(ge=1, le=7)
+    meal_type: str = Field(pattern="^(breakfast|lunch|dinner|snack)$")
+    recipe_id: UUID
+    servings: float = Field(ge=0.5, le=10, default=1)
+    sort_order: int = 0
+
+
+class WeeklyPlanItemResponse(WeeklyPlanItemBase):
+    id: UUID
+    plan_id: UUID
+    recipe: RecipeListItem | None = None
+    total_calories: float = 0
+    total_protein_g: float = 0
+    total_carbs_g: float = 0
+    total_fat_g: float = 0
+
+
+class WeeklyMealPlanResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    week_start_date: DateType
+    is_recurring: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    items: list[WeeklyPlanItemResponse] = []
+
+
+class WeeklyMealPlanListItem(BaseModel):
+    id: UUID
+    name: str
+    week_start_date: DateType
+    is_recurring: bool
+    total_calories: float = 0
+    item_count: int = 0
+
+
+class CreateWeeklyPlanRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    week_start_date: DateType
+    is_recurring: bool = False
+
+
+class UpsertWeeklyPlanItemRequest(BaseModel):
+    day_of_week: int = Field(ge=1, le=7)
+    meal_type: str = Field(pattern="^(breakfast|lunch|dinner|snack)$")
+    recipe_id: UUID
+    servings: float = Field(ge=0.5, le=10, default=1)
+    sort_order: int = 0
+
+
+class AutoFillRequest(BaseModel):
+    template_id: UUID
+    mode: str = Field(default="repeat", pattern="^(repeat|rotate)$")
+
+
+class ApplyToPlanRequest(BaseModel):
+    mode: str = Field(pattern="^(today|week)$")
+
+
+class DayMacroSummary(BaseModel):
+    day_of_week: int
+    total_calories: float
+    total_protein_g: float
+    total_carbs_g: float
+    total_fat_g: float
+
+
+class WeeklyShoppingListItem(BaseModel):
     name: str
     total_amount: float
     unit: str

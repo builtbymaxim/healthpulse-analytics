@@ -136,8 +136,8 @@ class CalendarSyncService: ObservableObject {
         guard calendarSyncEnabled, isAuthorized else { return }
         guard let calendar = getOrCreateHealthPulseCalendar() else { return }
 
-        // Remove existing future events
-        removeAllHealthPulseEvents(from: calendar)
+        // Remove existing workout events only (preserve meal events)
+        removeWorkoutEvents(from: calendar)
 
         // If no schedule, we're done (plan deactivated)
         guard let schedule = schedule, !schedule.isEmpty else { return }
@@ -276,6 +276,110 @@ class CalendarSyncService: ObservableObject {
         }
 
         return conflicts
+    }
+
+    // MARK: - Meal Plan Calendar Sync (Phase 9A)
+
+    private static let mealEventPrefix = "[HealthPulse-Meal]"
+
+    private static let mealTimes: [String: (hour: Int, minute: Int, duration: Int)] = [
+        "breakfast": (8, 0, 30),
+        "lunch": (12, 30, 45),
+        "dinner": (19, 0, 60),
+        "snack": (15, 30, 15)
+    ]
+
+    private static let mealEmoji: [String: String] = [
+        "breakfast": "🌅",
+        "lunch": "☀️",
+        "dinner": "🌙",
+        "snack": "🥕"
+    ]
+
+    /// Sync a weekly meal plan to the HealthPulse calendar
+    func syncMealPlan(_ plan: WeeklyMealPlan) {
+        guard calendarSyncEnabled, isAuthorized else { return }
+        guard let calendar = getOrCreateHealthPulseCalendar() else { return }
+
+        removeMealEvents(from: calendar)
+
+        let cal = Calendar.current
+        guard let weekStart = plan.weekStartAsDate else { return }
+
+        for item in plan.items {
+            let dayOffset = item.dayOfWeek - 1 // ISO 1=Mon → offset 0
+            guard let date = cal.date(byAdding: .day, value: dayOffset, to: weekStart) else { continue }
+
+            let timing = Self.mealTimes[item.mealType] ?? (12, 0, 30)
+            let emoji = Self.mealEmoji[item.mealType] ?? "🍽️"
+
+            var startComponents = cal.dateComponents([.year, .month, .day], from: date)
+            startComponents.hour = timing.hour
+            startComponents.minute = timing.minute
+            guard let startDate = cal.date(from: startComponents) else { continue }
+
+            let event = EKEvent(eventStore: eventStore)
+            event.calendar = calendar
+            event.title = "\(emoji) \(item.recipe?.name ?? "Meal")"
+            event.startDate = startDate
+            event.endDate = cal.date(byAdding: .minute, value: timing.duration, to: startDate)
+
+            var notes = Self.mealEventPrefix
+            notes += "\n\(item.mealType) · \(String(format: "%.1f", item.servings)) servings"
+            notes += "\n\(Int(item.totalCalories)) cal · \(Int(item.totalProteinG))g protein"
+            notes += "\nPlan: \(plan.name)"
+            event.notes = notes
+
+            event.addAlarm(EKAlarm(relativeOffset: -900)) // 15 min before
+
+            do {
+                try eventStore.save(event, span: .thisEvent, commit: false)
+            } catch {
+                print("CalendarSync: Failed to save meal event: \(error)")
+            }
+        }
+
+        do {
+            try eventStore.commit()
+        } catch {
+            print("CalendarSync: Failed to commit meal events: \(error)")
+        }
+    }
+
+    /// Remove only meal events from the calendar
+    private func removeMealEvents(from calendar: EKCalendar) {
+        let cal = Calendar.current
+        let start = cal.date(byAdding: .day, value: -7, to: cal.startOfDay(for: Date())) ?? Date()
+        guard let end = cal.date(byAdding: .day, value: 30, to: start) else { return }
+
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
+        let events = eventStore.events(matching: predicate)
+
+        for event in events where event.notes?.hasPrefix(Self.mealEventPrefix) == true {
+            try? eventStore.remove(event, span: .thisEvent, commit: false)
+        }
+        try? eventStore.commit()
+    }
+
+    /// Remove only workout events (those without meal prefix) from the calendar
+    private func removeWorkoutEvents(from calendar: EKCalendar) {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: Date())
+        guard let end = cal.date(byAdding: .day, value: 60, to: start) else { return }
+
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
+        let events = eventStore.events(matching: predicate)
+
+        for event in events where event.notes?.hasPrefix(Self.mealEventPrefix) != true {
+            try? eventStore.remove(event, span: .thisEvent, commit: false)
+        }
+        try? eventStore.commit()
+    }
+
+    /// Public: remove synced meal events (e.g. when plan is deleted)
+    func removeSyncedMealEvents() {
+        guard let calendar = getOrCreateHealthPulseCalendar() else { return }
+        removeMealEvents(from: calendar)
     }
 
     // MARK: - Removal

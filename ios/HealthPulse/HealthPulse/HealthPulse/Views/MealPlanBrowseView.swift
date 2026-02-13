@@ -192,6 +192,7 @@ private struct MealPlanDetailSheet: View {
     @State private var isAddingAll = false
     @State private var showSuccess = false
     @State private var showingShoppingList = false
+    @State private var showingWeeklyPlanner = false
 
     private let mealOrder = ["breakfast", "lunch", "dinner", "snack"]
 
@@ -242,6 +243,22 @@ private struct MealPlanDetailSheet: View {
                                 }
                                 .disabled(isAddingAll || showSuccess)
 
+                                // Plan this week
+                                Button {
+                                    showingWeeklyPlanner = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "calendar")
+                                        Text("Plan This Week")
+                                    }
+                                    .font(.headline)
+                                    .foregroundStyle(.blue)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.blue.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                }
+
                                 // Shopping list
                                 Button {
                                     showingShoppingList = true
@@ -277,6 +294,9 @@ private struct MealPlanDetailSheet: View {
             .task { await loadTemplate() }
             .sheet(isPresented: $showingShoppingList) {
                 ShoppingListSheet(templateId: templateId)
+            }
+            .sheet(isPresented: $showingWeeklyPlanner) {
+                WeeklyMealPlanView()
             }
         }
     }

@@ -776,6 +776,60 @@ class APIService {
     func getShoppingList(templateId: UUID) async throws -> [ShoppingListItem] {
         try await request(endpoint: "/meal-plans/templates/\(templateId)/shopping-list")
     }
+
+    // MARK: - Weekly Meal Plans (Phase 9A)
+
+    func getWeeklyPlans() async throws -> [WeeklyMealPlanListItem] {
+        try await request(endpoint: "/meal-plans/weekly-plans")
+    }
+
+    func getWeeklyPlan(id: UUID) async throws -> WeeklyMealPlan {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(id)")
+    }
+
+    func getWeeklyPlanForDate(_ weekStartDate: String) async throws -> WeeklyMealPlan? {
+        try await optionalRequest(endpoint: "/meal-plans/weekly-plans/for-week?week_start_date=\(weekStartDate)")
+    }
+
+    func createWeeklyPlan(_ req: CreateWeeklyPlanRequest) async throws -> WeeklyMealPlan {
+        try await request(endpoint: "/meal-plans/weekly-plans", method: "POST", body: req)
+    }
+
+    func updateWeeklyPlan(id: UUID, _ req: CreateWeeklyPlanRequest) async throws -> WeeklyMealPlan {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(id)", method: "PUT", body: req)
+    }
+
+    func deleteWeeklyPlan(id: UUID) async throws {
+        let _: EmptyResponse = try await request(endpoint: "/meal-plans/weekly-plans/\(id)", method: "DELETE")
+    }
+
+    func upsertPlanItem(planId: UUID, _ req: UpsertPlanItemRequest) async throws -> WeeklyPlanItem {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/items", method: "PUT", body: req)
+    }
+
+    func deletePlanItem(planId: UUID, itemId: UUID) async throws {
+        let _: EmptyResponse = try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/items/\(itemId)", method: "DELETE")
+    }
+
+    func autoFillPlan(planId: UUID, request: AutoFillRequest) async throws -> WeeklyMealPlan {
+        try await self.request(endpoint: "/meal-plans/weekly-plans/\(planId)/auto-fill", method: "POST", body: request)
+    }
+
+    func getDayMacros(planId: UUID) async throws -> [DayMacroSummary] {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/macros")
+    }
+
+    func applyPlanToFoodLog(planId: UUID, mode: String) async throws -> ApplyPlanResponse {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/apply", method: "POST", body: ApplyToPlanRequest(mode: mode))
+    }
+
+    func getWeeklyShoppingList(planId: UUID) async throws -> [ShoppingListItem] {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/shopping-list")
+    }
+
+    func copyPlanToNextWeek(planId: UUID) async throws -> WeeklyMealPlan {
+        try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/copy-next-week", method: "POST")
+    }
 }
 
 // Helper for empty responses
