@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.api import auth, health, metrics, nutrition, predictions, users, workouts, exercises, sleep, training_plans, social
+from app.api import auth, health, metrics, nutrition, predictions, users, workouts, exercises, sleep, training_plans, social, meal_plans
 
 settings = get_settings()
 
@@ -39,6 +39,7 @@ app.include_router(exercises.router, prefix="/api/v1/exercises", tags=["Exercise
 app.include_router(sleep.router, prefix="/api/v1/sleep", tags=["Sleep"])
 app.include_router(training_plans.router, prefix="/api/v1/training-plans", tags=["Training Plans"])
 app.include_router(social.router, prefix="/api/v1/social", tags=["Social"])
+app.include_router(meal_plans.router, prefix="/api/v1/meal-plans", tags=["Meal Plans"])
 
 
 @app.get("/")

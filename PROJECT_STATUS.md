@@ -190,6 +190,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/recovery`, `/readiness` |
 | `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`, `/suggestions`; PUT `/{id}` |
 | `social.py` | `/api/v1/social` | POST/GET `/invite-codes`; GET `/partners`, `/leaderboard/{category}`; PUT `/partners/{id}/accept` |
+| `meal_plans.py` | `/api/v1/meal-plans` | GET `/recipes`, `/templates`, `/suggestions`, `/barcode/{code}`; POST `/quick-add` |
 | `health.py` | `/` | GET `/health`, `/ready` |
 
 ### Backend Services
@@ -204,6 +205,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `progression_service.py` | Progressive overload weight suggestions |
 | `sleep_service.py` | Sleep metrics + scoring |
 | `wellness_calculator.py` | Wellness/recovery/readiness scoring |
+| `meal_plan_service.py` | Recipe library, meal plan templates, barcode lookup (Open Food Facts) |
 
 ### iOS Views
 
@@ -226,6 +228,9 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `InsightsView` | AI insights + correlations |
 | `TrendsView` | Historical trend charts |
 | `SocialView` | Social tab (partners, invites, leaderboards) |
+| `RecipeLibraryView` | Recipe browsing, filtering, detail + quick-add |
+| `MealPlanBrowseView` | Meal plan templates, detail + shopping list |
+| `BarcodeScannerView` | Camera barcode scan + Open Food Facts lookup |
 | `ProfileView` | Settings, baseline config, notifications, about |
 | `LogView` | Daily check-in + metric logging |
 
@@ -248,6 +253,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 **Workouts:** `workouts`, `workout_sets`, `workout_sessions`, `exercises`, `exercise_progress`, `personal_records`
 **Training:** `plan_templates`, `user_training_plans`
 **Nutrition:** `nutrition_goals`, `food_entries`
+**Meal Plans:** `recipes`, `meal_plan_templates`, `meal_plan_items`
 **Social:** `partnerships`, `invite_codes`
 
 All tables have RLS enabled. User data is private; exercise library and plan templates are public read.
@@ -352,14 +358,28 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Backend social router: 8 endpoints (invite codes, partners, leaderboards)
 - All cross-user queries server-side (backend uses service key, no RLS changes on existing tables)
 
+### Phase 9 — Meal Plans, Recipes & Barcode Scanning
+- Recipe library: ~35 pre-seeded recipes with ingredients, instructions, macros per serving
+- Recipes tagged by category (breakfast/lunch/dinner/snack/dessert/shake) and goal type
+- 12 meal plan templates (3 per goal: lose_weight, build_muscle, maintain, general_health)
+- Quick-add: one-tap recipe → food_entry with correct macros (`source="recipe"`)
+- Barcode scanning via Open Food Facts API (4M+ products, free, open source)
+- Scan any packaged product → auto-fill nutrition per 100g → log to food diary (`source="barcode"`)
+- Shopping/ingredient list: consolidated ingredients from meal plan templates
+- Goal-aligned recipe suggestions based on user's nutrition goal
+- New DB tables: `recipes`, `meal_plan_templates`, `meal_plan_items`
+- Backend meal_plans router: 8 endpoints (recipes, templates, quick-add, barcode, shopping list)
+- iOS views: RecipeLibraryView, MealPlanBrowseView, BarcodeScannerView
+
 ---
 
 ## Roadmap
 
-### Phase 9 — Meal Plans & Recipes
-- Pre-built meal templates aligned to macro targets
-- Macro-balanced recipe suggestions based on nutrition goals
-- Quick-add from meal plan templates
+### Phase 9A (Future) — Meal Planning Calendar
+- Weekly meal planner: drag-and-drop recipes into 7-day grid
+- Auto-fill from template, swap individual meals
+- Macro balancing view (daily/weekly), smart gap-filling suggestions
+- Recurring plans, weekly shopping list aggregation
 
 ### Phase 10 — App Distribution
 - TestFlight for friend sharing (requires Apple Developer Program)
@@ -397,12 +417,12 @@ healthpulse-analytics/
 │   │   ├── api/                 # Route handlers
 │   │   │   ├── auth.py, users.py, metrics.py, workouts.py
 │   │   │   ├── exercises.py, nutrition.py, sleep.py
-│   │   │   ├── predictions.py, training_plans.py, social.py, health.py
+│   │   │   ├── predictions.py, training_plans.py, social.py, meal_plans.py, health.py
 │   │   ├── services/            # Business logic
 │   │   │   ├── dashboard_service.py, prediction_service.py
 │   │   │   ├── nutrition_service.py, nutrition_calculator.py
 │   │   │   ├── exercise_service.py, sleep_service.py
-│   │   │   ├── wellness_calculator.py, data_generator.py
+│   │   │   ├── wellness_calculator.py, meal_plan_service.py, data_generator.py
 │   │   └── models/              # Pydantic models + DB config
 │   ├── requirements.txt
 │   ├── Procfile, railway.json
@@ -410,7 +430,7 @@ healthpulse-analytics/
 ├── ios/
 │   └── HealthPulse/HealthPulse/HealthPulse/
 │       ├── HealthPulseApp.swift  # App entry point
-│       ├── Views/               # All SwiftUI views (20 files)
+│       ├── Views/               # All SwiftUI views (23 files)
 │       ├── Services/            # API, Auth, HealthKit, Keychain, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities
@@ -418,6 +438,7 @@ healthpulse-analytics/
 │   ├── database-schema.sql
 │   ├── migration-exercises.sql
 │   ├── migration-social.sql
+│   ├── migration-meal-plans.sql
 │   └── seed-plan-templates.sql
 └── PROJECT_STATUS.md            # This file
 ```

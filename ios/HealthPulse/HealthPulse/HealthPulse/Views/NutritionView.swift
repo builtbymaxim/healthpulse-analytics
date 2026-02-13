@@ -12,6 +12,9 @@ struct NutritionView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showingFoodLog = false
+    @State private var showingRecipeLibrary = false
+    @State private var showingMealPlans = false
+    @State private var showingBarcodeScanner = false
     @State private var selectedDate = Date()
     @State private var animationTrigger = false  // Triggers animation on food log
 
@@ -41,8 +44,32 @@ struct NutritionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingFoodLog = true
+                    Menu {
+                        Button {
+                            showingBarcodeScanner = true
+                        } label: {
+                            Label("Scan Barcode", systemImage: "barcode.viewfinder")
+                        }
+
+                        Button {
+                            showingRecipeLibrary = true
+                        } label: {
+                            Label("Browse Recipes", systemImage: "book.fill")
+                        }
+
+                        Button {
+                            showingMealPlans = true
+                        } label: {
+                            Label("Meal Plans", systemImage: "list.bullet.clipboard.fill")
+                        }
+
+                        Divider()
+
+                        Button {
+                            showingFoodLog = true
+                        } label: {
+                            Label("Log Food Manually", systemImage: "pencil.line")
+                        }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                     }
@@ -50,14 +77,36 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $showingFoodLog) {
                 FoodLogView { newEntry in
-                    // Trigger animation and haptic when food is logged
                     Task {
                         await loadData()
-                        // Toggle to trigger animation
                         animationTrigger.toggle()
                         HapticsManager.shared.success()
                     }
                 }
+            }
+            .sheet(isPresented: $showingRecipeLibrary) {
+                RecipeLibraryView(onRecipeAdded: {
+                    Task {
+                        await loadData()
+                        animationTrigger.toggle()
+                    }
+                })
+            }
+            .sheet(isPresented: $showingMealPlans) {
+                MealPlanBrowseView(onMealsAdded: {
+                    Task {
+                        await loadData()
+                        animationTrigger.toggle()
+                    }
+                })
+            }
+            .sheet(isPresented: $showingBarcodeScanner) {
+                BarcodeScannerView(onFoodAdded: {
+                    Task {
+                        await loadData()
+                        animationTrigger.toggle()
+                    }
+                })
             }
             .refreshable {
                 await loadData()

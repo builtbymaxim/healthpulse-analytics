@@ -14,6 +14,8 @@ struct FoodLogView: View {
 
     @State private var name = ""
     @State private var selectedMealType: MealType = .lunch
+    @State private var showingBarcodeScanner = false
+    @State private var showingRecipeLibrary = false
 
     // Per 100g values
     @State private var caloriesPer100g = ""
@@ -167,6 +169,40 @@ struct FoodLogView: View {
                         .padding(.horizontal)
                     }
 
+                    // Scan / Browse shortcuts
+                    HStack(spacing: 12) {
+                        Button {
+                            showingBarcodeScanner = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "barcode.viewfinder")
+                                Text("Scan Barcode")
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.green.opacity(0.15))
+                            .foregroundStyle(.green)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        Button {
+                            showingRecipeLibrary = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "book.fill")
+                                Text("Recipes")
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundStyle(.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                    .padding(.horizontal)
+
                     // Quick Add Suggestions
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Quick Add")
@@ -231,6 +267,16 @@ struct FoodLogView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showingBarcodeScanner) {
+                BarcodeScannerView(onFoodAdded: {
+                    dismiss()
+                })
+            }
+            .sheet(isPresented: $showingRecipeLibrary) {
+                RecipeLibraryView(onRecipeAdded: {
+                    dismiss()
+                })
             }
         }
     }

@@ -728,6 +728,54 @@ class APIService {
         }
         let _: User = try await request(endpoint: "/users/me/settings", method: "PUT", body: SocialSettingsUpdate(socialOptIn: optIn))
     }
+
+    // MARK: - Meal Plans & Recipes
+
+    func getRecipes(category: String? = nil, goalType: String? = nil, search: String? = nil, tag: String? = nil) async throws -> [Recipe] {
+        var params: [String] = []
+        if let category { params.append("category=\(category)") }
+        if let goalType { params.append("goal_type=\(goalType)") }
+        if let search, !search.isEmpty {
+            let encoded = search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search
+            params.append("search=\(encoded)")
+        }
+        if let tag { params.append("tag=\(tag)") }
+        var endpoint = "/meal-plans/recipes"
+        if !params.isEmpty { endpoint += "?" + params.joined(separator: "&") }
+        return try await request(endpoint: endpoint)
+    }
+
+    func getRecipe(id: UUID) async throws -> Recipe {
+        try await request(endpoint: "/meal-plans/recipes/\(id)")
+    }
+
+    func getMealPlanTemplates(goalType: String? = nil) async throws -> [MealPlanTemplate] {
+        var endpoint = "/meal-plans/templates"
+        if let goalType { endpoint += "?goal_type=\(goalType)" }
+        return try await request(endpoint: endpoint)
+    }
+
+    func getMealPlanTemplate(id: UUID) async throws -> MealPlanTemplate {
+        try await request(endpoint: "/meal-plans/templates/\(id)")
+    }
+
+    func quickAddRecipe(_ request: QuickAddRecipeRequest) async throws -> FoodEntry {
+        try await self.request(endpoint: "/meal-plans/quick-add", method: "POST", body: request)
+    }
+
+    func getRecipeSuggestions(mealType: String? = nil) async throws -> [Recipe] {
+        var endpoint = "/meal-plans/suggestions"
+        if let mealType { endpoint += "?meal_type=\(mealType)" }
+        return try await request(endpoint: endpoint)
+    }
+
+    func lookupBarcode(_ barcode: String) async throws -> BarcodeProduct {
+        try await request(endpoint: "/meal-plans/barcode/\(barcode)")
+    }
+
+    func getShoppingList(templateId: UUID) async throws -> [ShoppingListItem] {
+        try await request(endpoint: "/meal-plans/templates/\(templateId)/shopping-list")
+    }
 }
 
 // Helper for empty responses
