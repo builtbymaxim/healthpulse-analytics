@@ -80,14 +80,16 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.workout)
 
-            // Sleep tracking
-            SleepView()
-                .tabItem {
-                    Label("Sleep", systemImage: "moon.zzz.fill")
-                }
-                .tag(AppTab.sleep)
+            // Sleep tab (hidden when social is active — accessible from Dashboard instead)
+            if !showSocialTab {
+                SleepView()
+                    .tabItem {
+                        Label("Sleep", systemImage: "moon.zzz.fill")
+                    }
+                    .tag(AppTab.sleep)
+            }
 
-            // Social - training partners (conditional)
+            // Social - training partners (replaces Sleep tab when active)
             if showSocialTab {
                 SocialView()
                     .tabItem {
@@ -95,21 +97,15 @@ struct MainTabView: View {
                     }
                     .tag(AppTab.social)
             }
+
+            // Profile & settings
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person.fill")
+                }
+                .tag(AppTab.profile)
         }
         .tint(.green)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    tabRouter.showProfile = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .sheet(isPresented: $tabRouter.showProfile) {
-            ProfileView()
-        }
     }
 }
 

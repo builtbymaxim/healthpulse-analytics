@@ -423,9 +423,9 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | OAuth buttons → "Coming Soon" labels for Strava/Garmin/Oura/Whoop | LOW UX |
 
 ### Social Tab Navigation Fix
-- Moved Profile from tab bar to toolbar gear icon (sheet presentation)
-- Max 5 visible tabs: Dashboard, Nutrition, Workout, Sleep, Social (when enabled)
-- Eliminates iOS "More" tab that appeared with 6 tabs
+- Dynamic tab layout: always exactly 5 tabs (no iOS "More" overflow)
+- Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile
+- Social ON: Dashboard, Nutrition, Workout, Social, Profile (Sleep accessible as sheet from Dashboard)
 
 ---
 

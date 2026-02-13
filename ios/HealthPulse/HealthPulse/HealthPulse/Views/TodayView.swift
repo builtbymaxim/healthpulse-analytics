@@ -12,10 +12,16 @@ struct TodayView: View {
     @StateObject private var viewModel = TodayViewModel()
     @EnvironmentObject var healthKitService: HealthKitService
     @EnvironmentObject var tabRouter: TabRouter
+    @EnvironmentObject var authService: AuthService
     @State private var showTrainingPlanSetup = false
     @State private var showWorkoutExecution = false
     @State private var showPRCelebration = false
+    @State private var showSleepView = false
     @State private var achievedPRs: [PRInfo] = []
+
+    private var socialActive: Bool {
+        authService.currentUser?.settings?.socialOptIn ?? false
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,7 +37,7 @@ struct TodayView: View {
                             hasSetupTrainingPlan: viewModel.hasSetupTrainingPlan,
                             onWorkoutTap: { tabRouter.navigateTo(.workout) },
                             onMealTap: { tabRouter.navigateTo(.nutrition) },
-                            onSleepTap: { tabRouter.navigateTo(.sleep) },
+                            onSleepTap: { navigateToSleep() },
                             onTrainingPlanTap: { showTrainingPlanSetup = true }
                         )
                         .padding(.horizontal)
@@ -128,7 +134,7 @@ struct TodayView: View {
                             trend: viewModel.sleepTrend
                         )
                         .onTapGesture {
-                            tabRouter.navigateTo(.sleep)
+                            navigateToSleep()
                             HapticsManager.shared.light()
                         }
                         .padding(.horizontal)
@@ -151,7 +157,7 @@ struct TodayView: View {
                                 color: .purple
                             )
                             .onTapGesture {
-                                tabRouter.navigateTo(.sleep)
+                                navigateToSleep()
                                 HapticsManager.shared.light()
                             }
                         }
@@ -238,6 +244,17 @@ struct TodayView: View {
                 }
                 .presentationDetents([.medium])
             }
+            .sheet(isPresented: $showSleepView) {
+                SleepView()
+            }
+        }
+    }
+
+    private func navigateToSleep() {
+        if socialActive {
+            showSleepView = true
+        } else {
+            tabRouter.navigateTo(.sleep)
         }
     }
 

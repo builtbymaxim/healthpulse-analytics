@@ -14,6 +14,7 @@ enum AppTab: Int, CaseIterable {
     case workout = 2
     case sleep = 3
     case social = 4
+    case profile = 5
 }
 
 @MainActor
@@ -24,7 +25,6 @@ class TabRouter: ObservableObject {
     @Published var showStrengthWorkout = false
     @Published var showRunningWorkout = false
     @Published var showFoodLog = false
-    @Published var showProfile = false
 
     private init() {}
 
