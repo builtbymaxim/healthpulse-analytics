@@ -518,7 +518,7 @@ struct RunningWorkoutView: View {
 // MARK: - Location Manager for Running
 
 class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let locationManager = CLLocationManager()
+    private var locationManager: CLLocationManager!
 
     @Published var totalDistance: Double = 0 // in meters
     @Published var hasLocation = false
@@ -528,13 +528,21 @@ class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
 
     override init() {
         super.init()
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.distanceFilter = 5 // Update every 5 meters
-        locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.showsBackgroundLocationIndicator = true
-        locationManager.pausesLocationUpdatesAutomatically = false
-        locationManager.activityType = .fitness
+        let setup = {
+            self.locationManager = CLLocationManager()
+            self.locationManager.delegate = self
+            self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            self.locationManager.distanceFilter = 5 // Update every 5 meters
+            self.locationManager.allowsBackgroundLocationUpdates = true
+            self.locationManager.showsBackgroundLocationIndicator = true
+            self.locationManager.pausesLocationUpdatesAutomatically = false
+            self.locationManager.activityType = .fitness
+        }
+        if Thread.isMainThread {
+            setup()
+        } else {
+            DispatchQueue.main.sync { setup() }
+        }
     }
 
     func requestPermission() {
@@ -575,9 +583,9 @@ class RunLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         }
 
         let last = lastLocation
-        lastLocation = newLocation
 
         DispatchQueue.main.async {
+            self.lastLocation = newLocation
             self.hasLocation = true
 
             if let last = last {

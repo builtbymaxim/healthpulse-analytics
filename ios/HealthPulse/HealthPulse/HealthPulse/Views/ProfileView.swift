@@ -268,10 +268,13 @@ struct DataSourceRow: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {
-                Button("Connect") {
-                    // TODO: Implement OAuth flow
-                }
-                .buttonStyle(.bordered)
+                Text("Coming Soon")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(Capsule())
             }
         }
     }

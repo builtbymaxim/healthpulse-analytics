@@ -31,6 +31,7 @@ struct OnboardingView: View {
     @State private var targetSleepHours: Double = 8
     @State private var caloriePreview: CalorieTargetsPreview?
     @State private var isLoadingPreview = false
+    @FocusState private var nameFieldFocused: Bool
 
     // Training preferences
     @State private var trainingModality: TrainingModality = .gym
@@ -213,6 +214,8 @@ struct OnboardingView: View {
                 .font(.title2)
                 .multilineTextAlignment(.center)
                 .textInputAutocapitalization(.words)
+                .focused($nameFieldFocused)
+                .onSubmit { handleNext() }
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -427,6 +430,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(fitnessGoal == goal ? Color.green : Color.clear, lineWidth: 2)
                         )
+                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -529,6 +533,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(activityLevel == level ? Color.green : Color.clear, lineWidth: 2)
                         )
+                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -724,6 +729,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(trainingModality == modality ? Color.green : Color.clear, lineWidth: 2)
                         )
+                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -759,6 +765,7 @@ struct OnboardingView: View {
                                 .padding(.vertical, 10)
                                 .background(Color(.secondarySystemBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .contentShape(Rectangle())
                             }
                         }
                     }
@@ -1059,6 +1066,7 @@ struct OnboardingView: View {
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(socialOptIn ? Color.green : Color.clear, lineWidth: 2)
                     )
+                    .contentShape(Rectangle())
                 }
 
                 // No option
@@ -1097,6 +1105,7 @@ struct OnboardingView: View {
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(!socialOptIn ? Color.secondary.opacity(0.5) : Color.clear, lineWidth: 2)
                     )
+                    .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal)
@@ -1151,6 +1160,7 @@ struct OnboardingView: View {
     }
 
     private func handleNext() {
+        nameFieldFocused = false
         HapticsManager.shared.medium()
 
         // Name step: require non-empty name

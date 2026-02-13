@@ -1,10 +1,13 @@
 """ML predictions and insights endpoints."""
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from datetime import datetime, date
 from uuid import UUID, uuid4
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user, CurrentUser
 from app.services.prediction_service import get_prediction_service
@@ -253,7 +256,7 @@ async def get_insights(
                 created_at=datetime.now(),
             ))
     except Exception:
-        pass
+        logger.warning("Failed to generate recovery insights", exc_info=True)
 
     # Get correlations and add as insights
     try:
@@ -271,7 +274,7 @@ async def get_insights(
                 created_at=datetime.now(),
             ))
     except Exception:
-        pass
+        logger.warning("Failed to generate correlation insights", exc_info=True)
 
     # Filter by category if specified
     if category:
@@ -295,25 +298,25 @@ async def trigger_analysis(
         await service.get_recovery_prediction(current_user.id)
         updated.append("recovery")
     except Exception as e:
-        pass
+        logger.warning("Recovery analysis failed: %s", e)
 
     try:
         await service.get_readiness_prediction(current_user.id)
         updated.append("readiness")
     except Exception as e:
-        pass
+        logger.warning("Readiness analysis failed: %s", e)
 
     try:
         await service.get_wellness_score(current_user.id)
         updated.append("wellness")
     except Exception as e:
-        pass
+        logger.warning("Wellness analysis failed: %s", e)
 
     try:
         await service.analyze_correlations(current_user.id)
         updated.append("correlations")
     except Exception as e:
-        pass
+        logger.warning("Correlations analysis failed: %s", e)
 
     return AnalysisResponse(
         status="completed",

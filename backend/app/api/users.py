@@ -1,5 +1,6 @@
 """User management endpoints."""
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,6 +10,8 @@ from uuid import UUID
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
 from app.services.nutrition_calculator import get_nutrition_calculator
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -102,7 +105,7 @@ async def update_my_profile(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Update current authenticated user's profile."""
-    print(f"PUT /users/me received: {profile.model_dump()}")
+    logger.debug("PUT /users/me received: %s", profile.model_dump())
 
     supabase = get_supabase_client()
 
@@ -121,11 +124,11 @@ async def update_my_profile(
     if profile.fitness_goal is not None:
         update_data["fitness_goal"] = profile.fitness_goal
 
-    print(f"  Fields to update: {update_data}")
+    logger.debug("Fields to update: %s", update_data)
 
     if not update_data:
         # Nothing to update, just return current profile
-        print("  No fields to update!")
+        logger.debug("No fields to update")
         result = (
             supabase.table("profiles")
             .select("*")
@@ -293,7 +296,7 @@ async def delete_user_account(
         supabase.auth.admin.delete_user(uid)
     except Exception as e:
         # Log but don't fail — user data is already deleted
-        print(f"Warning: Could not delete auth record for {uid}: {e}")
+        logger.warning("Could not delete auth record for %s: %s", uid, e)
 
     return {"message": "Account and all data deleted successfully"}
 
@@ -306,7 +309,7 @@ async def complete_onboarding(
     """Complete user onboarding with profile data."""
     supabase = get_supabase_client()
 
-    print(f"Onboarding for user {current_user.id}: {profile.model_dump()}")
+    logger.info("Onboarding for user %s", current_user.id)
 
     try:
         # Update profile with onboarding data
@@ -320,7 +323,7 @@ async def complete_onboarding(
         if profile.display_name:
             update_data["display_name"] = profile.display_name
 
-        print(f"  Updating profile: {update_data}")
+        logger.debug("Updating profile: %s", update_data)
         result = (
             supabase.table("profiles")
             .update(update_data)
@@ -331,7 +334,7 @@ async def complete_onboarding(
         if not result.data:
             raise HTTPException(status_code=404, detail="Profile not found")
 
-        print(f"  Profile updated successfully")
+        logger.debug("Profile updated successfully")
 
         # Also log the initial weight as a metric
         if profile.weight_kg:
@@ -343,9 +346,9 @@ async def complete_onboarding(
                 "source": "manual",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            print(f"  Logging weight: {weight_data}")
+            logger.debug("Logging weight: %s", weight_data)
             supabase.table("health_metrics").insert(weight_data).execute()
-            print(f"  Weight logged successfully")
+            logger.debug("Weight logged successfully")
 
         # Update settings with target sleep and training preferences
         settings = result.data[0].get("settings") or {}
@@ -366,7 +369,7 @@ async def complete_onboarding(
             settings["social_opt_in"] = profile.social_opt_in
 
         supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
-        print(f"  Settings updated with training preferences")
+        logger.debug("Settings updated with training preferences")
 
         # Calculate and create nutrition goal
         calculator = get_nutrition_calculator()
@@ -378,7 +381,7 @@ async def complete_onboarding(
             activity_level=profile.activity_level,
             goal_type=profile.fitness_goal,
         )
-        print(f"  Calculated targets: BMR={targets.bmr}, TDEE={targets.tdee}, Calories={targets.calorie_target}")
+        logger.debug("Calculated targets: BMR=%s, TDEE=%s, Calories=%s", targets.bmr, targets.tdee, targets.calorie_target)
 
         # Upsert nutrition goal (delete existing first, then insert)
         supabase.table("nutrition_goals").delete().eq("user_id", str(current_user.id)).execute()
@@ -394,7 +397,7 @@ async def complete_onboarding(
             "adjust_for_activity": True,
         }
         supabase.table("nutrition_goals").insert(nutrition_goal).execute()
-        print(f"  Nutrition goal created with {targets.calorie_target} kcal target")
+        logger.debug("Nutrition goal created with %s kcal target", targets.calorie_target)
 
         # Create training plan if training preferences were provided
         if profile.training_modality and profile.days_per_week:
@@ -429,11 +432,11 @@ async def complete_onboarding(
                         "is_active": True,
                     }
                     supabase.table("user_training_plans").insert(training_plan).execute()
-                    print(f"  Training plan '{template['name']}' created")
+                    logger.debug("Training plan '%s' created", template["name"])
                 else:
-                    print(f"  No matching template found for {profile.training_modality}/{profile.days_per_week} days")
+                    logger.debug("No matching template found for %s/%s days", profile.training_modality, profile.days_per_week)
             except Exception as plan_error:
-                print(f"  Warning: Could not create training plan: {plan_error}")
+                logger.warning("Could not create training plan: %s", plan_error)
                 # Don't fail onboarding if plan creation fails
 
         # Re-fetch the updated profile
@@ -444,13 +447,13 @@ async def complete_onboarding(
             .execute()
         )
 
-        print(f"  Onboarding complete!")
+        logger.info("Onboarding complete for user %s", current_user.id)
         return updated.data[0] if updated.data else result.data[0]
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"  Onboarding error: {type(e).__name__}: {e}")
+        logger.exception("Onboarding error")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to save onboarding data: {str(e)}"

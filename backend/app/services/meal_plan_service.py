@@ -1,6 +1,9 @@
 """Service layer for meal plans, recipes, barcode lookups, and shopping lists."""
 
+import logging
 import httpx
+
+logger = logging.getLogger(__name__)
 from uuid import UUID
 from datetime import date, datetime, timedelta, timezone
 from app.models.meal_plans import (
@@ -156,6 +159,7 @@ class MealPlanService:
                 "found": True,
             }
         except Exception:
+            logger.warning("Barcode lookup failed for %s", barcode, exc_info=True)
             return {"barcode": barcode, "found": False}
 
     def get_shopping_list(self, template_id: UUID) -> list[dict]:

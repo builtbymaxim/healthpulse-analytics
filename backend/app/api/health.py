@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter
 
+from app.database import get_supabase_client
+
 router = APIRouter()
 
 
@@ -17,11 +19,17 @@ async def health_check():
 @router.get("/health/ready")
 async def readiness_check():
     """Check if API is ready to serve requests."""
-    # TODO: Add database connectivity check
+    db_status = "ok"
+    try:
+        supabase = get_supabase_client()
+        supabase.table("profiles").select("id").limit(1).execute()
+    except Exception:
+        db_status = "error"
+
+    status = "ready" if db_status == "ok" else "degraded"
     return {
-        "status": "ready",
+        "status": status,
         "checks": {
-            "database": "ok",
-            "ml_models": "ok",
+            "database": db_status,
         },
     }

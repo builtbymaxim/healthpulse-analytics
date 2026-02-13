@@ -239,6 +239,7 @@ struct RecipeDetailSheet: View {
     @State private var selectedMealType: String = "lunch"
     @State private var isAdding = false
     @State private var showSuccess = false
+    @State private var loadError: String?
 
     private let servingOptions: [Double] = [0.5, 1, 1.5, 2]
     private let mealTypes = ["breakfast", "lunch", "dinner", "snack"]
@@ -249,6 +250,21 @@ struct RecipeDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    if let errorMsg = loadError {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text(errorMsg)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.orange.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(.horizontal)
+                    }
+
                     // Macro summary card
                     macroSummaryCard
 
@@ -494,7 +510,9 @@ struct RecipeDetailSheet: View {
     private func loadFullRecipe() async {
         do {
             fullRecipe = try await APIService.shared.getRecipe(id: recipe.id)
-        } catch {}
+        } catch {
+            loadError = "Failed to load recipe details."
+        }
     }
 
     private func formatAmount(_ value: Double) -> String {

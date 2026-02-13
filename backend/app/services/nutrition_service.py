@@ -4,8 +4,11 @@ Follows the pattern of prediction_service.py - fetches data from DB,
 delegates calculations to nutrition_calculator.py.
 """
 
+import logging
 from datetime import date, datetime, timedelta
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_supabase_client
 from app.services.nutrition_calculator import (
@@ -118,6 +121,7 @@ class NutritionService:
             )
             return result.data if result and result.data else None
         except Exception:
+            logger.warning("Failed to fetch nutrition goal for user %s", user_id, exc_info=True)
             return None
 
     async def create_or_update_nutrition_goal(

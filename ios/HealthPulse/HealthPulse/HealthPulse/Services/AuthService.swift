@@ -18,6 +18,8 @@ class AuthService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
+    private var refreshTask: Task<Void, Never>?
+
     private init() {
         checkStoredSession()
         setupAuthFailureListener()
@@ -56,6 +58,19 @@ class AuthService: ObservableObject {
         }
     }
 
+    private func scheduleTokenRefresh(expiresIn: Int = 3600) {
+        refreshTask?.cancel()
+        let refreshDelay = max(Double(expiresIn) * 0.8, 60)
+        refreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(refreshDelay))
+            guard !Task.isCancelled, let self else { return }
+            let success = await APIService.shared.refreshAccessTokenPublic()
+            if success {
+                self.scheduleTokenRefresh(expiresIn: expiresIn)
+            }
+        }
+    }
+
     private func handleAuthFailure() {
         // Clear auth state and redirect to login
         print("Auth failure detected - logging out")
@@ -77,6 +92,8 @@ class AuthService: ObservableObject {
                 APIService.shared.setRefreshToken(refreshToken)
             }
             isAuthenticated = true
+            isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
+            scheduleTokenRefresh()
             Task {
                 await loadProfile()
             }
@@ -127,8 +144,11 @@ class AuthService: ObservableObject {
     }
 
     func signOut() {
+        refreshTask?.cancel()
+        refreshTask = nil
         KeychainService.delete(key: "auth_token")
         KeychainService.delete(key: "refresh_token")
+        UserDefaults.standard.removeObject(forKey: "onboarding_complete")
         APIService.shared.setAuthToken(nil)
         APIService.shared.setRefreshToken(nil)
         isAuthenticated = false
@@ -143,6 +163,7 @@ class AuthService: ObservableObject {
             APIService.shared.setRefreshToken(refreshToken)
         }
         isAuthenticated = true
+        scheduleTokenRefresh()
         await loadProfile()
     }
 
@@ -151,6 +172,7 @@ class AuthService: ObservableObject {
             currentUser = try await APIService.shared.getProfile()
             // Check if onboarding is complete (user has set basic profile info)
             isOnboardingComplete = currentUser?.isProfileComplete ?? false
+            UserDefaults.standard.set(isOnboardingComplete, forKey: "onboarding_complete")
         } catch {
             print("Failed to load profile: \(error)")
             // If profile load fails, assume onboarding needed

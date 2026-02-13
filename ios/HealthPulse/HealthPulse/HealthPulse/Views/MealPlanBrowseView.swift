@@ -193,6 +193,7 @@ private struct MealPlanDetailSheet: View {
     @State private var showSuccess = false
     @State private var showingShoppingList = false
     @State private var showingWeeklyPlanner = false
+    @State private var loadError: String?
 
     private let mealOrder = ["breakfast", "lunch", "dinner", "snack"]
 
@@ -201,6 +202,24 @@ private struct MealPlanDetailSheet: View {
             Group {
                 if isLoading {
                     ProgressView()
+                } else if let errorMsg = loadError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.orange)
+                        Text(errorMsg)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Retry") {
+                            loadError = nil
+                            isLoading = true
+                            Task { await loadTemplate() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                    }
+                    .padding()
                 } else if let template {
                     ScrollView {
                         VStack(spacing: 20) {
@@ -424,7 +443,9 @@ private struct MealPlanDetailSheet: View {
     private func loadTemplate() async {
         do {
             template = try await APIService.shared.getMealPlanTemplate(id: templateId)
-        } catch {}
+        } catch {
+            loadError = "Failed to load meal plan. Please try again."
+        }
         isLoading = false
     }
 
@@ -441,12 +462,30 @@ struct ShoppingListSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var items: [ShoppingListItem] = []
     @State private var isLoading = true
+    @State private var loadError: String?
 
     var body: some View {
         NavigationStack {
             Group {
                 if isLoading {
                     ProgressView()
+                } else if let errorMsg = loadError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.orange)
+                        Text(errorMsg)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Button("Retry") {
+                            loadError = nil
+                            isLoading = true
+                            Task { await loadShoppingList() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                    }
+                    .padding()
                 } else if items.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "cart")
@@ -504,7 +543,9 @@ struct ShoppingListSheet: View {
     private func loadShoppingList() async {
         do {
             items = try await APIService.shared.getShoppingList(templateId: templateId)
-        } catch {}
+        } catch {
+            loadError = "Failed to load shopping list."
+        }
         isLoading = false
     }
 }

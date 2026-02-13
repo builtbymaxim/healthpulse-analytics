@@ -19,7 +19,7 @@
       "appearances" : [
         {
           "appearance" : "luminosity",
-          "value" : "light"
+          "value" : "dark"
         }
       ],
       "filename" : "healthpulse_logo_dark.png",
@@ -30,7 +30,7 @@
       "appearances" : [
         {
           "appearance" : "luminosity",
-          "value" : "light"
+          "value" : "dark"
         }
       ],
       "filename" : "healthpulse_logo_dark.png",
@@ -41,7 +41,7 @@
       "appearances" : [
         {
           "appearance" : "luminosity",
-          "value" : "light"
+          "value" : "dark"
         }
       ],
       "filename" : "healthpulse_logo_dark.png",

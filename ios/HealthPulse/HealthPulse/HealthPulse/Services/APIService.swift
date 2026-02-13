@@ -89,6 +89,11 @@ class APIService {
         }
     }
 
+    /// Public wrapper for proactive token refresh from AuthService.
+    func refreshAccessTokenPublic() async -> Bool {
+        await refreshAccessToken()
+    }
+
     // MARK: - Generic Request
 
     private func request<T: Decodable>(
