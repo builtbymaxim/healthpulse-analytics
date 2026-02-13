@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import AVFoundation
 
 // MARK: - Barcode Scanner View
@@ -21,13 +22,11 @@ struct BarcodeScannerView: View {
 
     // Food log fields (shown after product found)
     @State private var amount: Double = 100
-    @State private var selectedMealType = "snack"
+    @State private var selectedMealType: MealType = .snack
     @State private var isAdding = false
     @State private var showSuccess = false
 
     var onFoodAdded: (() -> Void)?
-
-    private let mealTypes = ["breakfast", "lunch", "dinner", "snack"]
     private let amountOptions: [Double] = [50, 100, 150, 200, 250]
 
     var body: some View {
@@ -229,17 +228,17 @@ struct BarcodeScannerView: View {
                         .padding(.horizontal)
 
                     HStack(spacing: 8) {
-                        ForEach(mealTypes, id: \.self) { type in
+                        ForEach(MealType.allCases, id: \.self) { meal in
                             Button {
-                                selectedMealType = type
+                                selectedMealType = meal
                                 HapticsManager.shared.selection()
                             } label: {
-                                Text(type.capitalized)
+                                Text(meal.displayName)
                                     .font(.subheadline.bold())
                                     .padding(.vertical, 10)
                                     .frame(maxWidth: .infinity)
-                                    .background(selectedMealType == type ? Color.green : Color(.secondarySystemBackground))
-                                    .foregroundStyle(selectedMealType == type ? .white : .primary)
+                                    .background(selectedMealType == meal ? Color.green : Color(.secondarySystemBackground))
+                                    .foregroundStyle(selectedMealType == meal ? .white : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                         }

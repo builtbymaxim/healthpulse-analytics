@@ -395,6 +395,16 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Privacy policy document (`docs/privacy-policy.md`) covering GDPR Articles 15, 17, 20
 - Dynamic app version display in About screen via `Bundle.main.infoDictionary`
 
+### Production Bug Fixes & Database Migrations
+- Applied 3 database migrations to production Supabase (7 missing tables causing 500 errors):
+  - Meal plans: `recipes` (34 seed recipes), `meal_plan_templates` (12 templates), `meal_plan_items`
+  - Social: `partnerships`, `invite_codes`
+  - Weekly meal plans: `user_weekly_meal_plans`, `user_weekly_plan_items`
+- Fixed BarcodeScannerView crash: added missing `NSCameraUsageDescription` to Info.plist
+- Fixed BarcodeScannerView build error: changed `selectedMealType` from `String` to `MealType` enum
+- Fixed missing `import UIKit` in BarcodeScannerView (UIColor/UILabel) and ProfileView (UIActivityViewController)
+- Fixed missing `import Combine` in WeeklyMealPlanView (ObservableObject/Published)
+
 ---
 
 ## Roadmap

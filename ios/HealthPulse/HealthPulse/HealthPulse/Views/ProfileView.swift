@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
