@@ -2,15 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_http._tcp</string>
-	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -21,13 +12,9 @@
 	<string>HealthPulse needs location access to track your runs even when the app is in the background.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>HealthPulse reads your health data to track workouts, sleep, heart rate, and activity levels for personalized fitness insights.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>HealthPulse saves your workouts and health metrics to Apple Health.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>HealthPulse adds your scheduled workouts to your calendar so you never miss a training day.</string>
+	<string>HealthPulse adds your scheduled workouts and meal plans to your calendar so you never miss a training day.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>HealthPulse adds your scheduled workouts to your calendar so you never miss a training day.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>HealthPulse connects to your local server for data sync.</string>
+	<string>HealthPulse adds your scheduled workouts and meal plans to your calendar so you never miss a training day.</string>
 </dict>
 </plist>

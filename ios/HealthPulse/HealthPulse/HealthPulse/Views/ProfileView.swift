@@ -11,6 +11,12 @@ struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var healthKitService: HealthKitService
     @State private var showingLogoutAlert = false
+    @State private var showingDeleteAccountAlert = false
+    @State private var showingDeleteConfirmation = false
+    @State private var isExportingData = false
+    @State private var isDeletingAccount = false
+    @State private var exportDataURL: URL?
+    @State private var showingShareSheet = false
 
     var body: some View {
         NavigationStack {
@@ -98,11 +104,7 @@ struct ProfileView: View {
 
                 // Support section
                 Section("Support") {
-                    Link(destination: URL(string: "https://healthpulse.app/help")!) {
-                        Label("Help Center", systemImage: "questionmark.circle")
-                    }
-
-                    Link(destination: URL(string: "https://healthpulse.app/privacy")!) {
+                    Link(destination: URL(string: "https://github.com/user/healthpulse-analytics/blob/main/docs/privacy-policy.md")!) {
                         Label("Privacy Policy", systemImage: "hand.raised.fill")
                     }
 
@@ -111,6 +113,29 @@ struct ProfileView: View {
                     } label: {
                         Label("About", systemImage: "info.circle")
                     }
+                }
+
+                // Data & Privacy section
+                Section("Data & Privacy") {
+                    Button {
+                        exportData()
+                    } label: {
+                        HStack {
+                            Label("Export My Data", systemImage: "square.and.arrow.up")
+                            Spacer()
+                            if isExportingData {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isExportingData)
+
+                    Button(role: .destructive) {
+                        showingDeleteAccountAlert = true
+                    } label: {
+                        Label("Delete Account", systemImage: "trash")
+                    }
+                    .disabled(isDeletingAccount)
                 }
 
                 // Logout section
@@ -132,8 +157,74 @@ struct ProfileView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
+            .alert("Delete Account?", isPresented: $showingDeleteAccountAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete Everything", role: .destructive) {
+                    showingDeleteConfirmation = true
+                }
+            } message: {
+                Text("This will permanently delete your account and all data. This action cannot be undone.")
+            }
+            .alert("Are you absolutely sure?", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Yes, Delete My Account", role: .destructive) {
+                    deleteAccount()
+                }
+            } message: {
+                Text("All your workouts, nutrition logs, training plans, and personal records will be permanently erased.")
+            }
+            .sheet(isPresented: $showingShareSheet) {
+                if let url = exportDataURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
         }
     }
+
+    private func exportData() {
+        isExportingData = true
+        Task {
+            do {
+                let data = try await APIService.shared.exportMyData()
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("healthpulse-export.json")
+                try data.write(to: tempURL)
+                exportDataURL = tempURL
+                showingShareSheet = true
+                HapticsManager.shared.success()
+            } catch {
+                HapticsManager.shared.error()
+                ToastManager.shared.error("Export failed: \(error.localizedDescription)")
+            }
+            isExportingData = false
+        }
+    }
+
+    private func deleteAccount() {
+        isDeletingAccount = true
+        Task {
+            do {
+                try await APIService.shared.deleteAccount()
+                HapticsManager.shared.success()
+                authService.signOut()
+            } catch {
+                HapticsManager.shared.error()
+                ToastManager.shared.error("Deletion failed: \(error.localizedDescription)")
+                isDeletingAccount = false
+            }
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Sub Views
@@ -924,6 +1015,12 @@ struct SocialToggleRow: View {
 }
 
 struct AboutView: View {
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(version) (\(build))"
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "heart.fill")
@@ -933,7 +1030,7 @@ struct AboutView: View {
             Text("HealthPulse")
                 .font(.largeTitle.bold())
 
-            Text("Version 1.0.0")
+            Text(appVersion)
                 .foregroundStyle(.secondary)
 
             Text("Your personal fitness and wellness companion. Track your health, discover insights, and optimize your performance.")

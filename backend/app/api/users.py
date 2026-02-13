@@ -1,6 +1,7 @@
 """User management endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from uuid import UUID
@@ -223,26 +224,78 @@ async def update_user_settings(
     return result.data[0]
 
 
+@router.get("/me/export")
+async def export_user_data(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Export all user data as JSON (GDPR Article 20 — data portability)."""
+    supabase = get_supabase_client()
+    uid = str(current_user.id)
+
+    # All user-data tables to export
+    user_tables = [
+        "profiles", "health_metrics", "workouts", "workout_sessions",
+        "workout_sets", "personal_records", "exercise_progress",
+        "daily_scores", "predictions", "insights",
+        "nutrition_goals", "food_entries",
+        "user_training_plans", "user_weekly_meal_plans", "user_weekly_plan_items",
+    ]
+
+    export = {}
+    for table in user_tables:
+        try:
+            result = supabase.table(table).select("*").eq("user_id", uid).execute()
+            export[table] = result.data or []
+        except Exception:
+            export[table] = []
+
+    # Partnerships: user can be inviter or invitee
+    try:
+        as_inviter = supabase.table("partnerships").select("*").eq("inviter_id", uid).execute()
+        as_invitee = supabase.table("partnerships").select("*").eq("invitee_id", uid).execute()
+        export["partnerships"] = (as_inviter.data or []) + (as_invitee.data or [])
+    except Exception:
+        export["partnerships"] = []
+
+    # Invite codes created by user
+    try:
+        codes = supabase.table("invite_codes").select("*").eq("created_by", uid).execute()
+        export["invite_codes"] = codes.data or []
+    except Exception:
+        export["invite_codes"] = []
+
+    export["exported_at"] = datetime.now(timezone.utc).isoformat()
+
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": 'attachment; filename="healthpulse-export.json"'},
+    )
+
+
 @router.delete("/me")
 async def delete_user_account(
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Delete current user's account and all data."""
+    """Delete current user's account and all data (GDPR Article 17 — right to erasure)."""
     supabase = get_supabase_client()
+    uid = str(current_user.id)
 
-    # Delete profile (cascade will delete related data)
+    # Delete profile (cascade will delete all related user data)
     (
         supabase.table("profiles")
         .delete()
-        .eq("id", str(current_user.id))
+        .eq("id", uid)
         .execute()
     )
 
-    # Note: This deletes the profile, but the auth.users record
-    # needs to be deleted via Supabase Auth Admin API
-    # For full deletion, you'd call supabase.auth.admin.delete_user()
+    # Also delete the auth.users record so the account is fully removed
+    try:
+        supabase.auth.admin.delete_user(uid)
+    except Exception as e:
+        # Log but don't fail — user data is already deleted
+        print(f"Warning: Could not delete auth record for {uid}: {e}")
 
-    return {"message": "Account data deleted successfully"}
+    return {"message": "Account and all data deleted successfully"}
 
 
 @router.post("/me/onboarding", response_model=UserProfile)

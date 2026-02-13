@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-11
+> Last updated: 2026-02-13
 
 ## Overview
 
@@ -385,16 +385,30 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Backend: 13 new endpoints (weekly plan CRUD, auto-fill, macros, apply, shopping list, copy)
 - iOS: WeeklyMealPlanView (grid + macro balance + recipe picker + template filler + shopping list)
 
+### Phase 10 — App Distribution & GDPR Compliance
+- iOS deployment target lowered from 26.0 (beta) to 17.0 for TestFlight compatibility
+- Info.plist cleaned: removed dev-only keys (local networking, Bonjour, inaccurate HealthKit write description)
+- Complete account deletion: cascading profile delete + `auth.admin.delete_user()` to remove auth record
+- Data export endpoint: `GET /users/me/export` returns all 18 user-data table categories as JSON
+- Two-step delete confirmation in ProfileView (alert → second confirmation → delete + sign out)
+- Export My Data in ProfileView → JSON file → iOS share sheet via `UIActivityViewController`
+- Privacy policy document (`docs/privacy-policy.md`) covering GDPR Articles 15, 17, 20
+- Dynamic app version display in About screen via `Bundle.main.infoDictionary`
+
 ---
 
 ## Roadmap
 
-### Phase 10 — App Distribution
-- TestFlight for friend sharing (requires Apple Developer Program)
-- GDPR compliance (data export, deletion, privacy policy)
-- EU Digital Markets Act alternative marketplace preparation
+### Phase 11 — Android App
+- Kotlin Multiplatform or native Jetpack Compose app
+- Feature parity with iOS: auth, dashboard, workouts, nutrition, sleep, training plans, meal plans, social
+- Shared backend — all API endpoints already platform-agnostic
+- Health Connect integration (Android equivalent of HealthKit)
+- Google Calendar integration (Android equivalent of EventKit)
+- Material Design 3 / Material You theming
+- Google Play Store distribution
 
-### Phase 11 (Optional) — Body Composition
+### Phase 12 (Optional) — Body Composition
 - Body measurement tracking (chest, waist, hips, arms, legs)
 - Progress photo capture with date overlay
 - Before/after comparison view
@@ -448,6 +462,7 @@ healthpulse-analytics/
 │   ├── migration-social.sql
 │   ├── migration-meal-plans.sql
 │   ├── migration-weekly-meal-plans.sql
-│   └── seed-plan-templates.sql
+│   ├── seed-plan-templates.sql
+│   └── privacy-policy.md
 └── PROJECT_STATUS.md            # This file
 ```

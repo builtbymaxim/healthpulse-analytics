@@ -830,6 +830,28 @@ class APIService {
     func copyPlanToNextWeek(planId: UUID) async throws -> WeeklyMealPlan {
         try await request(endpoint: "/meal-plans/weekly-plans/\(planId)/copy-next-week", method: "POST")
     }
+
+    // MARK: - Account (GDPR)
+
+    func deleteAccount() async throws {
+        let _: EmptyResponse = try await request(endpoint: "/users/me", method: "DELETE")
+    }
+
+    func exportMyData() async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/users/me/export") else {
+            throw APIError.invalidURL
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        if let token = authToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw APIError.serverError
+        }
+        return data
+    }
 }
 
 // Helper for empty responses
