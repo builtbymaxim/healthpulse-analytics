@@ -80,16 +80,14 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.workout)
 
-            // Sleep tab (hidden when social is active — accessible from Dashboard instead)
-            if !showSocialTab {
-                SleepView()
-                    .tabItem {
-                        Label("Sleep", systemImage: "moon.zzz.fill")
-                    }
-                    .tag(AppTab.sleep)
-            }
+            // Sleep tracking
+            SleepView()
+                .tabItem {
+                    Label("Sleep", systemImage: "moon.zzz.fill")
+                }
+                .tag(AppTab.sleep)
 
-            // Social - training partners (replaces Sleep tab when active)
+            // Social - training partners (conditional)
             if showSocialTab {
                 SocialView()
                     .tabItem {

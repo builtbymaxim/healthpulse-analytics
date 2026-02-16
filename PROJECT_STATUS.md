@@ -423,9 +423,8 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | OAuth buttons → "Coming Soon" labels for Strava/Garmin/Oura/Whoop | LOW UX |
 
 ### Social Tab Navigation Fix
-- Dynamic tab layout: always exactly 5 tabs (no iOS "More" overflow)
-- Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile
-- Social ON: Dashboard, Nutrition, Workout, Social, Profile (Sleep accessible as sheet from Dashboard)
+- Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile (5 tabs)
+- Social ON: Dashboard, Nutrition, Workout, Sleep, Social, Profile (6 tabs)
 
 ---
 
@@ -450,12 +449,53 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 
 ## Future Ideas
 
+### AI & Intelligence
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **Home Screen Widgets** | WidgetKit widgets for daily stats, workout reminder, nutrition progress | Medium |
-| **Apple Watch** | WatchOS companion for workout tracking and quick stats | High |
-| **Strava Integration** | Import/export workouts with Strava API | Medium |
-| **Data Export** | Export health data as CSV/PDF reports | Low |
+| **AI Coach Chat** | Conversational assistant using user's own data ("How's my recovery?", "What should I eat?") | High |
+| **Smart Deload Weeks** | Auto-detect fatigue accumulation across mesocycles, suggest programmed deloads | Medium |
+| **AI Meal Suggestions** | Suggest meals from recipe library that fit remaining daily macros | Medium |
+
+### Tracking Expansion
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Water/Hydration Tracking** | Daily intake logging with reminders, integrated into dashboard daily goals | Low |
+| **Supplement Tracking** | Log supplements (creatine, vitamins, protein) alongside nutrition | Low |
+| **Injury Log** | Track injuries, auto-modify training plans to avoid affected muscle groups | Medium |
+| **Custom Exercise Builder** | Users create their own exercises with muscle group tags | Low |
+
+### Social & Motivation
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Activity Feed** | See partner workouts in real-time, react/comment | Medium |
+| **Time-bound Challenges** | "30-Day Consistency Challenge", "Squat PR Challenge" with progress tracking | Medium |
+| **Workout Sharing Cards** | Generate shareable workout summary images for Instagram/stories | Medium |
+| **Achievements/Badges** | Gamification: streak badges, PR milestones, nutrition consistency awards | Medium |
+
+### Integrations
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Strava Sync** | Bi-directional: import Strava runs, export HealthPulse workouts | Medium |
+| **Apple Music** | Workout playlists, BPM-matched to exercise tempo | Medium |
+| **Siri Shortcuts** | "Hey Siri, start my chest workout" / "Log 200g chicken breast" | Medium |
+| **MyFitnessPal Import** | One-time migration for users switching apps | Low |
+
+### Advanced Training
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **1RM Calculator & %-based Programming** | Auto-calculate working weights from estimated 1RM | Medium |
+| **Periodization Engine** | Multi-week mesocycle planning with auto-progression and deload scheduling | High |
+| **Heart Rate Zone Training** | Cardio zones from HealthKit HR data, zone-based run coaching | Medium |
+| **Warmup/Cooldown Routines** | Auto-generated stretching sequences based on today's workout muscles | Medium |
+| **Form Check (Camera)** | ML-based exercise form analysis using device camera | High |
+
+### Platform
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Home Screen Widgets** | WidgetKit: today's workout, calorie ring, streak counter | Medium |
+| **Apple Watch** | Quick workout logging, live HR during sets, rest timer on wrist | High |
+| **iPad Layout** | Multi-column dashboard, side-by-side workout logging | Medium |
+| **Android App** | Kotlin/Jetpack Compose with Health Connect + Google Calendar | High |
 
 ---
 
