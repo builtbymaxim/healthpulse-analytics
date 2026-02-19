@@ -1,10 +1,14 @@
 """Authentication endpoints for sign up, sign in, and token management."""
 
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from app.database import get_supabase_anon
+from app.rate_limit import limiter
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -39,7 +43,8 @@ class SignUpPendingResponse(BaseModel):
 
 
 @router.post("/signup", response_model=AuthResponse | SignUpPendingResponse)
-async def sign_up(request: SignUpRequest):
+@limiter.limit("5/minute")
+async def sign_up(request: Request, body: SignUpRequest):
     """
     Create a new user account.
 
@@ -49,8 +54,8 @@ async def sign_up(request: SignUpRequest):
 
     try:
         response = supabase.auth.sign_up({
-            "email": request.email,
-            "password": request.password,
+            "email": body.email,
+            "password": body.password,
         })
 
         if response.user is None:
@@ -64,7 +69,7 @@ async def sign_up(request: SignUpRequest):
             return {
                 "message": "Check your email for confirmation link.",
                 "user_id": str(response.user.id) if response.user else None,
-                "email": request.email,
+                "email": body.email,
                 "requires_confirmation": True
             }
 
@@ -73,17 +78,21 @@ async def sign_up(request: SignUpRequest):
             refresh_token=response.session.refresh_token,
             expires_in=response.session.expires_in or 3600,
             user_id=str(response.user.id),
-            email=response.user.email or request.email,
+            email=response.user.email or body.email,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         if "already registered" in str(e).lower():
             raise HTTPException(status_code=400, detail="Email already registered")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Sign up error for %s: %s", body.email, e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Registration failed. Please try again.")
 
 
 @router.post("/signin", response_model=AuthResponse)
-async def sign_in(request: SignInRequest):
+@limiter.limit("5/minute")
+async def sign_in(request: Request, body: SignInRequest):
     """
     Sign in with email and password.
 
@@ -95,8 +104,8 @@ async def sign_in(request: SignInRequest):
 
     try:
         response = supabase.auth.sign_in_with_password({
-            "email": request.email,
-            "password": request.password,
+            "email": body.email,
+            "password": body.password,
         })
 
         if response.user is None or response.session is None:
@@ -110,13 +119,16 @@ async def sign_in(request: SignInRequest):
             refresh_token=response.session.refresh_token,
             expires_in=response.session.expires_in or 3600,
             user_id=str(response.user.id),
-            email=response.user.email or request.email,
+            email=response.user.email or body.email,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         if "invalid" in str(e).lower():
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Sign in error: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Authentication failed. Please try again.")
 
 
 class RefreshRequest(BaseModel):
@@ -125,12 +137,13 @@ class RefreshRequest(BaseModel):
 
 
 @router.post("/refresh")
-async def refresh_token(request: RefreshRequest):
+@limiter.limit("10/minute")
+async def refresh_token(request: Request, body: RefreshRequest):
     """Refresh an expired access token."""
     supabase = get_supabase_anon()
 
     try:
-        response = supabase.auth.refresh_session(request.refresh_token)
+        response = supabase.auth.refresh_session(body.refresh_token)
 
         if response.session is None:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
@@ -143,5 +156,8 @@ async def refresh_token(request: RefreshRequest):
             email=response.user.email if response.user else "",
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        logger.error("Token refresh error: %s", e, exc_info=True)
+        raise HTTPException(status_code=401, detail="Token refresh failed.")

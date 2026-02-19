@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-13
+> Last updated: 2026-02-19
 
 ## Overview
 
@@ -425,6 +425,75 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 ### Social Tab Navigation Fix
 - Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile (5 tabs)
 - Social ON: Dashboard, Nutrition, Workout, Sleep, Social, Profile (6 tabs)
+
+### Security Hardening & Runtime Robustness
+
+Full security and robustness pass across backend and iOS. 15 issues addressed across 5 batches (~25 files modified, 8 new files).
+
+**Backend Security (Batch 1):**
+
+| Fix | Details |
+|-----|---------|
+| CORS lockdown | `allow_origins` no longer defaults to `"*"` — empty in prod, localhost-only in debug; restricted to explicit methods/headers |
+| Rate limiting | `slowapi` added; auth endpoints (signup/signin/refresh) capped at 5/min, all others at 60/min |
+| Error sanitization | All 3 auth endpoints now return generic messages (`"Authentication failed. Please try again."`); real exception logged server-side |
+| `social.py` f-string safety | Extracted PostgREST `.or_()` filter to named variables with explicit comment explaining why UUID-validated interpolation is safe |
+
+**Backend Resilience (Batch 2):**
+
+| Fix | Details |
+|-----|---------|
+| Retry utility | `utils/retry.py`: `retry_with_backoff` decorator + `call_with_retry()` — exponential backoff (1s/2s/4s), configurable attempts/exceptions |
+| Circuit breaker | `utils/circuit_breaker.py`: closed → open (after N failures) → half-open (after cooldown); stops hammering failing services |
+| External API resilience | Barcode lookup (Open Food Facts): 3 retries + circuit breaker (5 failures → 120s cooldown); JWKS fetch: 3 retries + circuit breaker (3 failures → 60s cooldown, falls back to cached keys) |
+| Structured JSON logging | `logging_config.py`: every log line is JSON with `timestamp`, `level`, `logger`, `message`, `request_id` |
+| Request ID middleware | `middleware/request_id.py`: generates/reads `X-Request-ID` header, stored in `contextvars.ContextVar`, echoed in response |
+| Health check improvements | 5s timeout on DB probe, 3s on JWKS check, 10s result cache, per-check breakdown (`database` + `external_services`) |
+
+**iOS Security (Batch 3):**
+
+| Fix | Details |
+|-----|---------|
+| Force unwrap removal | TodayView streak calc (`calendar.date(...)!` × 2) and SleepView bed-time default (`!` × 2) replaced with `guard let` / `??` |
+| URLSession timeout | Custom `URLSessionConfiguration`: 30s request timeout, 60s resource timeout, `waitsForConnectivity = true` — replaces all 7 `URLSession.shared` call sites |
+| Certificate pinning | `PinningDelegate` using `CryptoKit.SHA256` for SPKI hash comparison. Ships with empty hash set (passthrough). Activate by adding hashes for Railway prod cert. Skipped for local dev builds. |
+
+**iOS Robustness (Batch 4):**
+
+| Fix | Details |
+|-----|---------|
+| Retry with backoff | `requestWithRetry<T>()` on APIService: retries on 5xx and `URLError.timedOut/.networkConnectionLost` with 1s/2s/4s backoff; 4xx/auth/offline throw immediately |
+| Offline detection | `NetworkMonitor` (`NWPathMonitor`): `@Published isConnected`, `nonisolated var isCurrentlyConnected` for thread-safe API guard |
+| Offline UI banner | Red "No Internet Connection" banner overlaid at top of `ContentView` when offline; animated in/out |
+| `APIError.offline` | New case thrown at the top of `request<T>()` and `optionalRequest<T>()` before any network call |
+| Background task registration | `ActiveWorkoutManager`: `beginBackgroundTask()` / `endBackgroundTask()` via `UIApplication`; called on `startWorkout()`, `clearWorkout()`, and scene phase changes |
+
+**Backend Logging (Batch 5):**
+
+Structured `logger.info/debug/error` added to all service and API files that lacked coverage:
+- Services: `nutrition_service`, `exercise_service`, `sleep_service`, `prediction_service`, `progression_service`, `wellness_calculator`
+- API routers: `workouts`, `metrics`, `sleep`, `training_plans`, `exercises`
+- Pattern: `info` for mutations, `debug` for calculations, `error(exc_info=True)` in catch blocks. No passwords, tokens, or email addresses logged.
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `backend/app/rate_limit.py` | Shared slowapi `Limiter` instance |
+| `backend/app/utils/retry.py` | Exponential backoff retry decorator + helper |
+| `backend/app/utils/circuit_breaker.py` | Circuit breaker (closed/open/half-open) |
+| `backend/app/middleware/request_id.py` | Request ID middleware + context var |
+| `backend/app/logging_config.py` | JSON log formatter + `setup_logging()` |
+| `ios/.../Services/NetworkMonitor.swift` | `NWPathMonitor`-based connectivity observer |
+
+**New dependency:** `slowapi==0.1.9`
+
+**Pending pre-production step — Shannon pentest:**
+[Shannon](https://github.com/KeygraphHQ/shannon) (open-source AGPL-3.0, requires Anthropic API key) is an AI-powered autonomous white-box pentester. Run it against the local backend after deployment to validate that hardening holds up against real exploit attempts. Estimated cost: ~$5–20 in API credits per full scan. Command:
+```bash
+./shannon start URL=http://localhost:8000 REPO=/path/to/healthpulse-analytics
+```
+Results written to `audit-logs/`. Fix any high/critical findings before public launch.
 
 ---
 

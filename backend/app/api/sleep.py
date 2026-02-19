@@ -1,5 +1,7 @@
 """Sleep tracking and analysis endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from datetime import date
@@ -11,6 +13,8 @@ from app.services.sleep_service import (
     SleepEntry,
     SleepAnalytics,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,6 +75,10 @@ async def log_sleep(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Log sleep data manually."""
+    logger.info(
+        "Sleep log request for user %s: duration=%.1fh quality=%s date=%s",
+        current_user.id, request.duration_hours, request.quality, request.logged_for,
+    )
     service = get_sleep_service()
     return await service.log_sleep(
         user_id=current_user.id,

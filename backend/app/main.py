@@ -2,11 +2,17 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
+from app.logging_config import setup_logging
+from app.rate_limit import limiter
+from app.middleware.request_id import RequestIdMiddleware
 from app.api import auth, health, metrics, nutrition, predictions, users, workouts, exercises, sleep, training_plans, social, meal_plans
 
 settings = get_settings()
+setup_logging(debug=settings.debug)
 
 app = FastAPI(
     title=settings.app_name,
@@ -17,14 +23,24 @@ app = FastAPI(
     redirect_slashes=False,  # Prevent 307 redirects that lose auth headers
 )
 
-# CORS middleware for web and mobile clients
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Request ID middleware — must be added before other middleware so the ID is
+# available throughout the full request lifecycle (including logging).
+app.add_middleware(RequestIdMiddleware)
+
+# CORS middleware — only enabled when origins are explicitly configured.
+# iOS native clients don't send Origin headers, so this only affects web clients.
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
+    )
 
 
 # Include routers

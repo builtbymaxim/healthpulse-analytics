@@ -1,5 +1,7 @@
 """Exercise library and strength tracking endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -20,6 +22,8 @@ from app.models.exercises import (
     FrequencyAnalytics,
     MuscleGroupStats,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -124,6 +128,10 @@ async def log_sets(
     if not request.sets:
         raise HTTPException(status_code=400, detail="No sets provided")
 
+    logger.info(
+        "Logging %d sets for user %s workout_id=%s",
+        len(request.sets), current_user.id, request.workout_id,
+    )
     service = get_exercise_service()
     created_sets = await service.log_sets(
         user_id=current_user.id,
@@ -143,6 +151,10 @@ async def log_workout_sets(
     if not sets:
         raise HTTPException(status_code=400, detail="No sets provided")
 
+    logger.info(
+        "Logging %d sets for user %s workout_id=%s",
+        len(sets), current_user.id, workout_id,
+    )
     service = get_exercise_service()
     set_creates = [
         WorkoutSetCreate(

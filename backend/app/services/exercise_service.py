@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, date, timedelta
 from uuid import UUID
 
 from app.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 from app.models.exercises import (
     Exercise,
     ExerciseCategory,
@@ -94,6 +97,10 @@ class ExerciseService:
             if workout_result.data:
                 workout_id = UUID(workout_result.data[0]["id"])
 
+        logger.info(
+            "Logging %d sets for user %s workout_id=%s",
+            len(sets), user_id, workout_id,
+        )
         for set_data in sets:
             # Prepare set record
             record = {
@@ -247,9 +254,17 @@ class ExerciseService:
                         "value": weight_kg,
                         "achieved_at": datetime.utcnow().isoformat(),
                     }).eq("id", current_pr["id"]).execute()
+                    logger.info(
+                        "New PR for user %s exercise %s %s: %skg (prev %skg)",
+                        user_id, exercise_id, pr_type, weight_kg, current_pr["value"],
+                    )
                     is_pr = True
             else:
                 # Create new PR
+                logger.info(
+                    "First PR for user %s exercise %s %s: %skg",
+                    user_id, exercise_id, pr_type, weight_kg,
+                )
                 self.supabase.table("personal_records").insert({
                     "user_id": str(user_id),
                     "exercise_id": str(exercise_id),

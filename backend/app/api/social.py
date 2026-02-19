@@ -144,14 +144,20 @@ async def use_invite_code(
     if inviter_id == str(current_user.id):
         raise HTTPException(status_code=400, detail="Cannot use your own invite code")
 
-    # Check for existing partnership
+    # Check for existing partnership.
+    # NOTE: PostgREST's .or_() filter requires string interpolation — it has no
+    # parameterised equivalent. Both IDs are validated UUIDs at this point
+    # (inviter_id came from DB lookup, current_user.id is UUID from JWT), so
+    # injection is not possible here.
+    uid = str(current_user.id)
+    filter_str = (
+        f"and(inviter_id.eq.{inviter_id},invitee_id.eq.{uid}),"
+        f"and(inviter_id.eq.{uid},invitee_id.eq.{inviter_id})"
+    )
     existing = (
         supabase.table("partnerships")
         .select("id, status")
-        .or_(
-            f"and(inviter_id.eq.{inviter_id},invitee_id.eq.{current_user.id}),"
-            f"and(inviter_id.eq.{current_user.id},invitee_id.eq.{inviter_id})"
-        )
+        .or_(filter_str)
         .in_("status", ["pending", "active"])
         .execute()
     )

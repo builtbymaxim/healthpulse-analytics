@@ -202,6 +202,10 @@ class NutritionService:
         # Check if goal exists
         existing = await self.get_nutrition_goal(user_id)
 
+        logger.info(
+            "Upserting nutrition goal for user %s: goal_type=%s calorie_target=%s",
+            user_id, goal_type, targets.calorie_target,
+        )
         if existing:
             result = (
                 self.supabase.table("nutrition_goals")
@@ -270,6 +274,10 @@ class NutritionService:
             "source": source or "manual",
         }
 
+        logger.info(
+            "Logging food entry for user %s: name=%r calories=%s meal_type=%s",
+            user_id, name, calories, meal_type,
+        )
         result = (
             self.supabase.table("food_entries")
             .insert(entry_data)
@@ -328,6 +336,7 @@ class NutritionService:
         Returns:
             True if deleted, False if not found
         """
+        logger.info("Deleting food entry %s for user %s", entry_id, user_id)
         result = (
             self.supabase.table("food_entries")
             .delete()
@@ -416,6 +425,11 @@ class NutritionService:
             if e.get("logged_at")
         ))
 
+        logger.debug(
+            "Calculating nutrition score for user %s date=%s: calories=%s/%s protein=%s/%s",
+            user_id, target, round(total_calories, 1), calorie_target,
+            round(total_protein, 1), protein_target,
+        )
         score_breakdown = self.calculator.calculate_nutrition_score(
             calories_consumed=total_calories,
             calorie_target=calorie_target,

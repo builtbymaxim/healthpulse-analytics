@@ -1,5 +1,7 @@
 """Workout tracking endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -8,6 +10,8 @@ from enum import Enum
 
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -133,6 +137,11 @@ async def create_workout(
         workout.avg_heart_rate,
     )
 
+    logger.info(
+        "Creating workout for user %s: type=%s duration=%dmin intensity=%s",
+        current_user.id, workout.workout_type.value,
+        workout.duration_minutes, workout.intensity.value,
+    )
     data = {
         "user_id": str(current_user.id),
         "workout_type": workout.workout_type.value,
@@ -346,6 +355,7 @@ async def delete_workout(
     """Delete a workout."""
     supabase = get_supabase_client()
 
+    logger.info("Deleting workout %s for user %s", workout_id, current_user.id)
     result = (
         supabase.table("workouts")
         .delete()

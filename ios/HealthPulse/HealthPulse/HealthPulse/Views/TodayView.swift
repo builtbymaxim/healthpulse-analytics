@@ -1277,7 +1277,9 @@ class TodayViewModel: ObservableObject {
 
         // Check if there's a workout today or yesterday to start the streak
         if !workoutDays.contains(today) {
-            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
+                return 0
+            }
             if !workoutDays.contains(yesterday) {
                 return 0  // Streak broken
             }
@@ -1287,7 +1289,10 @@ class TodayViewModel: ObservableObject {
         // Count consecutive days
         while workoutDays.contains(checkDate) {
             streak += 1
-            checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: checkDate) else {
+                break
+            }
+            checkDate = previousDay
         }
 
         return streak

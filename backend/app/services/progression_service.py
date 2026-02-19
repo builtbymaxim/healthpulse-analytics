@@ -5,8 +5,11 @@
 # the user's recent workout session history.
 #
 
+import logging
 from uuid import UUID
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 
 # Upper body increment: +2.5kg, Lower body: +5kg
@@ -30,6 +33,10 @@ async def get_suggestions(
     if not exercise_names:
         return {}
 
+    logger.debug(
+        "Computing progression suggestions for user %s: %d exercises",
+        user_id, len(exercise_names),
+    )
     # Fetch recent workout sessions (last 10, most recent first)
     result = (
         supabase.table("workout_sessions")
@@ -131,18 +138,26 @@ def _compute_suggestion(
 
     if needs_deload and avg_rpe >= 9:
         deloaded = round(last_weight * DELOAD_FACTOR / 2.5) * 2.5  # Round to nearest 2.5
+        logger.debug(
+            "Suggestion for %r: deload %skg -> %skg (RPE %.1f)",
+            exercise_name, last_weight, deloaded, avg_rpe,
+        )
         return {
             "suggested_weight_kg": deloaded,
             "last_weight_kg": last_weight,
             "last_reps": last_reps,
             "last_rpe": round(avg_rpe, 1),
             "status": "deload",
-            "reason": f"-10% deload ({last_weight}kg → {deloaded}kg)",
+            "reason": f"-10% deload ({last_weight}kg \u2192 {deloaded}kg)",
         }
 
     if avg_rpe <= 8 and last_reps >= 1:
         suggested = last_weight + increment
         body_label = "lower body" if is_lower else "upper body"
+        logger.debug(
+            "Suggestion for %r: increase %skg -> %skg (RPE %.1f, %s)",
+            exercise_name, last_weight, suggested, avg_rpe, body_label,
+        )
         return {
             "suggested_weight_kg": suggested,
             "last_weight_kg": last_weight,

@@ -6,11 +6,71 @@
 //
 
 import Foundation
+import CryptoKit
 
 extension Notification.Name {
     static let authenticationFailed = Notification.Name("authenticationFailed")
     static let tokensRefreshed = Notification.Name("tokensRefreshed")
 }
+
+// MARK: - Certificate Pinning Delegate
+
+/// Validates server certificates against pinned SPKI hashes.
+/// Ships with an empty pin set (passthrough) until production hashes are confirmed.
+/// To activate: extract the SPKI SHA-256 hash with:
+///   openssl s_client -connect <host>:443 </dev/null 2>/dev/null | \
+///   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | \
+///   openssl dgst -sha256 -binary | base64
+private class PinningDelegate: NSObject, URLSessionDelegate {
+    /// Add SPKI SHA-256 hashes here for production pinning.
+    /// Empty = passthrough (no pinning enforced).
+    static let pinnedKeyHashes: Set<Data> = []
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        // Standard certificate chain validation first
+        var cfError: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &cfError) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        // If no pins configured, allow (dev mode or pre-activation)
+        guard !Self.pinnedKeyHashes.isEmpty else {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+            return
+        }
+
+        // Extract server leaf certificate public key and hash it
+        guard
+            let certChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
+            let leafCert = certChain.first,
+            let publicKey = SecCertificateCopyKey(leafCert),
+            let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data?
+        else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        let keyHash = Data(SHA256.hash(data: publicKeyData))
+        if Self.pinnedKeyHashes.contains(keyHash) {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+}
+
+// MARK: - API Service
 
 class APIService {
     static let shared = APIService()
@@ -19,6 +79,7 @@ class APIService {
     private var authToken: String?
     private var refreshToken: String?
     private let refreshCoordinator = TokenRefreshCoordinator()
+    private let session: URLSession
 
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -35,8 +96,25 @@ class APIService {
     private init() {
         // Production URL (Railway deployment)
         // For local development, set API_BASE_URL environment variable in Xcode scheme
-        self.baseURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
-            ?? "https://healthpulse-analytics-production.up.railway.app/api/v1"
+        let envURL = ProcessInfo.processInfo.environment["API_BASE_URL"]
+        self.baseURL = envURL ?? "https://healthpulse-analytics-production.up.railway.app/api/v1"
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30   // per-request timeout
+        config.timeoutIntervalForResource = 60  // total resource timeout
+        config.waitsForConnectivity = true       // wait briefly before failing on no network
+
+        // Attach pinning delegate only in production (skip for local dev overrides)
+        if envURL != nil {
+            // Local dev: no pinning
+            self.session = URLSession(configuration: config)
+        } else {
+            self.session = URLSession(
+                configuration: config,
+                delegate: PinningDelegate(),
+                delegateQueue: nil
+            )
+        }
     }
 
     func setAuthToken(_ token: String?) {
@@ -65,7 +143,7 @@ class APIService {
             struct RefreshBody: Encodable { let refresh_token: String }
             req.httpBody = try? self.encoder.encode(RefreshBody(refresh_token: currentRefreshToken))
 
-            guard let (data, response) = try? await URLSession.shared.data(for: req),
+            guard let (data, response) = try? await session.data(for: req),
                   let http = response as? HTTPURLResponse,
                   (200...299).contains(http.statusCode),
                   let authResponse = try? self.decoder.decode(AuthResponse.self, from: data),
@@ -94,6 +172,37 @@ class APIService {
         await refreshAccessToken()
     }
 
+    // MARK: - Retry Wrapper
+
+    /// Retries a request on transient failures (5xx, network timeout, connection lost).
+    /// Does NOT retry auth errors, 4xx validation errors, or offline state — those propagate immediately.
+    func requestWithRetry<T: Decodable>(
+        endpoint: String,
+        method: String = "GET",
+        body: (any Encodable)? = nil,
+        maxRetries: Int = 3
+    ) async throws -> T {
+        var lastError: Error = APIError.serverError
+        for attempt in 0..<maxRetries {
+            do {
+                return try await request(endpoint: endpoint, method: method, body: body)
+            } catch APIError.serverError {
+                lastError = APIError.serverError
+            } catch let urlError as URLError
+                where urlError.code == .timedOut || urlError.code == .networkConnectionLost {
+                lastError = urlError
+            } catch {
+                // 4xx, auth, validation, offline — don't retry
+                throw error
+            }
+            if attempt < maxRetries - 1 {
+                let delayNs = UInt64(pow(2.0, Double(attempt))) * 1_000_000_000
+                try? await Task.sleep(nanoseconds: delayNs)
+            }
+        }
+        throw lastError
+    }
+
     // MARK: - Generic Request
 
     private func request<T: Decodable>(
@@ -101,6 +210,9 @@ class APIService {
         method: String = "GET",
         body: (any Encodable)? = nil
     ) async throws -> T {
+        guard NetworkMonitor.shared.isCurrentlyConnected else {
+            throw APIError.offline
+        }
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
@@ -117,7 +229,7 @@ class APIService {
             request.httpBody = try encoder.encode(body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -135,7 +247,7 @@ class APIService {
                 if let newToken = authToken {
                     retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
                 }
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                let (retryData, retryResponse) = try await session.data(for: retryRequest)
                 if let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
                     return try decoder.decode(T.self, from: retryData)
                 }
@@ -175,6 +287,9 @@ class APIService {
         method: String = "GET",
         body: (any Encodable)? = nil
     ) async throws -> T? {
+        guard NetworkMonitor.shared.isCurrentlyConnected else {
+            throw APIError.offline
+        }
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
@@ -191,7 +306,7 @@ class APIService {
             request.httpBody = try encoder.encode(body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -215,7 +330,7 @@ class APIService {
                 if let newToken = authToken {
                     retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
                 }
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                let (retryData, retryResponse) = try await session.data(for: retryRequest)
                 if let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
                     if let str = String(data: retryData, encoding: .utf8), str.trimmingCharacters(in: .whitespaces) == "null" {
                         return nil
@@ -794,7 +909,7 @@ class APIService {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "GET"
-        let (data, _) = try await URLSession.shared.data(for: urlRequest)
+        let (data, _) = try await session.data(for: urlRequest)
         let decoder = JSONDecoder()
         let response = try decoder.decode(USDASearchResponse.self, from: data)
         return response.foods
@@ -873,7 +988,7 @@ class APIService {
         if let token = authToken {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw APIError.serverError
         }
@@ -950,6 +1065,7 @@ enum APIError: Error, LocalizedError {
     case validationError
     case badRequest(String)
     case unknown(Int)
+    case offline
 
     var message: String {
         errorDescription ?? "Unknown error"
@@ -973,6 +1089,8 @@ enum APIError: Error, LocalizedError {
             return msg
         case .unknown(let code):
             return "Unknown error (code: \(code))"
+        case .offline:
+            return "You appear to be offline. Please check your connection."
         }
     }
 }

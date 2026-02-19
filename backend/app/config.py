@@ -33,16 +33,21 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     usda_api_key: str = ""                 # free key from api.data.gov
 
-    # CORS settings (comma-separated string in .env, use "*" for all origins)
-    cors_origins_str: str = "*"
+    # CORS settings (comma-separated string in .env)
+    # iOS native clients don't send Origin headers, so CORS only matters for
+    # web dashboards or Swagger UI. Leave empty in production to deny all web origins.
+    cors_origins_str: str = ""
 
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
         origins = [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
-        # If "*" is in origins, allow all
+        # Explicit "*" still supported via env var for local dev / open APIs
         if "*" in origins:
             return ["*"]
+        # Default for local dev: allow localhost origins when no explicit list is set
+        if not origins and self.debug:
+            return ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"]
         return origins
 
 

@@ -7,11 +7,13 @@
 //
 
 import Foundation
+import UIKit
 
 class ActiveWorkoutManager {
     static let shared = ActiveWorkoutManager()
 
     private let defaults = UserDefaults.standard
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     private enum Keys {
         static let isActive = "activeWorkout.isActive"
@@ -57,6 +59,7 @@ class ActiveWorkoutManager {
         defaults.removeObject(forKey: Keys.pauseStartDate)
         defaults.set(0.0, forKey: Keys.totalDistance)
         defaults.set(false, forKey: Keys.isPaused)
+        beginBackgroundTask()
     }
 
     func saveState(
@@ -76,9 +79,26 @@ class ActiveWorkoutManager {
     }
 
     func clearWorkout() {
+        endBackgroundTask()
         for key in [Keys.isActive, Keys.runStartDate, Keys.totalPausedInterval,
                     Keys.pauseStartDate, Keys.totalDistance, Keys.isPaused] {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    // MARK: - Background Task
+
+    func beginBackgroundTask() {
+        guard backgroundTaskID == .invalid else { return }
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "ActiveWorkout") { [weak self] in
+            // Expiry handler: iOS is about to suspend — end gracefully
+            self?.endBackgroundTask()
+        }
+    }
+
+    func endBackgroundTask() {
+        guard backgroundTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskID)
+        backgroundTaskID = .invalid
     }
 }

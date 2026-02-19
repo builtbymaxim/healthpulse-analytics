@@ -1,5 +1,7 @@
 """Training plans API endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta
@@ -9,6 +11,8 @@ from typing import Optional
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
 from app.services.progression_service import get_suggestions
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -229,6 +233,10 @@ async def activate_plan(
 
     template = template_result.data[0]
 
+    logger.info(
+        "Activating training plan for user %s: template_id=%s name=%r",
+        current_user.id, request.template_id, template.get("name"),
+    )
     # Deactivate any existing active plans
     supabase.table("user_training_plans").update(
         {"is_active": False}
@@ -260,6 +268,7 @@ async def deactivate_plan(
     """Deactivate the current training plan."""
     supabase = get_supabase_client()
 
+    logger.info("Deactivating training plan for user %s", current_user.id)
     supabase.table("user_training_plans").update(
         {"is_active": False}
     ).eq("user_id", str(current_user.id)).eq("is_active", True).execute()
@@ -287,6 +296,11 @@ async def log_workout_session(
         "notes": request.notes,
     }
 
+    logger.info(
+        "Logging workout session for user %s: plan_id=%s workout=%r exercises=%d",
+        current_user.id, request.plan_id, request.planned_workout_name,
+        len(request.exercises),
+    )
     result = supabase.table("workout_sessions").insert(session_data).execute()
 
     if not result.data:

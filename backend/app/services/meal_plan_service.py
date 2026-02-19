@@ -3,7 +3,13 @@
 import logging
 import httpx
 
+from app.utils.circuit_breaker import CircuitBreaker
+from app.utils.retry import call_with_retry
+
 logger = logging.getLogger(__name__)
+
+# Circuit breaker for Open Food Facts: open after 5 failures, recover after 2 min
+_barcode_cb = CircuitBreaker("openfoodfacts", failure_threshold=5, cooldown_seconds=120)
 from uuid import UUID
 from datetime import date, datetime, timedelta, timezone
 from app.models.meal_plans import (
@@ -133,14 +139,25 @@ class MealPlanService:
         return result.data or []
 
     def lookup_barcode(self, barcode: str) -> dict:
-        """Proxy to Open Food Facts API."""
+        """Proxy to Open Food Facts API with retry and circuit breaker."""
+        if _barcode_cb.is_open:
+            logger.warning("Barcode lookup skipped — circuit open for openfoodfacts")
+            return {"barcode": barcode, "found": False}
+
         url = f"https://world.openfoodfacts.org/api/v2/product/{barcode}"
         params = {"fields": "product_name,brands,nutriments,image_url,serving_size"}
         try:
             with httpx.Client(timeout=10) as client:
-                response = client.get(url, params=params)
+                response = call_with_retry(
+                    client.get, url,
+                    max_attempts=3,
+                    base_delay=1.0,
+                    exceptions=(httpx.HTTPError, httpx.TimeoutException),
+                    params=params,
+                )
                 response.raise_for_status()
                 data = response.json()
+            _barcode_cb.record_success()
             if data.get("status") != 1 or not data.get("product"):
                 return {"barcode": barcode, "found": False}
             product = data["product"]
@@ -159,6 +176,7 @@ class MealPlanService:
                 "found": True,
             }
         except Exception:
+            _barcode_cb.record_failure()
             logger.warning("Barcode lookup failed for %s", barcode, exc_info=True)
             return {"barcode": barcode, "found": False}
 

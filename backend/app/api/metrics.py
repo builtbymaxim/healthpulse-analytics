@@ -1,5 +1,7 @@
 """Health metrics endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timezone
@@ -8,6 +10,8 @@ from enum import Enum
 
 from app.auth import get_current_user, CurrentUser
 from app.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -122,6 +126,10 @@ async def create_metric(
         "notes": metric.notes,
     }
 
+    logger.info(
+        "Creating metric for user %s: type=%s value=%s source=%s",
+        current_user.id, metric.metric_type.value, metric.value, metric.source.value,
+    )
     result = supabase.table("health_metrics").insert(data).execute()
 
     if not result.data:
@@ -151,6 +159,10 @@ async def create_metrics_batch(
         for m in batch.metrics
     ]
 
+    logger.info(
+        "Batch inserting %d metrics for user %s",
+        len(data), current_user.id,
+    )
     result = supabase.table("health_metrics").insert(data).execute()
 
     if not result.data:

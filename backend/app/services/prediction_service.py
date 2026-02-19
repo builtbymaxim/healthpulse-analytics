@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, date, timedelta
 from uuid import UUID
 
 from app.database import get_supabase_client
 from app.ml.ml_models import get_predictor, RecoveryResult, ReadinessResult, WellnessResult
+
+logger = logging.getLogger(__name__)
 
 
 class PredictionService:
@@ -18,6 +21,7 @@ class PredictionService:
 
     async def get_recovery_prediction(self, user_id: UUID) -> RecoveryResult:
         """Get recovery score for a user based on their recent data."""
+        logger.debug("Generating recovery prediction for user %s", user_id)
         # Fetch recent metrics
         today = date.today()
         week_ago = today - timedelta(days=7)
@@ -143,6 +147,7 @@ class PredictionService:
 
     async def get_readiness_prediction(self, user_id: UUID) -> ReadinessResult:
         """Get training readiness score for a user."""
+        logger.debug("Generating readiness prediction for user %s", user_id)
         # First get recovery score
         recovery = await self.get_recovery_prediction(user_id)
 
@@ -222,6 +227,7 @@ class PredictionService:
     async def get_wellness_score(self, user_id: UUID, target_date: date | None = None) -> WellnessResult:
         """Get wellness score for a user on a specific date."""
         target = target_date or date.today()
+        logger.debug("Fetching wellness score for user %s date=%s", user_id, target)
 
         # Try to get existing daily score
         existing_score = (
@@ -234,6 +240,7 @@ class PredictionService:
         )
 
         if existing_score.data:
+            logger.debug("Returning cached wellness score for user %s date=%s", user_id, target)
             data = existing_score.data[0]
             return WellnessResult(
                 wellness_score=data.get("wellness_score", 70.0),
@@ -343,6 +350,7 @@ class PredictionService:
 
     async def analyze_correlations(self, user_id: UUID) -> list[dict]:
         """Analyze correlations in user's health data."""
+        logger.debug("Analyzing health correlations for user %s", user_id)
         # Get last 30 days of metrics
         start_date = date.today() - timedelta(days=30)
 

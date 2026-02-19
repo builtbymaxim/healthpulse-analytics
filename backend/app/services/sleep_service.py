@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, date, timedelta
 from uuid import UUID
 from pydantic import BaseModel
 
 from app.database import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 
 class SleepEntry(BaseModel):
@@ -235,6 +238,10 @@ class SleepService:
         logged_for: date | None = None,
     ) -> dict:
         """Log sleep data manually."""
+        logger.info(
+            "Logging sleep for user %s: date=%s duration=%.1fh quality=%s",
+            user_id, logged_for or date.today(), duration_hours, quality,
+        )
         target_date = logged_for or date.today()
         timestamp = datetime.combine(target_date, datetime.min.time())
 

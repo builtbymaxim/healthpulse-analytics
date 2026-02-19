@@ -435,8 +435,8 @@ struct SleepLogSheet: View {
     // Default: bedtime yesterday at 11pm, wake time now
     @State private var bedTime: Date = {
         let calendar = Calendar.current
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
-        return calendar.date(bySettingHour: 23, minute: 0, second: 0, of: yesterday)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        return calendar.date(bySettingHour: 23, minute: 0, second: 0, of: yesterday) ?? yesterday
     }()
 
     @State private var wakeTime: Date = Date()

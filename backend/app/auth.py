@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from uuid import UUID
 
 from app.config import get_settings
+from app.utils.circuit_breaker import CircuitBreaker
+from app.utils.retry import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,9 @@ security = HTTPBearer(auto_error=False)
 # Cache JWKS keys from Supabase
 _jwks_cache: dict | None = None
 
+# Circuit breaker: stop hammering Supabase JWKS if it's repeatedly unavailable
+_jwks_cb = CircuitBreaker("jwks", failure_threshold=3, cooldown_seconds=60)
+
 
 def _get_jwks() -> dict:
     """Fetch and cache JWKS from Supabase for ES256 verification."""
@@ -25,16 +30,28 @@ def _get_jwks() -> dict:
     if _jwks_cache is not None:
         return _jwks_cache
 
+    if _jwks_cb.is_open:
+        logger.warning("JWKS fetch skipped — circuit open; using cached keys if available")
+        return _jwks_cache or {"keys": []}
+
     settings = get_settings()
     jwks_url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
     try:
-        resp = httpx.get(jwks_url, timeout=10)
+        resp = call_with_retry(
+            httpx.get, jwks_url,
+            max_attempts=3,
+            base_delay=1.0,
+            exceptions=(httpx.HTTPError, httpx.TimeoutException),
+            timeout=10,
+        )
         resp.raise_for_status()
         _jwks_cache = resp.json()
+        _jwks_cb.record_success()
         return _jwks_cache
     except Exception as e:
+        _jwks_cb.record_failure()
         logger.warning("Failed to fetch JWKS from Supabase: %s", e)
-        return {"keys": []}
+        return _jwks_cache or {"keys": []}
 
 
 class CurrentUser(BaseModel):

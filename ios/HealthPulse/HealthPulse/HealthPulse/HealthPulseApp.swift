@@ -13,6 +13,7 @@ struct HealthPulseApp: App {
     @StateObject private var healthKitService = HealthKitService.shared
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var calendarSyncService = CalendarSyncService.shared
+    @StateObject private var networkMonitor = NetworkMonitor.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -22,6 +23,7 @@ struct HealthPulseApp: App {
                 .environmentObject(healthKitService)
                 .environmentObject(notificationService)
                 .environmentObject(calendarSyncService)
+                .environmentObject(networkMonitor)
                 .task {
                     await notificationService.requestAuthorization()
                 }
@@ -37,10 +39,18 @@ struct HealthPulseApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
-                        Task {
-                            await calendarSyncService.syncIfNeeded()
+                    switch phase {
+                    case .active:
+                        Task { await calendarSyncService.syncIfNeeded() }
+                        // Return from background — release the background task token
+                        ActiveWorkoutManager.shared.endBackgroundTask()
+                    case .background:
+                        // Keep the workout timer alive while backgrounded
+                        if ActiveWorkoutManager.shared.isWorkoutActive {
+                            ActiveWorkoutManager.shared.beginBackgroundTask()
                         }
+                    default:
+                        break
                     }
                 }
         }

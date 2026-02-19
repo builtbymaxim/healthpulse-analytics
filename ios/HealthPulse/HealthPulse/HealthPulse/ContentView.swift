@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var healthKit: HealthKitService
+    @EnvironmentObject var networkMonitor: NetworkMonitor
     @StateObject private var tabRouter = TabRouter.shared
     @State private var showGreeting = true
 
@@ -44,6 +45,22 @@ struct ContentView: View {
         .onChange(of: authService.isAuthenticated) { _, authenticated in
             if authenticated {
                 showGreeting = true
+            }
+        }
+        .overlay(alignment: .top) {
+            if !networkMonitor.isConnected {
+                HStack(spacing: 6) {
+                    Image(systemName: "wifi.slash")
+                    Text("No Internet Connection")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(Color.red.gradient)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: networkMonitor.isConnected)
+                .ignoresSafeArea(edges: .top)
             }
         }
     }

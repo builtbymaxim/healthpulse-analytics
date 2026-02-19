@@ -1,5 +1,6 @@
 """Wellness score calculation service."""
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -33,6 +34,9 @@ class WellnessBreakdown:
     nutrition_score: float
     training_load_score: float
     data_completeness: float
+
+
+logger = logging.getLogger(__name__)
 
 
 class WellnessCalculator:
@@ -84,6 +88,12 @@ class WellnessCalculator:
             + training_load_score * self.WEIGHTS["training_load"]
         )
 
+        logger.debug(
+            "Wellness score calculated: overall=%.1f activity=%.1f sleep=%.1f "
+            "recovery=%.1f mental=%.1f nutrition=%.1f training_load=%.1f completeness=%.2f",
+            overall, activity_score, sleep_score, recovery_score,
+            mental_score, nutrition_score, training_load_score, completeness,
+        )
         return WellnessBreakdown(
             overall_score=round(overall, 1),
             activity_score=round(activity_score, 1),
