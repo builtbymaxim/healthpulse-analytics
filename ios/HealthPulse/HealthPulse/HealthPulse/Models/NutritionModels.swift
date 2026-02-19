@@ -342,6 +342,7 @@ struct FoodEntryCreate: Encodable {
     let servingUnit: String
     let loggedAt: Date?
     let notes: String?
+    let source: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -355,12 +356,13 @@ struct FoodEntryCreate: Encodable {
         case servingUnit = "serving_unit"
         case loggedAt = "logged_at"
         case notes
+        case source
     }
 
     init(name: String, mealType: MealType? = nil, calories: Double,
          proteinG: Double = 0, carbsG: Double = 0, fatG: Double = 0,
          fiberG: Double = 0, servingSize: Double = 1, servingUnit: String = "serving",
-         loggedAt: Date? = nil, notes: String? = nil) {
+         loggedAt: Date? = nil, notes: String? = nil, source: String? = nil) {
         self.name = name
         self.mealType = mealType?.rawValue
         self.calories = calories
@@ -372,6 +374,7 @@ struct FoodEntryCreate: Encodable {
         self.servingUnit = servingUnit
         self.loggedAt = loggedAt
         self.notes = notes
+        self.source = source
     }
 }
 

@@ -1,5 +1,6 @@
 """Nutrition and calorie tracking API endpoints."""
 
+import logging
 from datetime import date, timedelta
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user, CurrentUser
 from app.services.nutrition_service import get_nutrition_service
 from app.services.nutrition_calculator import get_nutrition_calculator
+from app.services.food_scan_service import get_food_scan_service
 from app.models.nutrition import (
     PhysicalProfileUpdate,
     PhysicalProfileResponse,
@@ -21,6 +23,9 @@ from app.models.nutrition import (
     TargetCalculationRequest,
     NutritionGoalType,
 )
+from app.models.food_scan import FoodScanRequest, FoodScanResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -200,6 +205,25 @@ async def get_nutrition_goal(
 
 # Food Entry Endpoints
 
+
+@router.post("/food/scan", response_model=FoodScanResponse)
+async def scan_food(
+    request: FoodScanRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Analyze a food photo using vision AI and return identified items with macros."""
+    service = get_food_scan_service()
+    try:
+        result = await service.analyze_food(
+            image_base64=request.image_base64,
+            hints=request.classification_hints,
+        )
+        return FoodScanResponse(**result)
+    except Exception as e:
+        logger.error("Food scan failed for user %s: %s", current_user.id, e)
+        raise HTTPException(status_code=502, detail="Vision API error")
+
+
 @router.post("/food", response_model=FoodEntryResponse)
 async def log_food(
     entry: FoodEntryCreate,
@@ -221,6 +245,7 @@ async def log_food(
         serving_unit=entry.serving_unit,
         logged_at=entry.logged_at,
         notes=entry.notes,
+        source=entry.source,
     )
 
     if not result:

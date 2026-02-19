@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # JWT settings (Supabase handles this, but useful for validation)
     jwt_secret: str = ""
 
+    # Vision API settings (AI Food Scanner)
+    vision_provider: str = "gemini"        # "gemini", "openai", or "claude"
+    gemini_api_key: str = ""
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    usda_api_key: str = ""                 # free key from api.data.gov
+
     # CORS settings (comma-separated string in .env, use "*" for all origins)
     cors_origins_str: str = "*"
 

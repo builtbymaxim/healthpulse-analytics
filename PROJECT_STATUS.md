@@ -439,7 +439,33 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Material Design 3 / Material You theming
 - Google Play Store distribution
 
-### Phase 12 (Optional) — Body Composition
+### Phase 12 — AI Food Scanner
+- **Hybrid food recognition**: on-device CoreML (Food-101, ~87% accuracy, <100ms) + cloud vision API fallback (Gemini/GPT-4o-mini/Claude, abstracted provider)
+- **Smart routing**: high-confidence on-device results use free USDA FoodData Central API for exact macros; low-confidence or complex plates sent to cloud vision API for multi-item plate analysis
+- **Cost**: $0 for ~70-80% of scans (CoreML + USDA); cloud fallback ~$0.0002/photo via Gemini 2.5 Flash
+- CoreML Food-101 model (InceptionV3-based, 86.97% Top-1 accuracy, ~5-10MB) for instant on-device food classification
+- USDA FoodData Central API integration (300K+ foods, free, 1K req/hr) for exact macro data per identified food
+- Cloud vision API abstraction layer: `VisionProvider` ABC with `GeminiVisionProvider` (default), `OpenAIVisionProvider`, `ClaudeVisionProvider` — swappable via `VISION_PROVIDER` env var
+- Structured prompt returns JSON array of food items with name, portion description, portion grams, cal/P/C/F, confidence score
+- Camera photo capture view (AVCaptureSession + AVCapturePhotoOutput, `.photo` session preset)
+- Three-phase scan UX: camera → analyzing (CoreML instant + USDA/cloud lookup) → review & edit
+- Review screen: per-item food cards with name, portion description, macro row, portion adjustment slider (0.25x–3x), remove button
+- Total macros summary bar across all identified items
+- Meal type selector (breakfast/lunch/dinner/snack) before logging
+- Each food item logged as separate `FoodEntry` with `source: "ai_scan"`
+- Fallback handling: cloud fails → show CoreML results with USDA macros; both fail → error with "Retake" / "Log Manually"
+- Image compression: 0.7 JPEG quality, max 1024px before any upload
+- "Detailed Scan" button for user-initiated cloud analysis when on-device path is used
+- `NSCameraUsageDescription` updated to cover food scanning + barcode scanning
+- New backend endpoint: `POST /nutrition/food/scan` (accepts base64 image + classification hints, returns food items with macros)
+- `source` field added to `FoodEntryCreate` (backend + iOS) for tracking entry origin (manual, barcode, recipe, meal_plan, ai_scan)
+- New iOS files: `FoodScanModels.swift`, `FoodScannerView.swift`, `FoodClassificationService.swift`
+- New backend files: `food_scan.py` (models), `food_scan_service.py` (vision service)
+- Backend tests: model validation, service mock tests, source field integration tests
+- NutritionView toolbar: "Scan Food (AI)" menu item with camera.viewfinder icon (before "Scan Barcode")
+- Matches app style: dark gradient background, green (#4ADE80) accent, glassmorphism cards, spring animations, HapticsManager feedback
+
+### Phase 13 (Optional) — Body Composition
 - Body measurement tracking (chest, waist, hips, arms, legs)
 - Progress photo capture with date overlay
 - Before/after comparison view

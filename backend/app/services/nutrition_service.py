@@ -232,6 +232,7 @@ class NutritionService:
         serving_unit: str = "serving",
         logged_at: datetime | None = None,
         notes: str | None = None,
+        source: str | None = None,
     ) -> dict:
         """Log a food entry.
 
@@ -248,6 +249,7 @@ class NutritionService:
             serving_unit: Unit name
             logged_at: When the food was consumed
             notes: Optional notes
+            source: Entry source (manual, barcode, recipe, meal_plan, ai_scan)
 
         Returns:
             Created food entry dict
@@ -265,7 +267,7 @@ class NutritionService:
             "serving_unit": serving_unit,
             "logged_at": (logged_at or datetime.utcnow()).isoformat(),
             "notes": notes,
-            "source": "manual",
+            "source": source or "manual",
         }
 
         result = (

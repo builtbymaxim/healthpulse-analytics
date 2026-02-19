@@ -15,6 +15,7 @@ struct NutritionView: View {
     @State private var showingRecipeLibrary = false
     @State private var showingMealPlans = false
     @State private var showingBarcodeScanner = false
+    @State private var showingFoodScanner = false
     @State private var showingWeeklyPlanner = false
     @State private var selectedDate = Date()
     @State private var animationTrigger = false  // Triggers animation on food log
@@ -46,6 +47,12 @@ struct NutritionView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button {
+                            showingFoodScanner = true
+                        } label: {
+                            Label("Scan Food (AI)", systemImage: "camera.viewfinder")
+                        }
+
                         Button {
                             showingBarcodeScanner = true
                         } label: {
@@ -112,6 +119,14 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $showingBarcodeScanner) {
                 BarcodeScannerView(onFoodAdded: {
+                    Task {
+                        await loadData()
+                        animationTrigger.toggle()
+                    }
+                })
+            }
+            .sheet(isPresented: $showingFoodScanner) {
+                FoodScannerView(onFoodAdded: {
                     Task {
                         await loadData()
                         animationTrigger.toggle()

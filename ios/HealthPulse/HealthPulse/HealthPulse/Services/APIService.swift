@@ -778,6 +778,28 @@ class APIService {
         try await request(endpoint: "/meal-plans/barcode/\(barcode)")
     }
 
+    // MARK: - AI Food Scan (Phase 12)
+
+    func scanFood(imageBase64: String, classificationHints: [String]) async throws -> FoodScanResponse {
+        let body = FoodScanRequest(imageBase64: imageBase64, classificationHints: classificationHints)
+        return try await request(endpoint: "/nutrition/food/scan", method: "POST", body: body)
+    }
+
+    func lookupUSDAFood(query: String) async throws -> [USDAFood] {
+        let apiKey = "DEMO_KEY"
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        guard let url = URL(string: "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=\(apiKey)&query=\(encoded)&pageSize=5&dataType=SR%20Legacy") else {
+            return []
+        }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "GET"
+        let (data, _) = try await URLSession.shared.data(for: urlRequest)
+        let decoder = JSONDecoder()
+        let response = try decoder.decode(USDASearchResponse.self, from: data)
+        return response.foods
+    }
+
     func getShoppingList(templateId: UUID) async throws -> [ShoppingListItem] {
         try await request(endpoint: "/meal-plans/templates/\(templateId)/shopping-list")
     }

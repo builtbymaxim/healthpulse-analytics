@@ -85,6 +85,10 @@ class FoodEntryCreate(BaseModel):
     serving_unit: str = Field(default="serving", max_length=50)
     logged_at: Optional[datetime] = Field(None, description="When the food was consumed")
     notes: Optional[str] = Field(None, max_length=500)
+    source: Optional[str] = Field(
+        None, max_length=50,
+        description="Entry source: manual, barcode, recipe, meal_plan, ai_scan"
+    )
 
 
 class TargetCalculationRequest(BaseModel):
