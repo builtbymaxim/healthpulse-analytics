@@ -71,8 +71,9 @@ struct EnhancedRecoveryCard: View {
                 .padding(.top, 4)
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -134,8 +135,7 @@ struct ProgressDashboardSection: View {
         VStack(alignment: .leading, spacing: 16) {
             // Section header
             HStack {
-                Text("Progress")
-                    .font(.headline)
+                SectionHeaderLabel(text: "Progress")
                 Spacer()
                 Text(volumeTrendText)
                     .font(.caption)
@@ -200,8 +200,9 @@ struct ProgressDashboardSection: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 
     var volumeTrendText: String {
@@ -243,8 +244,8 @@ struct KeyLiftCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(.tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     var shortName: String {
@@ -274,7 +275,7 @@ struct MuscleBalanceChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color(.tertiarySystemBackground))
+        .background(AppTheme.surface1)
         .clipShape(Capsule())
     }
 }
@@ -286,8 +287,7 @@ struct SmartRecommendationsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("For You")
-                .font(.headline)
+            SectionHeaderLabel(text: "For You")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -327,8 +327,12 @@ struct RecommendationCard: View {
         }
         .frame(width: 180, alignment: .leading)
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.border.opacity(0.5), lineWidth: 1)
+        )
     }
 }
 
@@ -339,8 +343,7 @@ struct WeeklySummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("This Week")
-                .font(.headline)
+            SectionHeaderLabel(text: "This Week")
 
             // 2x2 Grid of stats
             LazyVGrid(columns: [
@@ -392,7 +395,7 @@ struct WeeklySummaryCard: View {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.caption)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(AppTheme.primary)
                             Text(highlight)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -402,8 +405,9 @@ struct WeeklySummaryCard: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 
     var workoutCompletionColor: Color {
@@ -448,8 +452,8 @@ struct WeeklyStatItem: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color(.tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

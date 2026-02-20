@@ -80,18 +80,117 @@ class SocialViewModel: ObservableObject {
     }
 }
 
+// MARK: - Social Activation Card
+
+struct SocialActivationCard: View {
+    var body: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.primary.opacity(0.12))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(AppTheme.primary)
+                }
+
+                VStack(spacing: 8) {
+                    Text("Train Together")
+                        .font(.title2.bold())
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text("Connect with a training partner to unlock leaderboards, streaks, and shared accountability.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
+            }
+
+            VStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    FeatureBlip(icon: "chart.bar.fill", color: AppTheme.primary, label: "Leaderboards")
+                    FeatureBlip(icon: "flame.fill", color: .orange, label: "Streak Battles")
+                    FeatureBlip(icon: "bell.badge.fill", color: .blue, label: "Accountability")
+                }
+
+                NavigationLink {
+                    // Navigate to Profile where the Social toggle lives
+                    ProfileView()
+                } label: {
+                    Text("Enable in Profile Settings")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(AppTheme.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+            }
+
+            Spacer()
+        }
+        .padding(24)
+    }
+}
+
+private struct FeatureBlip: View {
+    let icon: String
+    let color: Color
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(color)
+                .frame(width: 44, height: 44)
+                .background(color.opacity(0.12))
+                .clipShape(Circle())
+            Text(label)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 // MARK: - Social View
 
 struct SocialView: View {
+    @EnvironmentObject var authService: AuthService
     @StateObject private var viewModel = SocialViewModel()
     @State private var showInviteSheet = false
     @State private var showUseCodeSheet = false
     @State private var showEndConfirmation: UUID?
 
+    private var socialEnabled: Bool {
+        authService.currentUser?.settings?.socialOptIn ?? false
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 20) {
+            Group {
+                if socialEnabled {
+                    socialContent
+                } else {
+                    SocialActivationCard()
+                }
+            }
+            .navigationTitle("Social")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    @ViewBuilder
+    private var socialContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 20) {
                     // Pending Requests
                     if !viewModel.pendingPartners.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -136,8 +235,8 @@ struct SocialView: View {
                                         .font(.subheadline.bold())
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .background(Color.green.opacity(0.15))
-                                        .foregroundStyle(.green)
+                                        .background(AppTheme.primary.opacity(0.15))
+                                        .foregroundStyle(AppTheme.primary)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
 
@@ -148,7 +247,7 @@ struct SocialView: View {
                                         .font(.subheadline.bold())
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .background(Color(.secondarySystemBackground))
+                                        .background(AppTheme.surface2)
                                         .foregroundStyle(.primary)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
@@ -180,7 +279,6 @@ struct SocialView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Social")
             .refreshable {
                 await viewModel.loadData()
             }
@@ -211,7 +309,6 @@ struct SocialView: View {
             } message: {
                 Text("This will remove you from each other's leaderboards. You can always reconnect later.")
             }
-        }
     }
 }
 
@@ -242,7 +339,7 @@ struct EmptyPartnersCard: View {
                         .font(.subheadline.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.green)
+                        .background(AppTheme.primary)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
@@ -252,14 +349,14 @@ struct EmptyPartnersCard: View {
                         .font(.subheadline.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .foregroundStyle(.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
         .padding(24)
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -304,7 +401,7 @@ struct PendingPartnerCard: View {
                     .font(.caption.bold())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemBackground))
+                    .background(AppTheme.surface1)
                     .foregroundStyle(.secondary)
                     .clipShape(Capsule())
             }
@@ -322,7 +419,7 @@ struct PendingPartnerCard: View {
                         .font(.subheadline.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color(.tertiarySystemBackground))
+                        .background(AppTheme.surface1)
                         .foregroundStyle(.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
@@ -347,14 +444,14 @@ struct PendingPartnerCard: View {
                             .padding(.vertical, 10)
                     }
                 }
-                .background(Color.green)
+                .background(AppTheme.primary)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .disabled(isProcessing)
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -374,7 +471,7 @@ struct ActivePartnerCard: View {
             HStack {
                 Image(systemName: "person.crop.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(partner.displayName)
@@ -417,12 +514,12 @@ struct ActivePartnerCard: View {
                     let totalDays = total * 7
                     let elapsed = totalDays - remaining
                     ProgressView(value: Double(elapsed), total: Double(totalDays))
-                        .tint(.green)
+                        .tint(AppTheme.primary)
                 }
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -441,7 +538,7 @@ struct InvitePartnerSheet: View {
 
                 Image(systemName: "link.badge.plus")
                     .font(.system(size: 60))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.primary)
 
                 if let code = inviteCode {
                     VStack(spacing: 16) {
@@ -450,10 +547,10 @@ struct InvitePartnerSheet: View {
 
                         Text(code.code)
                             .font(.system(size: 48, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.primary)
                             .padding(.horizontal, 32)
                             .padding(.vertical, 16)
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
 
                         if let expires = code.expiresAt {
@@ -471,7 +568,7 @@ struct InvitePartnerSheet: View {
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(Color.green)
+                                .background(AppTheme.primary)
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
@@ -492,7 +589,7 @@ struct InvitePartnerSheet: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color.green)
+                            .background(AppTheme.primary)
                             .foregroundStyle(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
@@ -551,7 +648,7 @@ struct UseInviteSheet: View {
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .padding()
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .onChange(of: code) { _, newValue in
                                 code = String(newValue.prefix(6)).uppercased()
@@ -589,15 +686,15 @@ struct UseInviteSheet: View {
 
                                     if selectedChallenge == challenge {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.green)
+                                            .foregroundStyle(AppTheme.primary)
                                     }
                                 }
                                 .padding(12)
-                                .background(Color(.secondarySystemBackground))
+                                .background(AppTheme.surface2)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(selectedChallenge == challenge ? Color.green : Color.clear, lineWidth: 2)
+                                        .stroke(selectedChallenge == challenge ? AppTheme.primary : Color.clear, lineWidth: 2)
                                 )
                             }
                         }
@@ -618,7 +715,7 @@ struct UseInviteSheet: View {
                                         .font(.subheadline.bold())
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 14)
-                                        .background(selectedDuration == duration ? Color.green : Color(.secondarySystemBackground))
+                                        .background(selectedDuration == duration ? AppTheme.primary : AppTheme.surface2)
                                         .foregroundStyle(selectedDuration == duration ? .white : .primary)
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
@@ -646,7 +743,7 @@ struct UseInviteSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(code.count == 6 ? Color.green : Color.gray)
+                    .background(code.count == 6 ? AppTheme.primary : Color.gray)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .disabled(code.count != 6 || isSubmitting)
@@ -739,7 +836,7 @@ struct LeaderboardCard: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -801,7 +898,7 @@ struct LeaderboardDetailView: View {
                                 if entry.isCurrentUser {
                                     Text("You")
                                         .font(.caption)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(AppTheme.primary)
                                 }
                             }
 
@@ -854,4 +951,5 @@ struct LeaderboardDetailView: View {
 
 #Preview {
     SocialView()
+        .environmentObject(AuthService.shared)
 }

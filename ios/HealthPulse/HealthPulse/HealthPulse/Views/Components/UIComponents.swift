@@ -2,7 +2,7 @@
 //  UIComponents.swift
 //  HealthPulse
 //
-//  Reusable UI components for polished experience
+//  Reusable UI components — Phase 11 "Emerald Night" design system
 //
 
 import SwiftUI
@@ -11,35 +11,42 @@ import Combine
 
 // MARK: - App Theme
 
-/// Central theme configuration based on the HealthPulse logo colors
+/// Central theme configuration — "Emerald Night" palette
 struct AppTheme {
-    // Brand colors from logo
-    static let primary = Color(hex: "4ADE80")           // Mint green
-    static let primaryDark = Color(hex: "22C55E")       // Darker green
-    static let primaryLight = Color(hex: "86EFAC")      // Lighter green
+    // Brand colors — deep emerald family
+    static let primary      = Color(hex: "16C784")   // Deep emerald (was neon mint)
+    static let primaryDark  = Color(hex: "0D9668")   // Dark emerald for pressed states
+    static let accent       = Color(hex: "34D399")   // Bright mint for highlights only
 
-    // Background colors
-    static let backgroundDark = Color(hex: "0A0A0A")    // Near black
-    static let backgroundMedium = Color(hex: "121212")  // Slightly lighter
-    static let cardBackground = Color(hex: "1A1A1A")    // Card surfaces
-    static let greenTint = Color(hex: "0F1A0F")         // Dark with green tint
+    // Background surfaces
+    static let backgroundDark   = Color(hex: "080B0A")  // Near-black with faint warmth
+    static let backgroundMedium = Color(hex: "0F1511")  // Surface 1 — base cards
+    static let surface1         = Color(hex: "0F1511")  // Dark green-tinted base
+    static let surface2         = Color(hex: "161D18")  // Elevated cards
+    static let surface3         = Color(hex: "1E2920")  // Floating sheets / modals
+    static let cardBackground   = Color(hex: "161D18")  // Alias for surface2
+    static let greenTint        = Color(hex: "0A1F12")  // BG gradient midpoint
+
+    // Border
+    static let border = Color(hex: "2A3B2E")
+
+    // Text tokens
+    static let textPrimary   = Color(hex: "F0FAF2")  // Near-white with green warmth
+    static let textSecondary = Color(hex: "8BA98E")  // Muted green-gray
+    static let textTertiary  = Color(hex: "4D6651")  // Very muted — captions, timestamps
 
     // Gradients
     static let backgroundGradient = LinearGradient(
-        colors: [
-            Color(hex: "0A0A0A"),
-            Color(hex: "0D120D"),
-            Color(hex: "0A0A0A")
-        ],
+        colors: [Color(hex: "080B0A"), Color(hex: "0A1F12"), Color(hex: "080B0A")],
         startPoint: .top,
         endPoint: .bottom
     )
 
     // Semantic colors
-    static let success = Color.green
-    static let warning = Color.orange
-    static let error = Color.red
-    static let info = Color.blue
+    static let success = Color(hex: "16C784")  // Same as primary — reinforces brand
+    static let warning = Color(hex: "F59E0B")  // Amber — warmer than generic orange
+    static let error   = Color(hex: "EF4444")  // Crisp red
+    static let info    = Color(hex: "3B82F6")  // Electric blue
 }
 
 // MARK: - Color Hex Extension
@@ -51,14 +58,10 @@ extension Color {
         Scanner(string: hex).scanHexInt64(&int)
         let a, r, g, b: UInt64
         switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (255, 0, 0, 0)
+        case 3: (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default: (a, r, g, b) = (255, 0, 0, 0)
         }
         self.init(
             .sRGB,
@@ -72,32 +75,39 @@ extension Color {
 
 // MARK: - Themed Background
 
-/// A reusable themed background with gradient and optional glow effects
+/// Reusable themed background with drifting glow orbs
 struct ThemedBackground: View {
     var showGlow: Bool = true
-    var glowIntensity: Double = 0.15
+    var glowIntensity: Double = 0.20
+
+    @State private var driftX: CGFloat = 0
+    @State private var driftY: CGFloat = 0
 
     var body: some View {
         ZStack {
-            // Base gradient
             AppTheme.backgroundGradient
                 .ignoresSafeArea()
 
-            // Optional green glow accents
             if showGlow {
-                // Top-right glow
+                // Top-right drifting glow
                 Circle()
                     .fill(AppTheme.primary.opacity(glowIntensity))
                     .blur(radius: 120)
                     .frame(width: 300, height: 300)
-                    .offset(x: 150, y: -200)
+                    .offset(x: 150 + driftX, y: -200 + driftY)
 
                 // Bottom-left subtle glow
                 Circle()
                     .fill(AppTheme.primary.opacity(glowIntensity * 0.5))
                     .blur(radius: 100)
                     .frame(width: 200, height: 200)
-                    .offset(x: -150, y: 400)
+                    .offset(x: -150 - driftX, y: 400 + driftY)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
+                driftX = 15
+                driftY = -15
             }
         }
     }
@@ -105,17 +115,17 @@ struct ThemedBackground: View {
 
 // MARK: - Animated Gradient Background
 
-/// Animated gradient for landing/auth screens
+/// Animated gradient for auth / landing screens
 struct AnimatedGradientBackground: View {
     @State private var animateGradient = false
 
     var body: some View {
         LinearGradient(
             colors: [
-                Color(hex: "0A0A0A"),
-                Color(hex: "0F1A0F"),
-                Color(hex: "0A0A0A"),
-                Color(hex: "0D150D")
+                Color(hex: "080B0A"),
+                Color(hex: "0A1F12"),
+                Color(hex: "080B0A"),
+                Color(hex: "0D1A10")
             ],
             startPoint: animateGradient ? .topLeading : .bottomLeading,
             endPoint: animateGradient ? .bottomTrailing : .topTrailing
@@ -132,7 +142,6 @@ struct AnimatedGradientBackground: View {
 // MARK: - Themed Background Modifier
 
 extension View {
-    /// Applies the themed background behind the view
     func themedBackground(showGlow: Bool = true) -> some View {
         ZStack {
             ThemedBackground(showGlow: showGlow)
@@ -144,21 +153,89 @@ extension View {
 // MARK: - Glassmorphism Card
 
 struct GlassCard<Content: View>: View {
+    var cornerRadius: CGFloat = 20
     let content: () -> Content
 
-    init(@ViewBuilder content: @escaping () -> Content) {
+    init(cornerRadius: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
+        self.cornerRadius = cornerRadius
         self.content = content
     }
 
     var body: some View {
         content()
             .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .background {
+                ZStack {
+                    // Base fill — green-tinted dark surface
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(AppTheme.surface2.opacity(0.92))
+                    // Top shimmer gradient
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.06), Color.clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
             )
+    }
+}
+
+// MARK: - Section Header Label
+
+/// ALL-CAPS tracked section header for visual hierarchy
+struct SectionHeaderLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.caption2.weight(.bold))
+            .tracking(1.2)
+            .foregroundStyle(AppTheme.textTertiary)
+    }
+}
+
+// MARK: - Press Effect Button Style
+
+/// Subtle scale-down press effect for all primary buttons
+struct PressEffect: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Card Shadow Modifier
+
+extension View {
+    /// Level 1 shadow — base cards on dark background
+    func cardShadow() -> some View {
+        self.shadow(color: .black.opacity(0.20), radius: 12, y: 4)
+    }
+
+    /// Level 2 shadow — elevated cards
+    func elevatedShadow() -> some View {
+        self.shadow(color: .black.opacity(0.35), radius: 20, y: 8)
+    }
+
+    /// Primary glow — active / selected elements
+    func primaryGlow() -> some View {
+        self.shadow(color: AppTheme.primary.opacity(0.20), radius: 24)
     }
 }
 
@@ -168,10 +245,10 @@ class HapticsManager {
     static let shared = HapticsManager()
     private init() {}
 
-    private let lightImpact = UIImpactFeedbackGenerator(style: .light)
-    private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
-    private let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
-    private let selectionFeedback = UISelectionFeedbackGenerator()
+    private let lightImpact      = UIImpactFeedbackGenerator(style: .light)
+    private let mediumImpact     = UIImpactFeedbackGenerator(style: .medium)
+    private let heavyImpact      = UIImpactFeedbackGenerator(style: .heavy)
+    private let selectionFeedback    = UISelectionFeedbackGenerator()
     private let notificationFeedback = UINotificationFeedbackGenerator()
 
     func prepare() {
@@ -180,32 +257,21 @@ class HapticsManager {
         selectionFeedback.prepare()
     }
 
-    func light() {
-        lightImpact.impactOccurred()
-    }
+    func light()     { lightImpact.impactOccurred() }
+    func medium()    { mediumImpact.impactOccurred() }
+    func heavy()     { heavyImpact.impactOccurred() }
+    func selection() { selectionFeedback.selectionChanged() }
 
-    func medium() {
-        mediumImpact.impactOccurred()
-    }
+    func success() { notificationFeedback.notificationOccurred(.success) }
+    func warning() { notificationFeedback.notificationOccurred(.warning) }
+    func error()   { notificationFeedback.notificationOccurred(.error) }
 
-    func heavy() {
+    /// Double-heavy tap — used for Personal Record achievements
+    func doubleHeavy() {
         heavyImpact.impactOccurred()
-    }
-
-    func selection() {
-        selectionFeedback.selectionChanged()
-    }
-
-    func success() {
-        notificationFeedback.notificationOccurred(.success)
-    }
-
-    func warning() {
-        notificationFeedback.notificationOccurred(.warning)
-    }
-
-    func error() {
-        notificationFeedback.notificationOccurred(.error)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            self.heavyImpact.impactOccurred()
+        }
     }
 }
 
@@ -217,23 +283,17 @@ struct SkeletonView: View {
     var body: some View {
         LinearGradient(
             colors: [
-                Color(.systemGray5),
-                Color(.systemGray4),
-                Color(.systemGray5)
+                AppTheme.surface2,
+                AppTheme.surface3,
+                AppTheme.surface2
             ],
             startPoint: .leading,
             endPoint: .trailing
         )
         .mask(Rectangle())
         .offset(x: isAnimating ? 200 : -200)
-        .animation(
-            .linear(duration: 1.5)
-            .repeatForever(autoreverses: false),
-            value: isAnimating
-        )
-        .onAppear {
-            isAnimating = true
-        }
+        .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
+        .onAppear { isAnimating = true }
     }
 }
 
@@ -248,7 +308,7 @@ struct SkeletonShape: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: 4)
-            .fill(Color(.systemGray5))
+            .fill(AppTheme.surface2)
             .frame(width: width, height: height)
             .overlay(SkeletonView())
             .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -268,60 +328,94 @@ struct SkeletonCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
 // MARK: - Toast View
 
 enum ToastType {
-    case success
-    case error
-    case info
-    case warning
+    case success, error, info, warning
 
     var icon: String {
         switch self {
         case .success: return "checkmark.circle.fill"
-        case .error: return "xmark.circle.fill"
-        case .info: return "info.circle.fill"
+        case .error:   return "xmark.circle.fill"
+        case .info:    return "info.circle.fill"
         case .warning: return "exclamationmark.triangle.fill"
         }
     }
 
     var color: Color {
         switch self {
-        case .success: return .green
-        case .error: return .red
-        case .info: return .blue
-        case .warning: return .orange
+        case .success: return AppTheme.success
+        case .error:   return AppTheme.error
+        case .info:    return AppTheme.info
+        case .warning: return AppTheme.warning
         }
     }
 }
 
+/// Animated icon that springs/spins into view
+private struct AnimatedToastIcon: View {
+    let type: ToastType
+    @State private var scale: CGFloat = 0.1
+    @State private var rotation: Double = -90
+    @State private var opacity: Double = 0
+
+    var body: some View {
+        Image(systemName: type.icon)
+            .foregroundStyle(type.color)
+            .font(.body.weight(.semibold))
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(type == .error ? rotation : 0))
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    scale = 1.0
+                    rotation = 0
+                    opacity = 1
+                }
+            }
+    }
+}
+
+/// Pill-shaped bottom toast — premium frosted-glass style
 struct ToastView: View {
     let message: String
     let type: ToastType
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: type.icon)
-                .foregroundStyle(type.color)
-                .font(.title3)
+        HStack(spacing: 10) {
+            AnimatedToastIcon(type: type)
 
             Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-
-            Spacer()
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.textPrimary)
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
-        .padding(.horizontal)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 13)
+        .background {
+            ZStack {
+                Capsule().fill(AppTheme.surface3.opacity(0.95))
+                Capsule().fill(.thinMaterial)
+            }
+        }
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .elevatedShadow()
     }
 }
 
@@ -336,53 +430,42 @@ class ToastManager: ObservableObject {
     @Published var isShowing = false
 
     func show(_ message: String, type: ToastType = .info) {
+        // Dismiss current toast immediately if showing
+        if isShowing {
+            withAnimation(.easeIn(duration: 0.15)) { isShowing = false }
+        }
         currentToast = (message, type)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             isShowing = true
         }
-
-        // Auto dismiss
         Task {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            withAnimation(.easeIn(duration: 0.25)) {
                 isShowing = false
             }
         }
     }
 
-    func success(_ message: String) {
-        HapticsManager.shared.success()
-        show(message, type: .success)
-    }
-
-    func error(_ message: String) {
-        HapticsManager.shared.error()
-        show(message, type: .error)
-    }
-
-    func info(_ message: String) {
-        show(message, type: .info)
-    }
-
-    func warning(_ message: String) {
-        HapticsManager.shared.warning()
-        show(message, type: .warning)
-    }
+    func success(_ message: String) { HapticsManager.shared.success(); show(message, type: .success) }
+    func error(_ message: String)   { HapticsManager.shared.error();   show(message, type: .error)   }
+    func info(_ message: String)    { show(message, type: .info) }
+    func warning(_ message: String) { HapticsManager.shared.warning(); show(message, type: .warning) }
 }
 
-// Toast container for app-wide toasts
+/// Bottom-anchored toast overlay — place on root ZStack
 struct ToastContainer: View {
     @ObservedObject var manager = ToastManager.shared
 
     var body: some View {
         VStack {
+            Spacer()
             if manager.isShowing, let toast = manager.currentToast {
                 ToastView(message: toast.message, type: toast.type)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 96) // Clear the tab bar + safe area
             }
-            Spacer()
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: manager.isShowing)
+        .animation(.spring(response: 0.4, dampingFraction: 0.72), value: manager.isShowing)
     }
 }
 
@@ -401,13 +484,14 @@ struct AnimatedNumber: View {
 
     var body: some View {
         Text(String(format: format, animatedValue))
+            .contentTransition(.numericText())
             .onAppear {
-                withAnimation(.easeOut(duration: 0.8)) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                     animatedValue = value
                 }
             }
             .onChange(of: value) { _, newValue in
-                withAnimation(.easeOut(duration: 0.5)) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                     animatedValue = newValue
                 }
             }
@@ -420,7 +504,7 @@ struct ProgressRing: View {
     let progress: Double
     let lineWidth: CGFloat
     let color: Color
-    var backgroundColor: Color = Color.gray.opacity(0.2)
+    var backgroundColor: Color = Color.gray.opacity(0.15)
 
     @State private var animatedProgress: Double = 0
 
@@ -435,12 +519,12 @@ struct ProgressRing: View {
                 .rotationEffect(.degrees(-90))
         }
         .onAppear {
-            withAnimation(.easeOut(duration: 1.0)) {
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.75)) {
                 animatedProgress = progress
             }
         }
         .onChange(of: progress) { _, newValue in
-            withAnimation(.easeOut(duration: 0.5)) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                 animatedProgress = newValue
             }
         }
@@ -460,7 +544,8 @@ struct StaggeredAnimation: ViewModifier {
             .opacity(isVisible ? 1 : 0)
             .offset(y: isVisible ? 0 : 20)
             .onAppear {
-                withAnimation(animation.delay(Double(index) * 0.1)) {
+                // 60ms stagger (down from 100ms for snappier feel)
+                withAnimation(animation.delay(Double(index) * 0.06)) {
                     isVisible = true
                 }
             }
@@ -468,7 +553,10 @@ struct StaggeredAnimation: ViewModifier {
 }
 
 extension View {
-    func staggeredAnimation(index: Int, animation: Animation = .spring(response: 0.5, dampingFraction: 0.8)) -> some View {
+    func staggeredAnimation(
+        index: Int,
+        animation: Animation = .spring(response: 0.45, dampingFraction: 0.82)
+    ) -> some View {
         modifier(StaggeredAnimation(index: index, animation: animation))
     }
 }
@@ -486,19 +574,21 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 48))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.textTertiary)
 
             Text(title)
                 .font(.headline)
+                .foregroundStyle(AppTheme.textPrimary)
 
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
 
             if let actionTitle = actionTitle, let action = action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.primary)
                     .padding(.top, 8)
             }
         }
@@ -517,21 +607,23 @@ struct LoadingOverlay: ViewModifier {
             .overlay {
                 if isLoading {
                     ZStack {
-                        Color.black.opacity(0.3)
+                        Color.black.opacity(0.35)
                             .ignoresSafeArea()
 
                         VStack(spacing: 16) {
                             ProgressView()
+                                .tint(AppTheme.primary)
                                 .scaleEffect(1.2)
                             if let message = message {
                                 Text(message)
                                     .font(.subheadline)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppTheme.textSecondary)
                             }
                         }
                         .padding(24)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.surface3)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .elevatedShadow()
                     }
                 }
             }
@@ -544,23 +636,26 @@ extension View {
     }
 }
 
+// MARK: - Previews
+
 #Preview("Skeleton") {
     VStack(spacing: 16) {
         SkeletonCard()
         SkeletonCard()
     }
     .padding()
-    .background(Color(.systemGroupedBackground))
+    .background(AppTheme.backgroundDark)
 }
 
 #Preview("Toast") {
-    VStack {
+    VStack(spacing: 12) {
         ToastView(message: "Workout saved successfully!", type: .success)
         ToastView(message: "Failed to load data", type: .error)
         ToastView(message: "New feature available", type: .info)
         ToastView(message: "Low battery", type: .warning)
     }
     .padding()
+    .background(AppTheme.backgroundDark)
 }
 
 #Preview("Empty State") {
@@ -571,4 +666,5 @@ extension View {
         actionTitle: "Log Workout",
         action: {}
     )
+    .background(AppTheme.backgroundDark)
 }

@@ -70,10 +70,6 @@ struct MainTabView: View {
     @EnvironmentObject var tabRouter: TabRouter
     @EnvironmentObject var authService: AuthService
 
-    private var showSocialTab: Bool {
-        authService.currentUser?.settings?.socialOptIn ?? false
-    }
-
     var body: some View {
         TabView(selection: $tabRouter.selectedTab) {
             // Dashboard - main overview
@@ -104,14 +100,12 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.sleep)
 
-            // Social - training partners (conditional)
-            if showSocialTab {
-                SocialView()
-                    .tabItem {
-                        Label("Social", systemImage: "person.2.fill")
-                    }
-                    .tag(AppTab.social)
-            }
+            // Social - always visible; SocialView handles activation card vs. live content
+            SocialView()
+                .tabItem {
+                    Label("Social", systemImage: "person.2.fill")
+                }
+                .tag(AppTab.social)
 
             // Profile & settings
             ProfileView()
@@ -120,7 +114,10 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.profile)
         }
-        .tint(.green)
+        .tint(AppTheme.primary)
+        .onChange(of: tabRouter.selectedTab) { _, _ in
+            HapticsManager.shared.selection()
+        }
     }
 }
 

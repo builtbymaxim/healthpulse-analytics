@@ -2,9 +2,8 @@
 //  GreetingView.swift
 //  HealthPulse
 //
-//  Full-screen animated greeting shown on app launch.
-//  Displays a daily rotating motivational message with the user's name
-//  while dashboard data loads in the background behind the overlay.
+//  Full-screen greeting — Phase 11 blur-to-clear premium reveal.
+//  Dashboard data loads in the background while this overlay is shown.
 //
 
 import SwiftUI
@@ -13,13 +12,21 @@ struct GreetingView: View {
     let displayName: String?
     let onDismiss: () -> Void
 
+    // Blur-to-clear entrance
+    @State private var textBlur: CGFloat = 14
     @State private var textOpacity: Double = 0
-    @State private var textScale: CGFloat = 0.9
+    @State private var subtitleBlur: CGFloat = 10
     @State private var subtitleOpacity: Double = 0
-    @State private var verticalOffset: CGFloat = 0
-    @State private var dismissOpacity: Double = 1
 
-    // Pool of ~20 motivational greetings that rotate daily
+    // Radial background sweep
+    @State private var radialScale: CGFloat = 0.1
+    @State private var radialOpacity: Double = 0.18
+
+    // Exit
+    @State private var dismissOpacity: Double = 1
+    @State private var dismissBlur: CGFloat = 0
+    @State private var dismissScale: CGFloat = 1.0
+
     private static let greetings: [(personalized: String, fallback: String)] = [
         ("Let's make today count, {name}", "Let's make today count"),
         ("Ready to crush it, {name}?", "Ready to crush it?"),
@@ -46,7 +53,6 @@ struct GreetingView: View {
     private var greeting: String {
         let dayIndex = Calendar.current.ordinality(of: .day, in: .era, for: Date()) ?? 0
         let pair = Self.greetings[dayIndex % Self.greetings.count]
-
         if let name = displayName, !name.isEmpty {
             return pair.personalized.replacingOccurrences(of: "{name}", with: name)
         }
@@ -55,61 +61,81 @@ struct GreetingView: View {
 
     private var timeOfDayGreeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 {
-            return "Good morning"
-        } else if hour < 17 {
-            return "Good afternoon"
-        } else {
-            return "Good evening"
-        }
+        if hour < 12 { return "Good morning" }
+        else if hour < 17 { return "Good afternoon" }
+        else { return "Good evening" }
     }
 
     var body: some View {
         ZStack {
-            Color.black
+            // Deep dark background
+            AppTheme.backgroundDark
                 .ignoresSafeArea()
+
+            // Slow radial green sweep — barely perceptible
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [AppTheme.primary.opacity(radialOpacity), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 300
+                    )
+                )
+                .frame(width: 600, height: 600)
+                .scaleEffect(radialScale)
+                .allowsHitTesting(false)
 
             VStack(spacing: 16) {
                 Text(timeOfDayGreeting)
                     .font(.title3)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .blur(radius: subtitleBlur)
                     .opacity(subtitleOpacity)
 
                 Text(greeting)
                     .font(.title.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+                    .blur(radius: textBlur)
                     .opacity(textOpacity)
-                    .scaleEffect(textScale)
             }
-            .offset(y: verticalOffset)
         }
         .opacity(dismissOpacity)
+        .blur(radius: dismissBlur)
+        .scaleEffect(dismissScale)
         .onAppear {
             runAnimation()
         }
     }
 
     private func runAnimation() {
-        // Phase 1: Fade in greeting text with scale-up (0.3s)
-        withAnimation(.easeOut(duration: 0.3)) {
-            textOpacity = 1
-            textScale = 1.0
+        // Phase 1: Radial background starts expanding
+        withAnimation(.easeOut(duration: 8).repeatForever(autoreverses: true)) {
+            radialScale = 1.2
+            radialOpacity = 0.12
         }
 
-        // Subtitle fades in slightly after
-        withAnimation(.easeOut(duration: 0.3).delay(0.15)) {
+        // Phase 1: Text materialises — blur clears, opacity rises
+        withAnimation(.easeOut(duration: 0.5)) {
+            textBlur = 0
+            textOpacity = 1
+        }
+
+        // Subtitle clears slightly later
+        withAnimation(.easeOut(duration: 0.5).delay(0.12)) {
+            subtitleBlur = 0
             subtitleOpacity = 1
         }
 
-        // Phase 2: Hold for ~1.5s, then Phase 3: fade out + slide up (0.5s)
+        // Phase 3: Exit — blur back up + scale down + fade
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             withAnimation(.easeIn(duration: 0.4)) {
                 dismissOpacity = 0
-                verticalOffset = -40
+                dismissBlur = 8
+                dismissScale = 0.98
             }
-
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 onDismiss()
             }

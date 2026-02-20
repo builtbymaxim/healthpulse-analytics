@@ -159,7 +159,7 @@ struct OnboardingView: View {
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 240)
+                .frame(width: 320)
                 .scaleEffect(isAnimating ? 1.08 : 1.0)
                 .animation(heartbeatAnimation, value: isAnimating)
                 .onAppear {

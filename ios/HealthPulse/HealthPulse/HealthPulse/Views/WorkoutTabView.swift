@@ -42,66 +42,52 @@ struct WorkoutTabView: View {
                     }
 
                     // Quick Start Section
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text(hasActivePlan ? "Or Start Free Workout" : "Start Workout")
-                                .font(.headline)
-                            Spacer()
-                        }
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeaderLabel(text: hasActivePlan ? "Or Start Free Workout" : "Quick Start")
+                            .padding(.horizontal)
 
-                        // Primary workout types - big buttons
-                        HStack(spacing: 16) {
-                            // Strength Training
-                            WorkoutStartButton(
-                                icon: "dumbbell.fill",
-                                title: "Strength",
-                                subtitle: "Log sets & reps",
-                                color: .green
-                            ) {
-                                showStrengthSheet = true
-                                HapticsManager.shared.medium()
-                            }
-
-                            // Running
-                            WorkoutStartButton(
-                                icon: "figure.run",
-                                title: "Running",
-                                subtitle: "Track distance",
-                                color: .orange
-                            ) {
-                                showRunningSheet = true
-                                HapticsManager.shared.medium()
-                            }
-                        }
-
-                        // Secondary workout types
-                        HStack(spacing: 12) {
-                            ForEach([
-                                ("figure.outdoor.cycle", "Cycling", Color.blue, WorkoutType.cycling),
-                                ("figure.yoga", "Yoga", Color.purple, WorkoutType.yoga),
-                                ("figure.pool.swim", "Swimming", Color.cyan, WorkoutType.swimming),
-                                ("figure.highintensity.intervaltraining", "HIIT", Color.red, WorkoutType.hiit)
-                            ], id: \.0) { icon, title, color, type in
-                                SmallWorkoutButton(icon: icon, title: title, color: color) {
-                                    selectedWorkoutType = type
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                WorkoutPillChip(icon: "dumbbell.fill", title: "Strength", color: AppTheme.primary) {
+                                    showStrengthSheet = true
+                                    HapticsManager.shared.medium()
+                                }
+                                WorkoutPillChip(icon: "figure.run", title: "Running", color: .orange) {
+                                    showRunningSheet = true
+                                    HapticsManager.shared.medium()
+                                }
+                                WorkoutPillChip(icon: "figure.outdoor.cycle", title: "Cycling", color: .blue) {
+                                    selectedWorkoutType = .cycling
+                                    showGeneralWorkout = true
+                                    HapticsManager.shared.light()
+                                }
+                                WorkoutPillChip(icon: "figure.yoga", title: "Yoga", color: .purple) {
+                                    selectedWorkoutType = .yoga
+                                    showGeneralWorkout = true
+                                    HapticsManager.shared.light()
+                                }
+                                WorkoutPillChip(icon: "figure.pool.swim", title: "Swimming", color: .cyan) {
+                                    selectedWorkoutType = .swimming
+                                    showGeneralWorkout = true
+                                    HapticsManager.shared.light()
+                                }
+                                WorkoutPillChip(icon: "figure.highintensity.intervaltraining", title: "HIIT", color: .red) {
+                                    selectedWorkoutType = .hiit
                                     showGeneralWorkout = true
                                     HapticsManager.shared.light()
                                 }
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
                         }
                     }
-                    .padding(.horizontal)
 
                     Divider()
                         .padding(.horizontal)
 
                     // Recent Workouts
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Recent Workouts")
-                                .font(.headline)
-                            Spacer()
-                        }
+                        SectionHeaderLabel(text: "Recent Workouts")
 
                         if recentWorkouts.isEmpty {
                             // Empty state
@@ -304,11 +290,11 @@ struct TodayPlanWorkoutCard: View {
                     HStack(spacing: 16) {
                         ZStack {
                             Circle()
-                                .fill(Color.green.opacity(0.15))
+                                .fill(AppTheme.primary.opacity(0.15))
                                 .frame(width: 60, height: 60)
                             Image(systemName: "dumbbell.fill")
                                 .font(.title2)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(AppTheme.primary)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text(workout.workoutName ?? "Workout")
@@ -333,7 +319,7 @@ struct TodayPlanWorkoutCard: View {
                             ForEach(exercises.prefix(3)) { exercise in
                                 HStack {
                                     Circle()
-                                        .fill(Color.green.opacity(0.5))
+                                        .fill(AppTheme.primary.opacity(0.5))
                                         .frame(width: 6, height: 6)
                                     Text(exercise.name)
                                         .font(.caption)
@@ -365,7 +351,7 @@ struct TodayPlanWorkoutCard: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Color.green)
+                        .background(AppTheme.primary)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
@@ -373,72 +359,40 @@ struct TodayPlanWorkoutCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
     }
 }
 
-// MARK: - Workout Start Button
+// MARK: - Workout Pill Chip
 
-struct WorkoutStartButton: View {
+struct WorkoutPillChip: View {
     let icon: String
     let title: String
-    let subtitle: String
     let color: Color
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 36))
+                    .font(.subheadline.bold())
                     .foregroundStyle(color)
-
-                VStack(spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(AppTheme.textPrimary)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-            .background(color.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(AppTheme.surface2)
+            .clipShape(Capsule())
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(color.opacity(0.3), lineWidth: 1)
+                Capsule()
+                    .stroke(color.opacity(0.35), lineWidth: 1)
             )
         }
-    }
-}
-
-struct SmallWorkoutButton: View {
-    let icon: String
-    let title: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(color)
-
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
+        .buttonStyle(PressEffect())
     }
 }
 
@@ -471,8 +425,8 @@ struct RecentWorkoutRow: View {
                             .font(.caption2)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.green.opacity(0.15))
-                            .foregroundStyle(.green)
+                            .background(AppTheme.primary.opacity(0.15))
+                            .foregroundStyle(AppTheme.primary)
                             .clipShape(Capsule())
                     }
                 }
@@ -493,7 +447,7 @@ struct RecentWorkoutRow: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -540,11 +494,11 @@ struct GeneralWorkoutSheet: View {
                         Spacer()
                         Text("\(Int(duration)) min")
                             .font(.title2.bold())
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.primary)
                     }
 
                     Slider(value: $duration, in: 5...180, step: 5)
-                        .tint(.green)
+                        .tint(AppTheme.primary)
                 }
 
                 // Intensity
@@ -575,7 +529,7 @@ struct GeneralWorkoutSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.green)
+                .background(AppTheme.primary)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .disabled(isSubmitting)

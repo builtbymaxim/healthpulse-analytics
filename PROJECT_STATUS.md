@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-19
+> Last updated: 2026-02-20
 
 ## Overview
 
@@ -495,102 +495,247 @@ Structured `logger.info/debug/error` added to all service and API files that lac
 ```
 Results written to `audit-logs/`. Fix any high/critical findings before public launch.
 
+### App Icon & Landing Page Rebrand
+
+| Change | Details |
+|--------|---------|
+| New app icon | Replaced homescreen icon with production waveform design (green pulse on dark background, 1024×1024, no alpha) |
+| Video landing page | Auth screen background replaced with looping Sora-generated waveform video (`LoopingVideoBackground` using `AVQueuePlayer` + `AVPlayerLooper` via `layerClass` override) |
+| Logo removed | Static `Image("AppLogo")` + bloom ring animation removed from auth screen; video provides full visual identity |
+| Frosted glass form card | Auth form card uses `ultraThinMaterial` + dark overlay for readability over video; white-tinted input fields with bright borders |
+| Tagline retained | "Track. Train. Transform." displayed below the form card |
+| Simplified entrance animation | Removed logo fade/bloom/typewriter; form fields slide up with staggered spring animation (0.3s delay) |
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `ios/.../Views/Components/LoopingVideoBackground.swift` | `UIViewRepresentable` wrapping `AVQueuePlayer` for gapless looping video backgrounds |
+
 ---
 
 ## Roadmap
 
-### Phase 11 — Android App
-- Kotlin Multiplatform or native Jetpack Compose app
-- Feature parity with iOS: auth, dashboard, workouts, nutrition, sleep, training plans, meal plans, social
-- Shared backend — all API endpoints already platform-agnostic
+> Strategic pivot: HealthPulse is evolving from a passive data tracker into an **Actionable AI
+> Companion** — a system that synthesizes every data stream into a daily causal story and surfaces
+> empathetic, personalized guidance at exactly the right moment.
+
+---
+
+### Phase 11 — UI/UX Visual Refresh & The Daily Causal Story Dashboard
+
+**Milestone:** Transform the visual layer and reframe the dashboard from a stack of data cards
+into a single, readable narrative that changes based on the user's physiological state.
+
+#### 11A — "Emerald Night" Visual Refresh
+- **New color palette:** Deepen primary from neon mint (`#4ADE80`) to rich emerald (`#16C784`);
+  green-tinted dark surfaces (`#0F1511`, `#161D18`) replace flat grays; typography gains hierarchy
+  via ALL-CAPS tracked section headers and refined text secondary/tertiary tokens
+- **Glassmorphism upgrade:** Layered custom glass (Surface2 @90% + top gradient overlay + gradient
+  border) replaces raw `.ultraThinMaterial`
+- **Unified border radius system:** XL 28px · L 20px · M 16px · S 12px · XS 8px
+- **Elevation system:** Three shadow levels (black @20%/35%/55%) replace near-invisible current
+  shadows; primary glow (`@20%, radius 24`) for active elements
+- **Premium auth flow:** Logo bloom radial pulse → typewriter tagline → staggered form rise →
+  field focus glow → submit shimmer → success morph (replaces basic heartbeat loop)
+- **Motion overhaul:** Default spring `(response: 0.45, dampingFraction: 0.82)` throughout;
+  tab icon spring bounce; `.contentTransition(.numericText())` for all stat counters;
+  blur-to-clear greeting reveal; pill-shaped bottom toasts with self-drawing icons
+- **Haptic strategy:** Add `.selection()` on every tab tap (currently missing); double `.heavy()`
+  for PR achievements; `.success()` on all healthy-behavior saves
+- **Social tab fix:** Always-visible 6th tab (activation card when disabled → live content when
+  enabled); eliminates jarring layout-shift reflow from current settings toggle
+
+#### 11B — The Daily Causal Story Dashboard
+- **State-morphing layout:** Dashboard card priority order dynamically reorders based on current
+  readiness score — high readiness surfaces training; low readiness surfaces recovery guidance
+- **"Now / Next / Tonight" commitment framework:** Three persistent action slots replace the
+  unstructured card stack:
+  - **Now** — the single most important action right now (start workout / eat protein window / rest)
+  - **Next** — what to prepare for in the next 2–4 hours
+  - **Tonight** — one sleep/recovery commitment to protect tomorrow's readiness
+- **Causal annotation:** Each dashboard metric shows its primary driver ("Your recovery is 58% —
+  mainly because sleep was 5h 40m, 1h 22m below your target")
+- **Readiness-aware workout card:** Suggests load modification ("Today's plan: Push Day — we
+  recommend dropping to 80% volume given your readiness")
+- **Backend:** New `dashboard_service` mode — `readiness_narrative` endpoint returns prioritized
+  card order + causal annotations + commitment suggestions
+
+---
+
+### Phase 12 — Metabolic Readiness Synthesis (AI Food Scanner 2.0)
+
+**Milestone:** Elevate the shipped AI Food Scanner (Phase 12 base) into an intelligent nutrition
+co-pilot that connects food intake directly to physiological recovery deficits in real time.
+
+> **Note:** The hybrid CoreML + cloud vision scanning pipeline, USDA macro lookup, and review UI
+> were completed in the original Phase 12 build. This phase layers the intelligence tier on top.
+
+- **Recovery-linked macro targets:** Daily protein/carb/fat targets shift dynamically based on
+  that morning's readiness score, sleep debt, and yesterday's training load (heavy leg day →
+  +20g protein target; high sleep debt → +15% carb target for cortisol management)
+- **Post-workout synthesis window:** Smart notification within 30 minutes of workout completion
+  — "You have a 45-minute anabolic window. You need 42g protein. Tap to log a quick meal."
+- **Deficit radar:** Nutrition card on dashboard shows real-time gap between current intake and
+  *recovery-adjusted* targets (not just static goals) with color-coded urgency
+- **"Fix My Deficit" flow:** One tap from deficit indicator → filtered recipe suggestions from
+  the library that close the current protein/carb gap in one meal
+- **Scan intelligence upgrade:** AI scan review screen adds a recovery context banner —
+  "Good choice: this meal covers 68% of your remaining protein target for recovery"
+- **Backend:** `nutrition_calculator.py` gains `recovery_adjusted_targets()` function;
+  new `/nutrition/readiness-targets` endpoint; scan endpoint returns recovery context annotation
+- **New iOS:** `MetabolicReadinessService.swift`; deficit radar component in `TodayView` and
+  `NutritionView`; synthesis window notification type in `NotificationService`
+
+---
+
+### Phase 13 — Experiment Tracks & Silent Correlation Feed
+
+**Milestone:** Transform the existing correlation engine from a passive insight display into a
+guided, empathetic system for personal n=1 experimentation — the scientific method made human.
+
+#### 13A — Silent Correlation Feed
+- **Passive surfacing:** Correlations appear as quiet, non-interruptive cards at the bottom of
+  the Insights tab — no push notifications, no alerts, just observations waiting to be discovered
+- **Empathetic language layer:** All correlations reframed from statistical statements to
+  first-person narrative: "We noticed something interesting: on weeks when you sleep more than
+  7h 30m, your squat tends to be about 4% heavier. Curious?"
+- **Confidence gating:** Correlations only surface after minimum data thresholds (≥21 data
+  points, r ≥ 0.35) — prevents noise and false pattern recognition
+- **Tap-to-experiment:** Every correlation card has a single CTA — "Turn this into an
+  experiment" — connecting directly to the Experiment Tracks system
+
+#### 13B — Experiment Tracks
+- **Hypothesis builder:** Guided 3-step flow: pick a variable to change (sleep target, protein
+  intake, rest days per week) → pick a metric to watch (readiness, squat performance, mood) →
+  set duration (2, 4, or 6 weeks)
+- **Pre-built experiment library:** Curated hypotheses based on common health patterns:
+  - "Does 8h sleep improve my strength output?" (sleep vs. key lift weight)
+  - "Does daily protein ≥ 150g correlate with faster recovery?" (nutrition vs. recovery score)
+  - "Is my Monday fatigue from weekend habits?" (weekend behavior vs. Monday readiness)
+- **Silent tracking:** Once an experiment is active, the app collects data without prompting the
+  user — no check-ins, no reminders to "stay on track"
+- **Results presentation:** At experiment end, results are shown as a simple visual comparison
+  (before/after period), not a statistical report. Confidence level in plain English:
+  "The data suggests this connection is real — but you'd need 4 more weeks to be certain."
+- **Backend:** `experiment_service.py` with hypothesis tracking, data window isolation, and
+  correlation delta calculation; new `experiments` table in Supabase
+- **iOS:** `ExperimentTracksView` embedded in `InsightsView`; experiment progress indicator on
+  dashboard; results celebration screen with before/after chart
+
+---
+
+### Phase 14 — Burnout Horizon & What-If Sandbox
+
+**Milestone:** Make HealthPulse predictive, not just reactive — show users the consequences of
+their current trajectory and let them simulate the impact of behavioral changes before committing.
+
+#### 14A — Burnout Horizon
+- **Readiness forecast curve:** 14-day projected readiness score based on current training load,
+  sleep trend, and nutrition adherence — visualized as a continuous line chart with a confidence
+  band (not point predictions)
+- **Burnout risk indicator:** When forecast shows readiness dipping below 50% for 3+ consecutive
+  days, a "Burnout Horizon" warning surfaces: "At your current pace, your readiness is projected
+  to reach 42% by March 4th. Here's why."
+- **Causal breakdown:** Horizon warning always shows the 2–3 primary drivers pulling readiness
+  down (training load, sleep debt, nutrition deficit) with their individual projected contribution
+- **Protected Recovery Days:** System recommends inserting a strategic rest day before the
+  horizon — "Adding a recovery day on Wednesday could raise your Friday readiness from 44% to 67%"
+- **Training plan integration:** If the forecast conflicts with a planned heavy training day,
+  proactively surface a load modification suggestion in the workout card
+
+#### 14B — What-If Sandbox
+- **Behavior simulation:** Interactive sliders in a dedicated "Sandbox" view let users adjust
+  hypothetical inputs for the next 7 days: sleep target (+/- 1h increments), training sessions
+  (add/remove), calorie surplus/deficit, rest days — and instantly see the projected readiness
+  curve update
+- **Scenario comparison:** Save up to 3 named scenarios ("Current pace", "More sleep", "Deload
+  week") and view them as overlapping curves on a single chart
+- **Decision support, not prescription:** The sandbox is explicitly framed as exploration —
+  "This is a simulation based on your patterns. Real results will vary."
+- **Backend:** New `forecast_service.py` using XGBoost regression on rolling 30-day window;
+  `/predictions/burnout-horizon` and `/predictions/whatif` endpoints; sandbox scenarios stored
+  in-session only (no persistence required)
+- **iOS:** `BurnoutHorizonView` as a section in `TrendsView`; `WhatIfSandboxView` as a sheet;
+  forecast curve integrated into `TodayView` for users with ≥ 30 days of data
+
+---
+
+### Phase 15 — Android App
+
+**Milestone:** Expand to Android after the iOS UX has been refined and the Actionable AI core
+(Phases 11–14) is proven in production.
+
+- Kotlin / Jetpack Compose native app
+- Feature parity: auth, Daily Causal Story dashboard, workouts, nutrition, sleep, training plans,
+  Metabolic Readiness Synthesis, Experiment Tracks, Burnout Horizon
+- Shared backend — all API endpoints are already platform-agnostic
 - Health Connect integration (Android equivalent of HealthKit)
 - Google Calendar integration (Android equivalent of EventKit)
-- Material Design 3 / Material You theming
+- Material Design 3 / Material You theming aligned with the Emerald Night palette
 - Google Play Store distribution
-
-### Phase 12 — AI Food Scanner
-- **Hybrid food recognition**: on-device CoreML (Food-101, ~87% accuracy, <100ms) + cloud vision API fallback (Gemini/GPT-4o-mini/Claude, abstracted provider)
-- **Smart routing**: high-confidence on-device results use free USDA FoodData Central API for exact macros; low-confidence or complex plates sent to cloud vision API for multi-item plate analysis
-- **Cost**: $0 for ~70-80% of scans (CoreML + USDA); cloud fallback ~$0.0002/photo via Gemini 2.5 Flash
-- CoreML Food-101 model (InceptionV3-based, 86.97% Top-1 accuracy, ~5-10MB) for instant on-device food classification
-- USDA FoodData Central API integration (300K+ foods, free, 1K req/hr) for exact macro data per identified food
-- Cloud vision API abstraction layer: `VisionProvider` ABC with `GeminiVisionProvider` (default), `OpenAIVisionProvider`, `ClaudeVisionProvider` — swappable via `VISION_PROVIDER` env var
-- Structured prompt returns JSON array of food items with name, portion description, portion grams, cal/P/C/F, confidence score
-- Camera photo capture view (AVCaptureSession + AVCapturePhotoOutput, `.photo` session preset)
-- Three-phase scan UX: camera → analyzing (CoreML instant + USDA/cloud lookup) → review & edit
-- Review screen: per-item food cards with name, portion description, macro row, portion adjustment slider (0.25x–3x), remove button
-- Total macros summary bar across all identified items
-- Meal type selector (breakfast/lunch/dinner/snack) before logging
-- Each food item logged as separate `FoodEntry` with `source: "ai_scan"`
-- Fallback handling: cloud fails → show CoreML results with USDA macros; both fail → error with "Retake" / "Log Manually"
-- Image compression: 0.7 JPEG quality, max 1024px before any upload
-- "Detailed Scan" button for user-initiated cloud analysis when on-device path is used
-- `NSCameraUsageDescription` updated to cover food scanning + barcode scanning
-- New backend endpoint: `POST /nutrition/food/scan` (accepts base64 image + classification hints, returns food items with macros)
-- `source` field added to `FoodEntryCreate` (backend + iOS) for tracking entry origin (manual, barcode, recipe, meal_plan, ai_scan)
-- New iOS files: `FoodScanModels.swift`, `FoodScannerView.swift`, `FoodClassificationService.swift`
-- New backend files: `food_scan.py` (models), `food_scan_service.py` (vision service)
-- Backend tests: model validation, service mock tests, source field integration tests
-- NutritionView toolbar: "Scan Food (AI)" menu item with camera.viewfinder icon (before "Scan Barcode")
-- Matches app style: dark gradient background, green (#4ADE80) accent, glassmorphism cards, spring animations, HapticsManager feedback
-
-### Phase 13 (Optional) — Body Composition
-- Body measurement tracking (chest, waist, hips, arms, legs)
-- Progress photo capture with date overlay
-- Before/after comparison view
-- Body fat estimation from measurements (Navy method)
 
 ---
 
 ## Future Ideas
 
-### AI & Intelligence
-| Feature | Description | Complexity |
-|---------|-------------|------------|
-| **AI Coach Chat** | Conversational assistant using user's own data ("How's my recovery?", "What should I eat?") | High |
-| **Smart Deload Weeks** | Auto-detect fatigue accumulation across mesocycles, suggest programmed deloads | Medium |
-| **AI Meal Suggestions** | Suggest meals from recipe library that fit remaining daily macros | Medium |
+> Filtered for the **Actionable AI Companion** philosophy: features retained must either surface
+> a meaningful action, deepen personalization, or reduce friction in a healthy behavior.
+> Passive tracking for its own sake, social vanity features, and one-time utilities have been
+> removed.
 
-### Tracking Expansion
-| Feature | Description | Complexity |
-|---------|-------------|------------|
-| **Water/Hydration Tracking** | Daily intake logging with reminders, integrated into dashboard daily goals | Low |
-| **Supplement Tracking** | Log supplements (creatine, vitamins, protein) alongside nutrition | Low |
-| **Injury Log** | Track injuries, auto-modify training plans to avoid affected muscle groups | Medium |
-| **Custom Exercise Builder** | Users create their own exercises with muscle group tags | Low |
+### Intelligence & Coaching
 
-### Social & Motivation
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **Activity Feed** | See partner workouts in real-time, react/comment | Medium |
-| **Time-bound Challenges** | "30-Day Consistency Challenge", "Squat PR Challenge" with progress tracking | Medium |
-| **Workout Sharing Cards** | Generate shareable workout summary images for Instagram/stories | Medium |
-| **Achievements/Badges** | Gamification: streak badges, PR milestones, nutrition consistency awards | Medium |
+| **Conversational AI Coach** | In-app chat assistant grounded in the user's own data — "How's my recovery?", "What should I eat before my workout?", "Am I overtraining?" Answers use real metrics, not generic advice. | High |
+| **Smart Deload Detection** | Detect fatigue accumulation across mesocycles from training load + recovery trends; suggest a programmed deload week before performance declines. Feeds directly into Burnout Horizon. | Medium |
+| **Supplement Impact Tracking** | Log supplements (creatine, magnesium, ashwagandha, caffeine) and silently correlate with recovery score and sleep quality over time. Surfaces findings via the Correlation Feed. | Medium |
+| **Injury-Aware Plan Modification** | Log an injury with affected muscle groups; training plan automatically substitutes exercises that avoid those muscles for the logged recovery period. | Medium |
 
-### Integrations
-| Feature | Description | Complexity |
-|---------|-------------|------------|
-| **Strava Sync** | Bi-directional: import Strava runs, export HealthPulse workouts | Medium |
-| **Apple Music** | Workout playlists, BPM-matched to exercise tempo | Medium |
-| **Siri Shortcuts** | "Hey Siri, start my chest workout" / "Log 200g chicken breast" | Medium |
-| **MyFitnessPal Import** | One-time migration for users switching apps | Low |
+### Nutrition Intelligence
 
-### Advanced Training
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **1RM Calculator & %-based Programming** | Auto-calculate working weights from estimated 1RM | Medium |
-| **Periodization Engine** | Multi-week mesocycle planning with auto-progression and deload scheduling | High |
-| **Heart Rate Zone Training** | Cardio zones from HealthKit HR data, zone-based run coaching | Medium |
-| **Warmup/Cooldown Routines** | Auto-generated stretching sequences based on today's workout muscles | Medium |
-| **Form Check (Camera)** | ML-based exercise form analysis using device camera | High |
+| **Hydration Recovery Optimization** | Track daily water intake; correlate hydration with HRV and sleep quality via Correlation Feed; surface recovery-adjusted hydration targets alongside macro targets in Metabolic Readiness. | Low |
+| **Contextual Meal Timing** | Surface meal timing suggestions based on workout schedule and circadian data — "Eat your largest carb meal within 2h of your 6 PM workout for optimal glycogen replenishment." | Medium |
 
-### Platform
+### Training Intelligence
+
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **Home Screen Widgets** | WidgetKit: today's workout, calorie ring, streak counter | Medium |
-| **Apple Watch** | Quick workout logging, live HR during sets, rest timer on wrist | High |
-| **iPad Layout** | Multi-column dashboard, side-by-side workout logging | Medium |
-| **Android App** | Kotlin/Jetpack Compose with Health Connect + Google Calendar | High |
+| **1RM Calculator & %-based Programming** | Estimate 1RM from logged sets using Epley/Brzycki formula; auto-calculate daily working weights as a % of estimated 1RM. Feeds progressive overload system. | Medium |
+| **Periodization Engine** | Multi-week mesocycle planning with auto-progression phases (accumulation → intensification → deload). Works in concert with Burnout Horizon predictions. | High |
+| **Heart Rate Zone Training** | Real-time cardio zone overlay during runs using HealthKit HR data; zone-based pacing coach; post-run zone distribution summary. | Medium |
+| **AI Form Check** | ML-based exercise form analysis via device camera during live workouts. Actionable cue delivery ("Knees are caving — push them out"). | High |
+| **Warmup/Cooldown Generator** | AI-generated stretching and mobility sequences based on today's targeted muscle groups and yesterday's soreness signals. | Medium |
+
+### Social & Behavioral
+
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Time-bound Challenges** | Structured partner challenges with defined metrics and duration ("30-day consistency", "Squat PR race"). Ties into existing partnership system. | Medium |
+| **Achievements & Milestones** | Meaningful, non-gamified milestone recognition — streak badges, PR milestones, nutrition consistency awards. Tied to real behavioral change, not engagement loops. | Medium |
+| **Siri Shortcuts** | Voice-activated actions: "Hey Siri, start my chest workout" / "Log 200g chicken breast" / "What's my readiness today?" | Medium |
+
+### Platform Expansion
+
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| **Apple Watch App** | Surfaces "Now / Next / Tonight" commitments on wrist; quick set logging during workouts; real-time readiness score; rest timer; synthesis window notification. Highest-impact platform addition. | High |
+| **Home Screen Widgets** | WidgetKit: Daily Causal Story summary (readiness + one key action); calorie deficit/surplus ring; active experiment progress; workout streak. | Medium |
+| **iPad Layout** | Multi-column dashboard (causal story left / commitment actions right); side-by-side workout logging; expanded What-If Sandbox with larger chart canvas. | Medium |
+| **Strava Sync** | Bi-directional: import Strava runs into workout history; export HealthPulse sessions to Strava. Enriches training load data for Burnout Horizon forecasting. | Medium |
+
+---
+
+> **Deliberately removed from Future Ideas:**
+> - ~~Workout Sharing Cards~~ — social vanity, not aligned with AI Companion philosophy
+> - ~~Activity Feed~~ — passive social consumption, increases noise without action
+> - ~~Apple Music integration~~ — entertainment feature, not health-actionable
+> - ~~MyFitnessPal Import~~ — one-time migration utility, not a product feature
+> - ~~Custom Exercise Builder~~ — pure CRUD, no AI or actionable angle
+> - ~~Android App~~ — promoted to Phase 15 Roadmap
 
 ---
 

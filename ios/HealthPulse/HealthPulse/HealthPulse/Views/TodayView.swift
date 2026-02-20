@@ -338,9 +338,9 @@ struct WelcomeChecklistCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -410,8 +410,7 @@ struct TodayWorkoutCard: View {
                 // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Today's Workout")
-                            .font(.headline)
+                        SectionHeaderLabel(text: "Today's Workout")
                         if let planName = workout.planName {
                             Text(planName)
                                 .font(.caption)
@@ -458,12 +457,12 @@ struct TodayWorkoutCard: View {
                     HStack(spacing: 16) {
                         ZStack {
                             Circle()
-                                .fill(Color.green.opacity(0.15))
+                                .fill(AppTheme.primary.opacity(0.15))
                                 .frame(width: 56, height: 56)
 
                             Image(systemName: "dumbbell.fill")
                                 .font(.title2)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(AppTheme.primary)
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -495,7 +494,7 @@ struct TodayWorkoutCard: View {
                             ForEach(exercises.prefix(3)) { exercise in
                                 HStack {
                                     Circle()
-                                        .fill(Color.green.opacity(0.5))
+                                        .fill(AppTheme.primary.opacity(0.5))
                                         .frame(width: 6, height: 6)
                                     Text(exercise.name)
                                         .font(.caption)
@@ -519,9 +518,9 @@ struct TodayWorkoutCard: View {
                 }
             }
             .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+            .background(AppTheme.surface1)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .cardShadow()
         }
         .buttonStyle(.plain)
     }
@@ -548,8 +547,7 @@ struct NutritionProgressCard: View {
         VStack(spacing: 16) {
             // Header
             HStack {
-                Text("Today's Nutrition")
-                    .font(.headline)
+                SectionHeaderLabel(text: "Today's Nutrition")
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -561,11 +559,11 @@ struct NutritionProgressCard: View {
                 // Calorie ring
                 ZStack {
                     Circle()
-                        .stroke(Color.green.opacity(0.2), lineWidth: 12)
+                        .stroke(AppTheme.primary.opacity(0.2), lineWidth: 12)
 
                     Circle()
                         .trim(from: 0, to: calorieProgress)
-                        .stroke(Color.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                        .stroke(AppTheme.primary, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .animation(.easeOut(duration: 0.5), value: calorieProgress)
 
@@ -593,9 +591,9 @@ struct NutritionProgressCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -682,9 +680,9 @@ struct WorkoutStreakCard: View {
                 .foregroundStyle(.tertiary)
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -697,8 +695,7 @@ struct LastWorkoutCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Last Workout")
-                    .font(.headline)
+                SectionHeaderLabel(text: "Last Workout")
                 Spacer()
                 Text(workout.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
@@ -709,9 +706,9 @@ struct LastWorkoutCard: View {
                 // Workout icon
                 Image(systemName: workout.icon)
                     .font(.title)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.primary)
                     .frame(width: 44, height: 44)
-                    .background(Color.green.opacity(0.1))
+                    .background(AppTheme.primary.opacity(0.1))
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -736,16 +733,16 @@ struct LastWorkoutCard: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.15))
-                        .foregroundStyle(.green)
+                        .background(AppTheme.primary.opacity(0.15))
+                        .foregroundStyle(AppTheme.primary)
                         .clipShape(Capsule())
                 }
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -772,9 +769,9 @@ struct QuickStatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
     }
 }
 
@@ -818,9 +815,9 @@ struct CompactScoreCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
     }
 }
 
@@ -833,8 +830,7 @@ struct NutritionAdherenceCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Eating Habits")
-                    .font(.headline)
+                SectionHeaderLabel(text: "Eating Habits")
                 Spacer()
                 Text("\(adherenceScore)% this week")
                     .font(.caption)
@@ -880,9 +876,9 @@ struct NutritionAdherenceCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -939,9 +935,9 @@ struct SleepPatternCard: View {
                 .foregroundStyle(.tertiary)
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 

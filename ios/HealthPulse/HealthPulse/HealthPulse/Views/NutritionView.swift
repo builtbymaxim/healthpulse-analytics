@@ -36,6 +36,49 @@ struct NutritionView: View {
                         // Macro Progress Bars
                         MacroProgressCard(summary: summary, animationTrigger: animationTrigger)
 
+                        // Inline primary CTAs
+                        HStack(spacing: 12) {
+                            Button {
+                                showingFoodLog = true
+                                HapticsManager.shared.medium()
+                            } label: {
+                                Label("Log Food", systemImage: "pencil.line")
+                                    .font(.subheadline.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 13)
+                                    .background(AppTheme.primary)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(PressEffect())
+
+                            Menu {
+                                Button {
+                                    showingFoodScanner = true
+                                } label: {
+                                    Label("AI Photo Scan", systemImage: "camera.viewfinder")
+                                }
+                                Button {
+                                    showingBarcodeScanner = true
+                                } label: {
+                                    Label("Barcode Scan", systemImage: "barcode.viewfinder")
+                                }
+                            } label: {
+                                Label("Scan", systemImage: "camera.fill")
+                                    .font(.subheadline.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 13)
+                                    .background(AppTheme.surface2)
+                                    .foregroundStyle(AppTheme.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(AppTheme.primary.opacity(0.35), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(PressEffect())
+                        }
+
                         // Today's Meals
                         MealsListCard(entries: summary.entries)
                     }
@@ -48,44 +91,22 @@ struct NutritionView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
-                            showingFoodScanner = true
-                        } label: {
-                            Label("Scan Food (AI)", systemImage: "camera.viewfinder")
-                        }
-
-                        Button {
-                            showingBarcodeScanner = true
-                        } label: {
-                            Label("Scan Barcode", systemImage: "barcode.viewfinder")
-                        }
-
-                        Button {
                             showingRecipeLibrary = true
                         } label: {
                             Label("Browse Recipes", systemImage: "book.fill")
                         }
-
                         Button {
                             showingMealPlans = true
                         } label: {
                             Label("Meal Plans", systemImage: "list.bullet.clipboard.fill")
                         }
-
                         Button {
                             showingWeeklyPlanner = true
                         } label: {
                             Label("Weekly Planner", systemImage: "calendar")
                         }
-
-                        Divider()
-
-                        Button {
-                            showingFoodLog = true
-                        } label: {
-                            Label("Log Food Manually", systemImage: "pencil.line")
-                        }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -251,7 +272,7 @@ struct CalorieProgressCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 10)
         .onAppear {
@@ -318,7 +339,7 @@ struct MacroProgressCard: View {
             )
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 10)
     }
@@ -438,7 +459,7 @@ struct MealsListCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.05), radius: 10)
     }
