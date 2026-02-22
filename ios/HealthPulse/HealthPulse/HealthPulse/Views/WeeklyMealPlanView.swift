@@ -559,7 +559,7 @@ struct DayMacroCard: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 

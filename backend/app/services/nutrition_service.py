@@ -15,6 +15,7 @@ from app.services.nutrition_calculator import (
     get_nutrition_calculator,
     NutritionTargets,
     NutritionScoreBreakdown,
+    DailyTargets,
 )
 
 
@@ -494,6 +495,200 @@ class NutritionService:
         """
         summary = await self.get_daily_nutrition_summary(user_id, target_date)
         return summary.get("nutrition_score", 70.0)
+
+    async def get_daily_targets(
+        self,
+        user_id: UUID,
+        target_date: date | None = None,
+    ) -> dict:
+        """Get cycling-aware daily nutrition targets for a specific date.
+
+        Checks the user's active training plan schedule to determine if the
+        date is a training day or rest day, then returns adjusted targets.
+
+        Args:
+            user_id: User's UUID
+            target_date: Date to get targets for (defaults to today)
+
+        Returns:
+            Dict with cycling-adjusted targets and metadata
+        """
+        target = target_date or date.today()
+
+        # Get profile, weight, goal, and body fat
+        profile = await self.get_user_physical_profile(user_id)
+        if not profile or not all([
+            profile.get("age"), profile.get("height_cm"), profile.get("gender")
+        ]):
+            raise ValueError("Physical profile incomplete.")
+
+        weight_kg = await self.get_latest_weight(user_id)
+        if not weight_kg:
+            raise ValueError("No weight data found.")
+
+        goal = await self.get_nutrition_goal(user_id)
+
+        # Get body fat % if available
+        body_fat_pct = await self._get_latest_body_fat(user_id)
+
+        # Calculate base targets
+        goal_type = goal.get("goal_type", "maintain") if goal else "maintain"
+        targets = self.calculator.calculate_targets(
+            weight_kg=weight_kg,
+            height_cm=float(profile["height_cm"]),
+            age=int(profile["age"]),
+            gender=profile["gender"],
+            activity_level=profile.get("activity_level", "moderate"),
+            goal_type=goal_type,
+            custom_calorie_target=goal.get("custom_calorie_target") if goal else None,
+            custom_protein_g=goal.get("custom_protein_target_g") if goal else None,
+            custom_carbs_g=goal.get("custom_carbs_target_g") if goal else None,
+            custom_fat_g=goal.get("custom_fat_target_g") if goal else None,
+            body_fat_pct=body_fat_pct,
+        )
+
+        # Check if user has an active training plan with a schedule
+        is_training_day, training_days_per_week = await self._check_training_day(
+            user_id, target
+        )
+
+        # If user has an active plan, use cycling; otherwise return base targets
+        if training_days_per_week and training_days_per_week > 0:
+            daily = self.calculator.calculate_cycling_targets(
+                daily_calorie_target=targets.calorie_target,
+                goal_type=goal_type,
+                training_days_per_week=training_days_per_week,
+                is_training_day=is_training_day,
+                weight_kg=weight_kg,
+            )
+        else:
+            # No active plan — return base targets (non-cycled)
+            from app.services.nutrition_calculator import MACRO_DISTRIBUTIONS
+            dist = MACRO_DISTRIBUTIONS.get(goal_type, MACRO_DISTRIBUTIONS["general_health"])
+            daily = DailyTargets(
+                calories=targets.calorie_target,
+                protein_g=targets.protein_g,
+                carbs_g=targets.carbs_g,
+                fat_g=targets.fat_g,
+                is_training_day=False,
+                protein_pct=dist.protein_pct * 100,
+                carbs_pct=dist.carbs_pct * 100,
+                fat_pct=dist.fat_pct * 100,
+            )
+
+        return {
+            "date": target.isoformat(),
+            "calories": daily.calories,
+            "protein_g": daily.protein_g,
+            "carbs_g": daily.carbs_g,
+            "fat_g": daily.fat_g,
+            "is_training_day": daily.is_training_day,
+            "protein_pct": daily.protein_pct,
+            "carbs_pct": daily.carbs_pct,
+            "fat_pct": daily.fat_pct,
+            "bmr": targets.bmr,
+            "tdee": targets.tdee,
+            "bmr_formula": targets.bmr_formula,
+        }
+
+    async def _get_latest_body_fat(self, user_id: UUID) -> float | None:
+        """Get user's most recent body fat % from health metrics."""
+        try:
+            result = (
+                self.supabase.table("health_metrics")
+                .select("value")
+                .eq("user_id", str(user_id))
+                .eq("metric_type", "body_fat")
+                .order("timestamp", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return float(result.data[0].get("value"))
+        except Exception:
+            logger.debug("No body fat data for user %s", user_id)
+        return None
+
+    async def _check_training_day(
+        self,
+        user_id: UUID,
+        target_date: date,
+    ) -> tuple[bool, int | None]:
+        """Check if a date is a training day based on user's active plan.
+
+        Args:
+            user_id: User's UUID
+            target_date: Date to check
+
+        Returns:
+            Tuple of (is_training_day, training_days_per_week)
+        """
+        try:
+            result = (
+                self.supabase.table("user_training_plans")
+                .select("schedule")
+                .eq("user_id", str(user_id))
+                .eq("is_active", True)
+                .maybe_single()
+                .execute()
+            )
+
+            if not result or not result.data:
+                return False, None
+
+            schedule = result.data.get("schedule", {})
+            if not schedule:
+                return False, None
+
+            # Schedule is a dict like {"1": "Workout A", "3": "Workout B", ...}
+            # Keys are ISO weekday strings (1=Mon, 7=Sun)
+            # Convert target_date to ISO weekday
+            iso_weekday = target_date.isoweekday()  # 1=Mon, 7=Sun
+
+            training_days = [
+                k for k, v in schedule.items()
+                if v and v.lower() != "rest"
+            ]
+            training_days_per_week = len(training_days)
+            is_training = str(iso_weekday) in training_days
+
+            return is_training, training_days_per_week
+
+        except Exception:
+            logger.debug("Could not check training day for user %s", user_id)
+            return False, None
+
+    async def update_food_entry(
+        self,
+        user_id: UUID,
+        entry_id: UUID,
+        update_data: dict,
+    ) -> dict | None:
+        """Update an existing food entry.
+
+        Args:
+            user_id: User's UUID
+            entry_id: Food entry UUID
+            update_data: Dict of fields to update (only non-None values)
+
+        Returns:
+            Updated food entry dict or None if not found
+        """
+        if not update_data:
+            return None
+
+        logger.info("Updating food entry %s for user %s: %s", entry_id, user_id, list(update_data.keys()))
+        result = (
+            self.supabase.table("food_entries")
+            .update(update_data)
+            .eq("id", str(entry_id))
+            .eq("user_id", str(user_id))
+            .execute()
+        )
+
+        if result.data:
+            return result.data[0]
+        return None
 
     def _parse_date(self, date_str: str) -> date | None:
         """Parse ISO date string to date object."""

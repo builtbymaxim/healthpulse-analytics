@@ -59,6 +59,7 @@ class TodayWorkoutResponse(BaseModel):
     estimated_minutes: int | None = None
     day_of_week: int  # 1=Monday, 7=Sunday
     plan_name: str | None = None
+    plan_id: UUID | None = None
 
 
 class TrainingPlanSummary(BaseModel):
@@ -108,6 +109,8 @@ async def get_todays_workout(
     # Check if today is a workout day
     workout_name = schedule.get(str(day_of_week))
 
+    plan_id = plan.get("id")
+
     if not workout_name:
         # Rest day
         return TodayWorkoutResponse(
@@ -115,6 +118,7 @@ async def get_todays_workout(
             is_rest_day=True,
             day_of_week=day_of_week,
             plan_name=plan.get("name"),
+            plan_id=plan_id,
         )
 
     # Find the workout details from the template
@@ -134,6 +138,7 @@ async def get_todays_workout(
         estimated_minutes=workout_details.get("estimatedMinutes") if workout_details else 60,
         day_of_week=day_of_week,
         plan_name=plan.get("name"),
+        plan_id=plan_id,
     )
 
 
@@ -173,9 +178,10 @@ async def get_active_plan(
 async def get_plan_templates(
     modality: str | None = None,
     days_per_week: int | None = None,
+    difficulty: str | None = None,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Get available plan templates."""
+    """Get available plan templates, optionally filtered by difficulty/experience."""
     supabase = get_supabase_client()
 
     query = supabase.table("plan_templates").select("*")
@@ -185,7 +191,19 @@ async def get_plan_templates(
     if days_per_week:
         query = query.eq("days_per_week", days_per_week)
 
-    result = query.execute()
+    # If no explicit difficulty filter, auto-filter by user's experience level
+    if difficulty:
+        query = query.eq("difficulty", difficulty)
+    else:
+        profile = supabase.table("profiles").select("settings").eq("id", str(current_user.id)).maybe_single().execute()
+        exp_level = (profile.data or {}).get("settings", {}).get("experience_level") if profile.data else None
+        if exp_level:
+            # Show templates at or below user's level
+            level_map = {"beginner": ["beginner"], "intermediate": ["beginner", "intermediate"], "advanced": ["beginner", "intermediate", "advanced"]}
+            allowed = level_map.get(exp_level, ["beginner", "intermediate", "advanced"])
+            query = query.in_("difficulty", allowed)
+
+    result = query.order("difficulty").order("name").execute()
     return result.data or []
 
 

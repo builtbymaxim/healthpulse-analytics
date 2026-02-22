@@ -207,6 +207,7 @@ struct TodayView: View {
                 }
                 .padding(.top)
             }
+            .background(ThemedBackground())
             .navigationBarTitleDisplayMode(.inline)
             .refreshable {
                 await viewModel.refresh()
@@ -406,121 +407,120 @@ struct TodayWorkoutCard: View {
             HapticsManager.shared.light()
             onTap()
         }) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        SectionHeaderLabel(text: "Today's Workout")
-                        if let planName = workout.planName {
-                            Text(planName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Text(dayName)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.15))
-                        .foregroundStyle(.blue)
-                        .clipShape(Capsule())
-                }
-
-                if workout.isRestDay {
-                    // Rest day view
-                    HStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.purple.opacity(0.15))
-                                .frame(width: 56, height: 56)
-
-                            Image(systemName: "bed.double.fill")
-                                .font(.title2)
-                                .foregroundStyle(.purple)
-                        }
-
+            GlassCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Header
+                    HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Rest Day")
-                                .font(.title3.bold())
-
-                            Text("Recovery is part of the plan")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                    }
-                } else {
-                    // Workout day view
-                    HStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.primary.opacity(0.15))
-                                .frame(width: 56, height: 56)
-
-                            Image(systemName: "dumbbell.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppTheme.primary)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(workout.workoutName ?? "Workout")
-                                .font(.title3.bold())
-
-                            HStack(spacing: 12) {
-                                if let focus = workout.workoutFocus {
-                                    Label(focus, systemImage: "target")
-                                }
-                                if let minutes = workout.estimatedMinutes {
-                                    Label("\(minutes) min", systemImage: "clock")
-                                }
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    // Exercise preview (show first 3)
-                    if let exercises = workout.exercises, !exercises.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(exercises.prefix(3)) { exercise in
-                                HStack {
-                                    Circle()
-                                        .fill(AppTheme.primary.opacity(0.5))
-                                        .frame(width: 6, height: 6)
-                                    Text(exercise.name)
-                                        .font(.caption)
-                                    if let sets = exercise.sets, let reps = exercise.reps {
-                                        Spacer()
-                                        Text("\(sets)×\(reps)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            if exercises.count > 3 {
-                                Text("+\(exercises.count - 3) more exercises")
+                            SectionHeaderLabel(text: "Today's Workout")
+                            if let planName = workout.planName {
+                                Text(planName)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                    .padding(.leading, 14)
                             }
                         }
-                        .padding(.top, 4)
+                        Spacer()
+                        Text(dayName)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundStyle(.blue)
+                            .clipShape(Capsule())
+                    }
+
+                    if workout.isRestDay {
+                        // Rest day view
+                        HStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.purple.opacity(0.15))
+                                    .frame(width: 56, height: 56)
+
+                                Image(systemName: "bed.double.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.purple)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Rest Day")
+                                    .font(.title3.bold())
+
+                                Text("Recovery is part of the plan")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+                        }
+                    } else {
+                        // Workout day view
+                        HStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.primary.opacity(0.15))
+                                    .frame(width: 56, height: 56)
+
+                                Image(systemName: "dumbbell.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(AppTheme.primary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(workout.workoutName ?? "Workout")
+                                    .font(.title3.bold())
+
+                                HStack(spacing: 12) {
+                                    if let focus = workout.workoutFocus {
+                                        Label(focus, systemImage: "target")
+                                    }
+                                    if let minutes = workout.estimatedMinutes {
+                                        Label("\(minutes) min", systemImage: "clock")
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        // Exercise preview (show first 3)
+                        if let exercises = workout.exercises, !exercises.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(exercises.prefix(3)) { exercise in
+                                    HStack {
+                                        Circle()
+                                            .fill(AppTheme.primary.opacity(0.5))
+                                            .frame(width: 6, height: 6)
+                                        Text(exercise.name)
+                                            .font(.caption)
+                                        if let sets = exercise.sets, let reps = exercise.reps {
+                                            Spacer()
+                                            Text("\(sets)×\(reps)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                if exercises.count > 3 {
+                                    Text("+\(exercises.count - 3) more exercises")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.leading, 14)
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                 }
             }
-            .padding()
-            .background(AppTheme.surface1)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .cardShadow()
+            .elevatedShadow()
         }
         .buttonStyle(.plain)
     }
@@ -570,6 +570,7 @@ struct NutritionProgressCard: View {
                     VStack(spacing: 2) {
                         Text("\(Int(calories))")
                             .font(.system(size: 28, weight: .bold))
+                            .contentTransition(.numericText())
 
                         Text("/ \(Int(calorieGoal))")
                             .font(.caption)
@@ -762,6 +763,7 @@ struct QuickStatCard: View {
 
             Text(value)
                 .font(.headline)
+                .contentTransition(.numericText())
 
             Text(label)
                 .font(.caption2)
@@ -770,8 +772,8 @@ struct QuickStatCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .cardShadow()
     }
 }
 
@@ -797,6 +799,7 @@ struct CompactScoreCard: View {
 
                 Text("\(Int(score))")
                     .font(.system(size: 14, weight: .bold))
+                    .contentTransition(.numericText())
             }
             .frame(width: 44, height: 44)
 
@@ -816,8 +819,8 @@ struct CompactScoreCard: View {
         .padding()
         .frame(maxWidth: .infinity)
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .cardShadow()
     }
 }
 

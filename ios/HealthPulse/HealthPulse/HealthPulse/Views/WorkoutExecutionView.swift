@@ -92,10 +92,10 @@ struct WorkoutExecutionView: View {
                                 Text("Add Exercise")
                             }
                             .font(.headline)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.primary)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.green.opacity(0.1))
+                            .background(AppTheme.primary.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     }
@@ -122,7 +122,7 @@ struct WorkoutExecutionView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(viewModel.canComplete ? Color.green : Color.gray)
+                    .background(viewModel.canComplete ? AppTheme.primary : Color.gray)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .disabled(!viewModel.canComplete || viewModel.isSaving)
@@ -251,7 +251,7 @@ struct WorkoutHeader: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
     }
 }
 
@@ -369,9 +369,9 @@ struct ExerciseLogCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 
     // Dynamic column headers based on exercise input type
@@ -590,7 +590,7 @@ struct SetLogRow: View {
                 .font(.subheadline)
                 .frame(width: 40)
                 .padding(.vertical, 6)
-                .background(Color(.secondarySystemBackground))
+                .background(AppTheme.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .frame(width: 50)
@@ -960,7 +960,7 @@ struct WorkoutCompletionView: View {
 
     var body: some View {
         ZStack {
-            Color.green.opacity(0.15)
+            AppTheme.primary.opacity(0.15)
                 .ignoresSafeArea()
 
             VStack(spacing: 28) {
@@ -984,11 +984,14 @@ struct WorkoutCompletionView: View {
                 .opacity(textOpacity)
 
                 // Summary stats
-                HStack(spacing: 24) {
-                    SummaryStatView(value: "\(summary.duration)", label: "min", icon: "clock")
-                    SummaryStatView(value: "\(summary.exercises)", label: "exercises", icon: "figure.strengthtraining.traditional")
-                    SummaryStatView(value: "\(summary.sets)", label: "sets", icon: "checkmark.circle")
+                GlassCard {
+                    HStack(spacing: 24) {
+                        SummaryStatView(value: "\(summary.duration)", label: "min", icon: "clock")
+                        SummaryStatView(value: "\(summary.exercises)", label: "exercises", icon: "figure.strengthtraining.traditional")
+                        SummaryStatView(value: "\(summary.sets)", label: "sets", icon: "checkmark.circle")
+                    }
                 }
+                .padding(.horizontal)
                 .opacity(textOpacity)
                 .padding(.top, 8)
 
@@ -1001,7 +1004,7 @@ struct WorkoutCompletionView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.green)
+                        .background(AppTheme.primary)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
@@ -1082,7 +1085,7 @@ struct PRCelebrationView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
@@ -1094,12 +1097,15 @@ struct PRCelebrationView: View {
             .font(.headline)
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Color.green)
+            .background(AppTheme.primary)
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
         .padding(.vertical, 32)
+        .onAppear {
+            HapticsManager.shared.doubleHeavy()
+        }
     }
 }
 
@@ -1126,7 +1132,7 @@ struct RPEInfoSheet: View {
                         rpeRow(6, "Light - 4+ reps left")
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
                     Text("💡 Tip: Most working sets should be RPE 7-9. Leave RPE 10 for PR attempts.")
@@ -1254,8 +1260,8 @@ struct AddExerciseSheet: View {
                 .font(.caption)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(Color.green.opacity(0.1))
-                .foregroundStyle(.green)
+                .background(AppTheme.primary.opacity(0.1))
+                .foregroundStyle(AppTheme.primary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -1332,14 +1338,15 @@ struct AddExerciseSheet: View {
         workoutName: "Upper Body A",
         workoutFocus: "Chest Focus",
         exercises: [
-            PlannedExercise(name: "Bench Press", sets: 4, reps: "5", notes: nil),
-            PlannedExercise(name: "Overhead Press", sets: 3, reps: "8", notes: nil),
-            PlannedExercise(name: "Lat Pulldown", sets: 3, reps: "10", notes: nil)
+            PlannedExercise(name: "Bench Press", sets: 4, reps: "5", notes: nil, isKeyLift: true, restSeconds: 120),
+            PlannedExercise(name: "Overhead Press", sets: 3, reps: "8", notes: nil, isKeyLift: false, restSeconds: 90),
+            PlannedExercise(name: "Lat Pulldown", sets: 3, reps: "10", notes: nil, isKeyLift: false, restSeconds: 60)
         ],
         estimatedMinutes: 60,
         dayOfWeek: 1,
-        planName: "Upper/Lower Split"
+        planName: "Upper/Lower Split",
+        planId: nil
     )
 
-    return WorkoutExecutionView(workout: mockWorkout, planId: nil) { _ in }
+    WorkoutExecutionView(workout: mockWorkout, planId: nil) { _ in }
 }

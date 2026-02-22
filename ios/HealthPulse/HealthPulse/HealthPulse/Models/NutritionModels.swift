@@ -378,6 +378,32 @@ struct FoodEntryCreate: Encodable {
     }
 }
 
+struct FoodEntryUpdate: Encodable {
+    var name: String?
+    var mealType: String?
+    var calories: Double?
+    var proteinG: Double?
+    var carbsG: Double?
+    var fatG: Double?
+    var fiberG: Double?
+    var servingSize: Double?
+    var servingUnit: String?
+    var notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case mealType = "meal_type"
+        case calories
+        case proteinG = "protein_g"
+        case carbsG = "carbs_g"
+        case fatG = "fat_g"
+        case fiberG = "fiber_g"
+        case servingSize = "serving_size"
+        case servingUnit = "serving_unit"
+        case notes
+    }
+}
+
 // MARK: - Daily Summary
 
 struct DailyNutritionSummary: Codable {

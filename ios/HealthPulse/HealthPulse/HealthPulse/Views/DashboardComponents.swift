@@ -40,6 +40,7 @@ struct EnhancedRecoveryCard: View {
 
                     Text("\(Int(recovery.score))")
                         .font(.system(size: 18, weight: .bold))
+                        .contentTransition(.numericText())
                 }
             }
 
@@ -235,6 +236,7 @@ struct KeyLiftCard: View {
 
             Text("\(Int(lift.currentValue)) kg")
                 .font(.headline)
+                .contentTransition(.numericText())
 
             HStack(spacing: 2) {
                 Text("\(lift.changeSymbol)\(String(format: "%.1f", lift.changeValue))")
@@ -445,6 +447,7 @@ struct WeeklyStatItem: View {
                     .foregroundStyle(color)
                 Text(value)
                     .font(.headline)
+                    .contentTransition(.numericText())
             }
             Text(label)
                 .font(.caption2)

@@ -11,48 +11,63 @@ import Combine
 
 // MARK: - App Theme
 
-/// Central theme configuration — "Emerald Night" palette
+/// Central theme configuration — adaptive "Emerald Night" (dark) / "Emerald Day" (light) palette
 struct AppTheme {
-    // Brand colors — deep emerald family
-    static let primary      = Color(hex: "16C784")   // Deep emerald (was neon mint)
+    // Brand colors — deep emerald family (same in both modes)
+    static let primary      = Color(hex: "16C784")   // Deep emerald
     static let primaryDark  = Color(hex: "0D9668")   // Dark emerald for pressed states
     static let accent       = Color(hex: "34D399")   // Bright mint for highlights only
 
-    // Background surfaces
-    static let backgroundDark   = Color(hex: "080B0A")  // Near-black with faint warmth
-    static let backgroundMedium = Color(hex: "0F1511")  // Surface 1 — base cards
-    static let surface1         = Color(hex: "0F1511")  // Dark green-tinted base
-    static let surface2         = Color(hex: "161D18")  // Elevated cards
-    static let surface3         = Color(hex: "1E2920")  // Floating sheets / modals
-    static let cardBackground   = Color(hex: "161D18")  // Alias for surface2
-    static let greenTint        = Color(hex: "0A1F12")  // BG gradient midpoint
+    // Background surfaces — adaptive light/dark
+    static let backgroundDark   = Color.adaptive(light: "FAFCFB", dark: "080B0A")
+    static let backgroundMedium = Color.adaptive(light: "F0F4F1", dark: "0F1511")
+    static let surface1         = Color.adaptive(light: "F0F4F1", dark: "0F1511")
+    static let surface2         = Color.adaptive(light: "FFFFFF", dark: "161D18")
+    static let surface3         = Color.adaptive(light: "FFFFFF", dark: "1E2920")
+    static let cardBackground   = Color.adaptive(light: "FFFFFF", dark: "161D18")
+    static let greenTint        = Color.adaptive(light: "E8F5E9", dark: "0A1F12")
 
     // Border
-    static let border = Color(hex: "2A3B2E")
+    static let border = Color.adaptive(light: "D4E0D6", dark: "2A3B2E")
 
-    // Text tokens
-    static let textPrimary   = Color(hex: "F0FAF2")  // Near-white with green warmth
-    static let textSecondary = Color(hex: "8BA98E")  // Muted green-gray
-    static let textTertiary  = Color(hex: "4D6651")  // Very muted — captions, timestamps
+    // Text tokens — adaptive
+    static let textPrimary   = Color.adaptive(light: "1A2E1E", dark: "F0FAF2")
+    static let textSecondary = Color.adaptive(light: "5A7A5E", dark: "8BA98E")
+    static let textTertiary  = Color.adaptive(light: "8BA98E", dark: "4D6651")
 
-    // Gradients
-    static let backgroundGradient = LinearGradient(
+    // Gradients — dark mode
+    static let backgroundGradientDark = LinearGradient(
         colors: [Color(hex: "080B0A"), Color(hex: "0A1F12"), Color(hex: "080B0A")],
         startPoint: .top,
         endPoint: .bottom
     )
 
-    // Semantic colors
-    static let success = Color(hex: "16C784")  // Same as primary — reinforces brand
-    static let warning = Color(hex: "F59E0B")  // Amber — warmer than generic orange
-    static let error   = Color(hex: "EF4444")  // Crisp red
-    static let info    = Color(hex: "3B82F6")  // Electric blue
+    // Gradients — light mode
+    static let backgroundGradientLight = LinearGradient(
+        colors: [Color(hex: "FAFCFB"), Color(hex: "E8F5E9"), Color(hex: "FAFCFB")],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    // Semantic colors (same in both modes — sufficient contrast on light and dark)
+    static let success = Color(hex: "16C784")
+    static let warning = Color(hex: "F59E0B")
+    static let error   = Color(hex: "EF4444")
+    static let info    = Color(hex: "3B82F6")
+
+    // Shadow colors — adaptive (lighter shadows on light backgrounds)
+    static let cardShadowColor     = Color.adaptive(light: "000000", dark: "000000")
+    static let elevatedShadowColor = Color.adaptive(light: "000000", dark: "000000")
+
+    // Glass shimmer — adaptive
+    static let glassShimmer  = Color.adaptive(light: "000000", dark: "FFFFFF")
+    static let glassBorder   = Color.adaptive(light: "000000", dark: "FFFFFF")
 }
 
 // MARK: - Color Hex Extension
 
-extension Color {
-    init(hex: String) {
+extension UIColor {
+    convenience init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
@@ -64,41 +79,58 @@ extension Color {
         default: (a, r, g, b) = (255, 0, 0, 0)
         }
         self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
+            red: CGFloat(r) / 255,
+            green: CGFloat(g) / 255,
+            blue: CGFloat(b) / 255,
+            alpha: CGFloat(a) / 255
         )
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        self.init(uiColor: UIColor(hex: hex))
+    }
+
+    /// Creates an adaptive color that automatically switches between light and dark variants
+    static func adaptive(light: String, dark: String) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
     }
 }
 
 // MARK: - Themed Background
 
-/// Reusable themed background with drifting glow orbs
+/// Reusable themed background with drifting glow orbs — adapts to light/dark mode
 struct ThemedBackground: View {
     var showGlow: Bool = true
     var glowIntensity: Double = 0.20
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var driftX: CGFloat = 0
     @State private var driftY: CGFloat = 0
 
+    private var gradient: LinearGradient {
+        colorScheme == .dark ? AppTheme.backgroundGradientDark : AppTheme.backgroundGradientLight
+    }
+
+    private var effectiveGlow: Double {
+        colorScheme == .dark ? glowIntensity : glowIntensity * 0.4
+    }
+
     var body: some View {
         ZStack {
-            AppTheme.backgroundGradient
+            gradient
                 .ignoresSafeArea()
 
             if showGlow {
-                // Top-right drifting glow
                 Circle()
-                    .fill(AppTheme.primary.opacity(glowIntensity))
+                    .fill(AppTheme.primary.opacity(effectiveGlow))
                     .blur(radius: 120)
                     .frame(width: 300, height: 300)
                     .offset(x: 150 + driftX, y: -200 + driftY)
 
-                // Bottom-left subtle glow
                 Circle()
-                    .fill(AppTheme.primary.opacity(glowIntensity * 0.5))
+                    .fill(AppTheme.primary.opacity(effectiveGlow * 0.5))
                     .blur(radius: 100)
                     .frame(width: 200, height: 200)
                     .offset(x: -150 - driftX, y: 400 + driftY)
@@ -115,18 +147,20 @@ struct ThemedBackground: View {
 
 // MARK: - Animated Gradient Background
 
-/// Animated gradient for auth / landing screens
+/// Animated gradient for auth / landing screens — adapts to light/dark mode
 struct AnimatedGradientBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var animateGradient = false
+
+    private var gradientColors: [Color] {
+        colorScheme == .dark
+            ? [Color(hex: "080B0A"), Color(hex: "0A1F12"), Color(hex: "080B0A"), Color(hex: "0D1A10")]
+            : [Color(hex: "FAFCFB"), Color(hex: "E8F5E9"), Color(hex: "FAFCFB"), Color(hex: "EFF7F0")]
+    }
 
     var body: some View {
         LinearGradient(
-            colors: [
-                Color(hex: "080B0A"),
-                Color(hex: "0A1F12"),
-                Color(hex: "080B0A"),
-                Color(hex: "0D1A10")
-            ],
+            colors: gradientColors,
             startPoint: animateGradient ? .topLeading : .bottomLeading,
             endPoint: animateGradient ? .bottomTrailing : .topTrailing
         )
@@ -156,6 +190,8 @@ struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 20
     let content: () -> Content
 
+    @Environment(\.colorScheme) private var colorScheme
+
     init(cornerRadius: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
         self.cornerRadius = cornerRadius
         self.content = content
@@ -166,14 +202,15 @@ struct GlassCard<Content: View>: View {
             .padding()
             .background {
                 ZStack {
-                    // Base fill — green-tinted dark surface
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(AppTheme.surface2.opacity(0.92))
-                    // Top shimmer gradient
+                        .fill(AppTheme.surface2.opacity(colorScheme == .dark ? 0.92 : 0.95))
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.06), Color.clear],
+                                colors: [
+                                    AppTheme.glassShimmer.opacity(colorScheme == .dark ? 0.06 : 0.03),
+                                    Color.clear
+                                ],
                                 startPoint: .top,
                                 endPoint: .center
                             )
@@ -185,7 +222,10 @@ struct GlassCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)],
+                            colors: [
+                                AppTheme.glassBorder.opacity(colorScheme == .dark ? 0.10 : 0.06),
+                                AppTheme.glassBorder.opacity(colorScheme == .dark ? 0.03 : 0.02)
+                            ],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
@@ -222,15 +262,37 @@ struct PressEffect: ButtonStyle {
 
 // MARK: - Card Shadow Modifier
 
+private struct CardShadowModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    func body(content: Content) -> some View {
+        content.shadow(
+            color: .black.opacity(colorScheme == .dark ? 0.20 : 0.08),
+            radius: colorScheme == .dark ? 12 : 8,
+            y: colorScheme == .dark ? 4 : 2
+        )
+    }
+}
+
+private struct ElevatedShadowModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    func body(content: Content) -> some View {
+        content.shadow(
+            color: .black.opacity(colorScheme == .dark ? 0.35 : 0.15),
+            radius: colorScheme == .dark ? 20 : 12,
+            y: colorScheme == .dark ? 8 : 4
+        )
+    }
+}
+
 extension View {
-    /// Level 1 shadow — base cards on dark background
+    /// Level 1 shadow — base cards (adapts to light/dark)
     func cardShadow() -> some View {
-        self.shadow(color: .black.opacity(0.20), radius: 12, y: 4)
+        modifier(CardShadowModifier())
     }
 
-    /// Level 2 shadow — elevated cards
+    /// Level 2 shadow — elevated cards (adapts to light/dark)
     func elevatedShadow() -> some View {
-        self.shadow(color: .black.opacity(0.35), radius: 20, y: 8)
+        modifier(ElevatedShadowModifier())
     }
 
     /// Primary glow — active / selected elements

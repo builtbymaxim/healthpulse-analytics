@@ -185,9 +185,33 @@ class DayMacroSummary(BaseModel):
     total_protein_g: float
     total_carbs_g: float
     total_fat_g: float
+    # Goal comparison fields
+    target_calories: float | None = None
+    calorie_diff: float | None = None
+    target_protein_g: float | None = None
+    protein_diff: float | None = None
+    on_track: bool | None = None  # within ±10% of target
 
 
 class WeeklyShoppingListItem(BaseModel):
     name: str
     total_amount: float
     unit: str
+
+
+class CustomRecipeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(pattern="^(breakfast|lunch|dinner|snack|dessert|shake)$")
+    description: str | None = None
+    calories_per_serving: float = Field(ge=0)
+    protein_g_per_serving: float = Field(ge=0)
+    carbs_g_per_serving: float = Field(ge=0)
+    fat_g_per_serving: float = Field(ge=0)
+    fiber_g_per_serving: float = 0
+    servings: int = Field(ge=1, default=1)
+    ingredients: list[dict] = []
+    instructions: list[str] = []
+    tags: list[str] = []
+    goal_types: list[str] = []
+    prep_time_min: int | None = None
+    cook_time_min: int | None = None

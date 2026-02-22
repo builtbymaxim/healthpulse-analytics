@@ -73,6 +73,7 @@ struct SleepView: View {
                 }
                 .padding()
             }
+            .background(ThemedBackground())
             .navigationTitle("Sleep")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -136,61 +137,61 @@ struct TodaySleepCard: View {
     let summary: SleepSummary
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Last Night")
-                    .font(.headline)
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: summary.trendIcon)
-                    Text(summary.qualityTrend.capitalized)
-                }
-                .font(.subheadline)
-                .foregroundStyle(summary.trendColor)
-            }
-
-            HStack(spacing: 24) {
-                // Duration Ring
-                ZStack {
-                    ProgressRing(
-                        progress: min(summary.durationVsTargetPct / 100, 1.5),
-                        lineWidth: 12,
-                        color: summary.scoreColor
-                    )
-                    .frame(width: 100, height: 100)
-
-                    VStack(spacing: 2) {
-                        Text(summary.formattedDuration)
-                            .font(.title2.bold())
-                        Text("of \(Int(summary.targetHours))h")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        GlassCard {
+            VStack(spacing: 16) {
+                HStack {
+                    Text("Last Night")
+                        .font(.headline)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: summary.trendIcon)
+                        Text(summary.qualityTrend.capitalized)
                     }
+                    .font(.subheadline)
+                    .foregroundStyle(summary.trendColor)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    StatRow(
-                        icon: "star.fill",
-                        label: "Sleep Score",
-                        value: "\(Int(summary.sleepScore))",
-                        color: summary.scoreColor
-                    )
+                HStack(spacing: 24) {
+                    // Duration Ring
+                    ZStack {
+                        ProgressRing(
+                            progress: min(summary.durationVsTargetPct / 100, 1.5),
+                            lineWidth: 12,
+                            color: summary.scoreColor
+                        )
+                        .frame(width: 100, height: 100)
 
-                    StatRow(
-                        icon: "waveform.path.ecg",
-                        label: "Quality",
-                        value: "\(Int(summary.quality))%",
-                        color: .blue
-                    )
+                        VStack(spacing: 2) {
+                            Text(summary.formattedDuration)
+                                .font(.title2.bold())
+                                .contentTransition(.numericText())
+                            Text("of \(Int(summary.targetHours))h")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        StatRow(
+                            icon: "star.fill",
+                            label: "Sleep Score",
+                            value: "\(Int(summary.sleepScore))",
+                            color: summary.scoreColor
+                        )
+
+                        StatRow(
+                            icon: "waveform.path.ecg",
+                            label: "Quality",
+                            value: "\(Int(summary.quality))%",
+                            color: .blue
+                        )
+                    }
+
+                    Spacer()
                 }
-
-                Spacer()
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .elevatedShadow()
     }
 }
 
@@ -209,9 +210,10 @@ struct StatRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.textSecondary)
                 Text(value)
                     .font(.subheadline.bold())
+                    .foregroundStyle(AppTheme.textPrimary)
             }
         }
     }
@@ -269,9 +271,9 @@ struct SleepStagesCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 
     private func formatHours(_ hours: Double) -> String {
@@ -339,9 +341,9 @@ struct SleepHistoryChart: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -395,9 +397,9 @@ struct SleepAnalyticsCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -414,6 +416,7 @@ struct AnalyticTile: View {
 
             Text(value)
                 .font(.title3.bold())
+                .contentTransition(.numericText())
 
             Text(title)
                 .font(.caption)
@@ -421,8 +424,8 @@ struct AnalyticTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 

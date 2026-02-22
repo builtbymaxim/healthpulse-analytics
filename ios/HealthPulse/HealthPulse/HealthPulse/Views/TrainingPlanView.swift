@@ -32,9 +32,16 @@ struct TrainingPlanView: View {
                             NoPlanCard(onSelectPlan: { viewModel.showTemplates = true })
                         }
 
-                        // Weekly Schedule
+                        // Weekly Schedule with exercise detail
                         if let activePlan = viewModel.activePlan {
-                            WeeklyScheduleCard(schedule: activePlan.schedule)
+                            WeeklyScheduleCard(
+                                schedule: activePlan.schedule,
+                                workouts: activePlan.workouts,
+                                customizations: activePlan.customizations,
+                                onSwapExercise: { exerciseName, replacement in
+                                    viewModel.swapExercise(original: exerciseName, replacement: replacement)
+                                }
+                            )
                         }
 
                         // Quick Stats
@@ -115,8 +122,8 @@ struct ActivePlanCard: View {
                         .font(.subheadline)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.1))
-                        .foregroundStyle(.green)
+                        .background(AppTheme.primary.opacity(0.1))
+                        .foregroundStyle(AppTheme.primary)
                         .clipShape(Capsule())
                 }
 
@@ -144,9 +151,9 @@ struct ActivePlanCard: View {
             .foregroundStyle(.secondary)
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -178,15 +185,15 @@ struct NoPlanCard: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.green)
+                    .background(AppTheme.primary)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -194,6 +201,12 @@ struct NoPlanCard: View {
 
 struct WeeklyScheduleCard: View {
     let schedule: [String: String]
+    var workouts: [TemplateWorkout]?
+    var customizations: [String: [String: String]]?
+    var onSwapExercise: ((String, String) -> Void)?
+
+    @State private var expandedDay: Int?
+    @State private var swappingExercise: PlannedExercise?
 
     private let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -202,42 +215,197 @@ struct WeeklyScheduleCard: View {
             Text("Weekly Schedule")
                 .font(.headline)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 ForEach(1...7, id: \.self) { day in
-                    HStack {
-                        Text(dayNames[day - 1])
-                            .font(.subheadline)
-                            .frame(width: 40, alignment: .leading)
+                    VStack(spacing: 0) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                expandedDay = expandedDay == day ? nil : day
+                            }
+                            HapticsManager.shared.selection()
+                        } label: {
+                            HStack {
+                                Text(dayNames[day - 1])
+                                    .font(.subheadline)
+                                    .frame(width: 40, alignment: .leading)
 
-                        if let workout = schedule[String(day)] {
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 8, height: 8)
-                                Text(workout)
-                                    .font(.subheadline)
+                                if let workout = schedule[String(day)] {
+                                    HStack(spacing: 8) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                        Text(workout)
+                                            .font(.subheadline)
+                                    }
+                                } else {
+                                    HStack(spacing: 8) {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(width: 8, height: 8)
+                                        Text("Rest")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                if schedule[String(day)] != nil, workouts != nil {
+                                    Image(systemName: expandedDay == day ? "chevron.up" : "chevron.down")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
-                        } else {
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 8, height: 8)
-                                Text("Rest")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                            .foregroundStyle(.primary)
+                            .padding(.vertical, 6)
                         }
+                        .buttonStyle(.plain)
 
-                        Spacer()
+                        // Expanded exercise list for this day
+                        if expandedDay == day, let workout = workouts?.first(where: { $0.day == day }) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(workout.exercises ?? [], id: \.name) { exercise in
+                                    HStack(spacing: 10) {
+                                        Image(systemName: exercise.isKeyLift == true ? "star.fill" : "circle.fill")
+                                            .font(.system(size: exercise.isKeyLift == true ? 10 : 5))
+                                            .foregroundStyle(exercise.isKeyLift == true ? .yellow : .secondary)
+
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(exercise.name)
+                                                .font(.caption.bold())
+                                            if let sets = exercise.sets, let reps = exercise.reps {
+                                                Text("\(sets) x \(reps)")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        // Swap button
+                                        if onSwapExercise != nil {
+                                            Button {
+                                                swappingExercise = exercise
+                                            } label: {
+                                                Image(systemName: "arrow.triangle.2.circlepath")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.green)
+                                            }
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                    .padding(.leading, 48)
+                                }
+                            }
+                            .padding(.bottom, 8)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
-                    .padding(.vertical, 4)
                 }
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+        .sheet(item: $swappingExercise) { exercise in
+            ExerciseSwapSheet(exercise: exercise) { replacement in
+                onSwapExercise?(exercise.name, replacement)
+            }
+        }
+    }
+}
+
+// MARK: - Exercise Swap Sheet
+
+struct ExerciseSwapSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let exercise: PlannedExercise
+    let onSwap: (String) -> Void
+
+    // Static exercise alternatives grouped by muscle category
+    private var alternatives: [String] {
+        let muscleGroups: [String: [String]] = [
+            "Barbell Squat": ["Goblet Squat", "Leg Press", "Front Squat", "Hack Squat"],
+            "Front Squat": ["Barbell Squat", "Goblet Squat", "Leg Press"],
+            "Goblet Squat": ["Barbell Squat", "Leg Press", "Front Squat"],
+            "Bench Press": ["Dumbbell Bench Press", "Incline Dumbbell Press", "Push-Ups", "Machine Chest Press"],
+            "Incline Bench Press": ["Incline Dumbbell Press", "Bench Press", "Landmine Press"],
+            "Incline Dumbbell Press": ["Incline Bench Press", "Bench Press", "Cable Flyes"],
+            "Overhead Press": ["Arnold Press", "Dumbbell Shoulder Press", "Landmine Press"],
+            "Arnold Press": ["Overhead Press", "Dumbbell Shoulder Press", "Lateral Raise"],
+            "Deadlift": ["Romanian Deadlift", "Trap Bar Deadlift", "Sumo Deadlift"],
+            "Romanian Deadlift": ["Stiff-Leg Deadlift", "Good Mornings", "Deadlift"],
+            "Trap Bar Deadlift": ["Deadlift", "Romanian Deadlift", "Barbell Hip Hinge"],
+            "Barbell Row": ["Dumbbell Row", "Cable Row", "T-Bar Row", "Seated Cable Row"],
+            "Cable Row": ["Barbell Row", "Dumbbell Row", "Seated Cable Row"],
+            "Seated Cable Row": ["Barbell Row", "Cable Row", "T-Bar Row"],
+            "Chin-Ups": ["Lat Pulldown", "Pull-Ups", "Band-Assisted Pull-Ups"],
+            "Lat Pulldown": ["Chin-Ups", "Pull-Ups", "Cable Pullover"],
+            "Hip Thrust": ["Glute Bridge", "Cable Pull-Through", "Hip Extension Machine"],
+            "Glute Bridge": ["Hip Thrust", "Cable Pull-Through", "Single-Leg Glute Bridge"],
+            "Bulgarian Split Squat": ["Lunges", "Walking Lunges", "Step-Ups", "Reverse Lunges"],
+            "Walking Lunges": ["Bulgarian Split Squat", "Reverse Lunges", "Step-Ups"],
+            "Leg Press": ["Barbell Squat", "Hack Squat", "Goblet Squat"],
+            "Leg Curl": ["Nordic Curl", "Swiss Ball Curl", "Seated Leg Curl"],
+            "Lateral Raise": ["Cable Lateral Raise", "Dumbbell Lateral Raise", "Machine Lateral Raise"],
+            "Tricep Pushdown": ["Skull Crushers", "Overhead Tricep Extension", "Dips"],
+            "Hammer Curls": ["Barbell Curls", "Incline Dumbbell Curls", "Cable Curls"],
+            "Face Pulls": ["Band Pull-Apart", "Reverse Flyes", "Cable External Rotation"],
+            "Plank": ["Dead Bug", "Ab Rollout", "Pallof Press"],
+            "Power Clean": ["Hang Clean", "Kettlebell Swing", "Dumbbell Power Clean"],
+            "Box Jumps": ["Broad Jumps", "Tuck Jumps", "Squat Jumps"],
+        ]
+        return muscleGroups[exercise.name] ?? ["Dumbbell variation", "Cable variation", "Machine variation"]
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("Current")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(exercise.name)
+                            .font(.subheadline.bold())
+                    }
+
+                    if let sets = exercise.sets, let reps = exercise.reps {
+                        HStack {
+                            Text("Prescription")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(sets) x \(reps)")
+                                .font(.subheadline)
+                        }
+                    }
+                }
+
+                Section("Alternatives") {
+                    ForEach(alternatives, id: \.self) { alt in
+                        Button {
+                            onSwap(alt)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(alt)
+                                Spacer()
+                                Image(systemName: "arrow.right.circle")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Swap Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
     }
 }
 
@@ -289,9 +457,9 @@ struct RecentSessionsCard: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -575,13 +743,22 @@ struct TemplateCard: View {
                     }
                 }
 
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Label("\(template.daysPerWeek) days", systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Label(template.modality.capitalized, systemImage: modalityIcon(template.modality))
-                    Label(template.difficulty.capitalized, systemImage: "chart.bar.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(template.difficulty.capitalized)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(difficultyColor(template.difficulty).opacity(0.15))
+                        .foregroundStyle(difficultyColor(template.difficulty))
+                        .clipShape(Capsule())
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
                 // Workout preview
                 if let workouts = template.workouts, !workouts.isEmpty {
@@ -607,11 +784,11 @@ struct TemplateCard: View {
                 }
             }
             .padding()
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(AppTheme.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.green : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? AppTheme.primary : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
@@ -623,6 +800,15 @@ struct TemplateCard: View {
         case "home": return "house.fill"
         case "outdoor": return "figure.run"
         default: return "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private func difficultyColor(_ difficulty: String) -> Color {
+        switch difficulty.lowercased() {
+        case "beginner": return .green
+        case "intermediate": return .orange
+        case "advanced": return .red
+        default: return .gray
         }
     }
 }
@@ -890,6 +1076,29 @@ class TrainingPlanViewModel: ObservableObject {
         }
     }
 
+    func swapExercise(original: String, replacement: String) {
+        guard let plan = activePlan else { return }
+
+        // Merge with existing swaps
+        var swaps = plan.customizations?["exerciseSwaps"] ?? [:]
+        swaps[original] = replacement
+
+        Task {
+            do {
+                _ = try await APIService.shared.updateTrainingPlan(
+                    planId: plan.id,
+                    customizations: ["exerciseSwaps": swaps]
+                )
+                // Reload to get updated plan with swaps applied
+                await loadData()
+                ToastManager.shared.success("Exercise swapped!")
+                HapticsManager.shared.success()
+            } catch {
+                ToastManager.shared.error("Failed to swap exercise")
+            }
+        }
+    }
+
     func updateSchedule(_ newSchedule: [String: String]) {
         guard let plan = activePlan else { return }
 
@@ -907,7 +1116,9 @@ class TrainingPlanViewModel: ObservableObject {
                     description: plan.description,
                     daysPerWeek: newSchedule.count,
                     schedule: newSchedule,
-                    isActive: plan.isActive
+                    isActive: plan.isActive,
+                    workouts: plan.workouts,
+                    customizations: plan.customizations
                 )
 
                 ToastManager.shared.success("Schedule updated!")

@@ -173,7 +173,7 @@ struct BarcodeScannerView: View {
                     }
                 }
                 .padding()
-                .background(Color(.secondarySystemBackground))
+                .background(AppTheme.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .padding(.horizontal)
 
@@ -193,7 +193,7 @@ struct BarcodeScannerView: View {
                                     .font(.subheadline.bold())
                                     .padding(.vertical, 10)
                                     .frame(maxWidth: .infinity)
-                                    .background(amount == opt ? Color.green : Color(.secondarySystemBackground))
+                                    .background(amount == opt ? Color.green : AppTheme.surface2)
                                     .foregroundStyle(amount == opt ? .white : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
@@ -237,7 +237,7 @@ struct BarcodeScannerView: View {
                                     .font(.subheadline.bold())
                                     .padding(.vertical, 10)
                                     .frame(maxWidth: .infinity)
-                                    .background(selectedMealType == meal ? Color.green : Color(.secondarySystemBackground))
+                                    .background(selectedMealType == meal ? Color.green : AppTheme.surface2)
                                     .foregroundStyle(selectedMealType == meal ? .white : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             }

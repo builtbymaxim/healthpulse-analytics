@@ -232,3 +232,60 @@ class NutritionScoreResponse(BaseModel):
     macro_balance_score: float
     consistency_score: float
     contributing_factors: dict
+
+
+# --- Calorie Cycling Models ---
+
+class DailyTargetsResponse(BaseModel):
+    """Cycling-aware daily nutrition targets."""
+    date: date
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    is_training_day: bool
+    protein_pct: float
+    carbs_pct: float
+    fat_pct: float
+    bmr: float
+    tdee: float
+    bmr_formula: str  # "mifflin_st_jeor" or "katch_mcardle"
+
+
+# --- Goal Timeline Models ---
+
+class GoalTimelineRequest(BaseModel):
+    """Request to validate a weight goal timeline."""
+    current_weight_kg: float = Field(ge=20, le=500)
+    target_weight_kg: float = Field(ge=20, le=500)
+    timeframe_days: int = Field(ge=7, le=1095, description="Timeframe in days (1 week to 3 years)")
+    gender: Optional[str] = Field(None, description="Override gender for calorie floor")
+
+
+class GoalTimelineResponse(BaseModel):
+    """Goal timeline validation result."""
+    is_safe: bool
+    weekly_rate_kg: float
+    weekly_rate_pct: float
+    daily_adjustment_kcal: float
+    suggested_min_weeks: int
+    safety_level: str  # "green", "yellow", "orange", "red"
+    message: str
+    calorie_target: float
+    calorie_floor_applied: bool
+
+
+# --- Food Entry Update Model ---
+
+class FoodEntryUpdate(BaseModel):
+    """Request to update an existing food entry. All fields optional."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    meal_type: Optional[MealType] = None
+    calories: Optional[float] = Field(None, ge=0)
+    protein_g: Optional[float] = Field(None, ge=0)
+    carbs_g: Optional[float] = Field(None, ge=0)
+    fat_g: Optional[float] = Field(None, ge=0)
+    fiber_g: Optional[float] = Field(None, ge=0)
+    serving_size: Optional[float] = Field(None, ge=0)
+    serving_unit: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = Field(None, max_length=500)

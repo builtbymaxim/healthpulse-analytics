@@ -49,6 +49,14 @@ struct UserSettings: Codable {
     var dailyStepGoal: Int?
     var useMetricUnits: Bool
     var socialOptIn: Bool
+    // Dietary profile (Phase 8C)
+    var dietaryPattern: String?
+    var allergies: [String]?
+    var mealsPerDay: Int?
+    // Experience & motivation
+    var experienceLevel: String?
+    var motivation: String?
+    var bodyFatPct: Double?
 
     enum CodingKeys: String, CodingKey {
         case hrvBaseline = "hrv_baseline"
@@ -57,6 +65,12 @@ struct UserSettings: Codable {
         case dailyStepGoal = "daily_step_goal"
         case useMetricUnits = "use_metric_units"
         case socialOptIn = "social_opt_in"
+        case dietaryPattern = "dietary_pattern"
+        case allergies
+        case mealsPerDay = "meals_per_day"
+        case experienceLevel = "experience_level"
+        case motivation
+        case bodyFatPct = "body_fat_pct"
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +81,12 @@ struct UserSettings: Codable {
         dailyStepGoal = try container.decodeIfPresent(Int.self, forKey: .dailyStepGoal)
         useMetricUnits = try container.decodeIfPresent(Bool.self, forKey: .useMetricUnits) ?? true
         socialOptIn = try container.decodeIfPresent(Bool.self, forKey: .socialOptIn) ?? false
+        dietaryPattern = try container.decodeIfPresent(String.self, forKey: .dietaryPattern)
+        allergies = try container.decodeIfPresent([String].self, forKey: .allergies)
+        mealsPerDay = try container.decodeIfPresent(Int.self, forKey: .mealsPerDay)
+        experienceLevel = try container.decodeIfPresent(String.self, forKey: .experienceLevel)
+        motivation = try container.decodeIfPresent(String.self, forKey: .motivation)
+        bodyFatPct = try container.decodeIfPresent(Double.self, forKey: .bodyFatPct)
     }
 }
 
@@ -364,6 +384,7 @@ struct TodayWorkoutResponse: Codable {
     let estimatedMinutes: Int?
     let dayOfWeek: Int
     let planName: String?
+    let planId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case hasPlan = "has_plan"
@@ -374,7 +395,39 @@ struct TodayWorkoutResponse: Codable {
         case estimatedMinutes = "estimated_minutes"
         case dayOfWeek = "day_of_week"
         case planName = "plan_name"
+        case planId = "plan_id"
     }
+}
+
+struct UnifiedWorkoutEntry: Codable, Identifiable {
+    let id: UUID
+    let source: String // "freeform" or "plan"
+    let workoutType: String
+    let startTime: Date
+    let durationMinutes: Int?
+    let caloriesBurned: Int?
+    let notes: String?
+    let planId: UUID?
+    let plannedWorkoutName: String?
+    let overallRating: Int?
+    let intensity: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, notes, intensity
+        case workoutType = "workout_type"
+        case startTime = "start_time"
+        case durationMinutes = "duration_minutes"
+        case caloriesBurned = "calories_burned"
+        case planId = "plan_id"
+        case plannedWorkoutName = "planned_workout_name"
+        case overallRating = "overall_rating"
+    }
+
+    var displayName: String {
+        plannedWorkoutName ?? workoutType.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    var isPlanWorkout: Bool { source == "plan" }
 }
 
 struct PlannedExercise: Codable, Identifiable {
@@ -383,6 +436,8 @@ struct PlannedExercise: Codable, Identifiable {
     let sets: Int?
     let reps: String?
     let notes: String?
+    let isKeyLift: Bool?
+    let restSeconds: Int?
 }
 
 struct TrainingPlanSummary: Codable, Identifiable {
@@ -392,9 +447,11 @@ struct TrainingPlanSummary: Codable, Identifiable {
     let daysPerWeek: Int
     let schedule: [String: String]
     let isActive: Bool
+    let workouts: [TemplateWorkout]?
+    let customizations: [String: [String: String]]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description
+        case id, name, description, workouts, customizations
         case daysPerWeek = "days_per_week"
         case schedule
         case isActive = "is_active"
@@ -457,6 +514,7 @@ struct ActivatePlanResponse: Codable {
 struct UpdatePlanRequest: Codable {
     let name: String?
     let schedule: [String: String]?
+    let customizations: [String: [String: String]]?
 }
 
 struct UpdatePlanResponse: Codable {

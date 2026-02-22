@@ -49,6 +49,7 @@ class RecipeLibraryViewModel: ObservableObject {
 struct RecipeLibraryView: View {
     @StateObject private var viewModel = RecipeLibraryViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var showingCreateRecipe = false
     var onRecipeAdded: (() -> Void)?
 
     var body: some View {
@@ -73,7 +74,7 @@ struct RecipeLibraryView: View {
                         }
                     }
                     .padding(12)
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
 
@@ -129,10 +130,22 @@ struct RecipeLibraryView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingCreateRecipe = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
             }
             .task { await viewModel.loadRecipes() }
             .onChange(of: viewModel.searchText) { _, _ in
                 viewModel.debouncedSearch()
+            }
+            .sheet(isPresented: $showingCreateRecipe) {
+                CustomRecipeSheet {
+                    Task { await viewModel.loadRecipes() }
+                }
             }
         }
     }
@@ -161,7 +174,7 @@ private struct CategoryChip: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.green : Color(.secondarySystemBackground))
+            .background(isSelected ? AppTheme.primary : AppTheme.surface2)
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }
@@ -218,9 +231,9 @@ private struct RecipeCard: View {
                     .foregroundStyle(.tertiary)
             }
             .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 8)
+            .background(AppTheme.surface1)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .cardShadow()
         }
         .sheet(isPresented: $showingDetail) {
             RecipeDetailSheet(recipe: recipe, onRecipeAdded: onRecipeAdded)
@@ -304,7 +317,7 @@ struct RecipeDetailSheet: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(showSuccess ? Color.green : Color.green)
+                        .background(AppTheme.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                     .disabled(isAdding || showSuccess)
@@ -348,8 +361,8 @@ struct RecipeDetailSheet: View {
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.green.opacity(0.15))
-                                .foregroundStyle(.green)
+                                .background(AppTheme.primary.opacity(0.15))
+                                .foregroundStyle(AppTheme.primary)
                                 .clipShape(Capsule())
                         }
                     }
@@ -357,7 +370,7 @@ struct RecipeDetailSheet: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
@@ -397,7 +410,7 @@ struct RecipeDetailSheet: View {
                     }
                 }
             }
-            .background(Color(.secondarySystemBackground))
+            .background(AppTheme.surface2)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
@@ -416,7 +429,7 @@ struct RecipeDetailSheet: View {
                             .font(.caption.bold())
                             .foregroundStyle(.white)
                             .frame(width: 24, height: 24)
-                            .background(Color.green)
+                            .background(AppTheme.primary)
                             .clipShape(Circle())
 
                         Text(step)
@@ -426,7 +439,7 @@ struct RecipeDetailSheet: View {
                 }
             }
             .padding()
-            .background(Color(.secondarySystemBackground))
+            .background(AppTheme.surface2)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
@@ -448,7 +461,7 @@ struct RecipeDetailSheet: View {
                             .font(.subheadline.bold())
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
-                            .background(selectedServings == serving ? Color.green : Color(.secondarySystemBackground))
+                            .background(selectedServings == serving ? AppTheme.primary : AppTheme.surface2)
                             .foregroundStyle(selectedServings == serving ? .white : .primary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
@@ -474,7 +487,7 @@ struct RecipeDetailSheet: View {
                             .font(.subheadline.bold())
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
-                            .background(selectedMealType == type ? Color.green : Color(.secondarySystemBackground))
+                            .background(selectedMealType == type ? AppTheme.primary : AppTheme.surface2)
                             .foregroundStyle(selectedMealType == type ? .white : .primary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
@@ -518,5 +531,143 @@ struct RecipeDetailSheet: View {
     private func formatAmount(_ value: Double) -> String {
         if value == value.rounded() { return "\(Int(value))" }
         return String(format: "%.1f", value)
+    }
+}
+
+// MARK: - Custom Recipe Sheet
+
+struct CustomRecipeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var onSaved: (() -> Void)?
+
+    @State private var name = ""
+    @State private var category = "lunch"
+    @State private var calories = ""
+    @State private var protein = ""
+    @State private var carbs = ""
+    @State private var fat = ""
+    @State private var prepTime = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    private var isValid: Bool {
+        !name.isEmpty && Double(calories) != nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Recipe Info") {
+                    TextField("Recipe name", text: $name)
+
+                    Picker("Category", selection: $category) {
+                        ForEach(RecipeCategory.allCases, id: \.self) { cat in
+                            Text(cat.displayName).tag(cat.rawValue)
+                        }
+                    }
+                }
+
+                Section("Macros per Serving") {
+                    HStack {
+                        Text("Calories")
+                        Spacer()
+                        TextField("0", text: $calories)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text("kcal")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Protein")
+                        Spacer()
+                        TextField("0", text: $protein)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text("g")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Carbs")
+                        Spacer()
+                        TextField("0", text: $carbs)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text("g")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Fat")
+                        Spacer()
+                        TextField("0", text: $fat)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text("g")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Optional") {
+                    HStack {
+                        Text("Prep time")
+                        Spacer()
+                        TextField("0", text: $prepTime)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                        Text("min")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let error {
+                    Section {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .font(.caption)
+                    }
+                }
+            }
+            .navigationTitle("Create Recipe")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await saveRecipe() }
+                    }
+                    .disabled(!isValid || isSaving)
+                }
+            }
+        }
+    }
+
+    private func saveRecipe() async {
+        isSaving = true
+        error = nil
+        do {
+            let recipe = CustomRecipeCreate(
+                name: name,
+                category: category,
+                caloriesPerServing: Double(calories) ?? 0,
+                proteinGPerServing: Double(protein) ?? 0,
+                carbsGPerServing: Double(carbs) ?? 0,
+                fatGPerServing: Double(fat) ?? 0,
+                prepTimeMin: Int(prepTime)
+            )
+            _ = try await APIService.shared.createCustomRecipe(recipe)
+            HapticsManager.shared.success()
+            onSaved?()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+            HapticsManager.shared.error()
+        }
+        isSaving = false
     }
 }

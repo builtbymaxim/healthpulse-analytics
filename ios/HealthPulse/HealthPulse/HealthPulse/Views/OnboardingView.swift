@@ -42,7 +42,17 @@ struct OnboardingView: View {
     @State private var isLoadingPlan = false
     @State private var socialOptIn: Bool = false
 
-    let totalSteps = 13
+    // Dietary profile (Phase 8C Batch 2)
+    @State private var dietaryPattern: String = "omnivore"
+    @State private var selectedAllergies: Set<String> = []
+    @State private var mealsPerDay: Int = 3
+    // Experience & motivation
+    @State private var experienceLevel: String = "beginner"
+    @State private var motivation: String = "health"
+    @State private var bodyFatPct: Double? = nil
+    @State private var bodyFatInput: String = ""
+
+    let totalSteps = 15
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,7 +76,9 @@ struct OnboardingView: View {
                 planSuggestionStep.tag(9)
                 sleepStep.tag(10)
                 socialOptInStep.tag(11)
-                healthKitStep.tag(12)
+                dietaryProfileStep.tag(12)
+                experienceStep.tag(13)
+                healthKitStep.tag(14)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentStep)
@@ -82,7 +94,7 @@ struct OnboardingView: View {
                             .font(.title2.bold())
                             .foregroundStyle(.primary)
                             .frame(width: 56, height: 56)
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(Circle())
                     }
                 }
@@ -98,7 +110,7 @@ struct OnboardingView: View {
                             .font(.headline)
                     }
                     .frame(width: 80, height: 56)
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .disabled(isSaving)
@@ -217,7 +229,7 @@ struct OnboardingView: View {
                 .focused($nameFieldFocused)
                 .onSubmit { handleNext() }
                 .padding()
-                .background(Color(.secondarySystemBackground))
+                .background(AppTheme.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .padding(.horizontal, 40)
 
@@ -304,7 +316,7 @@ struct OnboardingView: View {
                                 .font(.subheadline.bold())
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(gender == g ? Color.green : Color(.secondarySystemBackground))
+                                .background(gender == g ? Color.green : AppTheme.surface2)
                                 .foregroundStyle(gender == g ? .white : .primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
@@ -424,7 +436,7 @@ struct OnboardingView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
@@ -527,7 +539,7 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
@@ -617,7 +629,7 @@ struct OnboardingView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     // Macro breakdown card
@@ -647,7 +659,7 @@ struct OnboardingView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     Text("You can adjust these in your profile settings")
@@ -723,7 +735,7 @@ struct OnboardingView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
@@ -763,7 +775,7 @@ struct OnboardingView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
-                                .background(Color(.secondarySystemBackground))
+                                .background(AppTheme.surface2)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                                 .contentShape(Rectangle())
                             }
@@ -808,7 +820,7 @@ struct OnboardingView: View {
                             Text("\(days)")
                                 .font(.headline)
                                 .frame(width: 48, height: 48)
-                                .background(daysPerWeek == days ? Color.green : Color(.secondarySystemBackground))
+                                .background(daysPerWeek == days ? Color.green : AppTheme.surface2)
                                 .foregroundStyle(daysPerWeek == days ? .white : .primary)
                                 .clipShape(Circle())
                         }
@@ -837,7 +849,7 @@ struct OnboardingView: View {
                             Text(dayAbbreviation(day))
                                 .font(.subheadline.bold())
                                 .frame(width: 44, height: 44)
-                                .background(preferredDays.contains(day) ? Color.green : Color(.secondarySystemBackground))
+                                .background(preferredDays.contains(day) ? Color.green : AppTheme.surface2)
                                 .foregroundStyle(preferredDays.contains(day) ? .white : .primary)
                                 .clipShape(Circle())
                         }
@@ -915,7 +927,7 @@ struct OnboardingView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -1060,7 +1072,7 @@ struct OnboardingView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -1099,7 +1111,7 @@ struct OnboardingView: View {
                         }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -1115,6 +1127,266 @@ struct OnboardingView: View {
                 .foregroundStyle(.tertiary)
 
             Spacer()
+        }
+    }
+
+    // MARK: - Dietary Profile Step
+
+    private var dietaryProfileStep: some View {
+        ScrollView {
+            VStack(spacing: 28) {
+                VStack(spacing: 8) {
+                    Text("Dietary Profile")
+                        .font(.title.bold())
+                    Text("Help us personalize your nutrition recommendations")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+
+                // Diet type
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("How do you eat?")
+                        .font(.headline)
+
+                    let dietOptions: [(String, String, String)] = [
+                        ("omnivore", "Omnivore", "fork.knife"),
+                        ("vegetarian", "Vegetarian", "leaf.fill"),
+                        ("vegan", "Vegan", "leaf.circle.fill"),
+                        ("pescatarian", "Pescatarian", "fish.fill"),
+                        ("keto", "Keto / Low-Carb", "flame.fill"),
+                    ]
+
+                    ForEach(dietOptions, id: \.0) { value, label, icon in
+                        Button {
+                            dietaryPattern = value
+                            HapticsManager.shared.selection()
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: icon)
+                                    .font(.title3)
+                                    .foregroundStyle(dietaryPattern == value ? .white : .green)
+                                    .frame(width: 40, height: 40)
+                                    .background(dietaryPattern == value ? Color.green : Color.green.opacity(0.15))
+                                    .clipShape(Circle())
+
+                                Text(label)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                if dietaryPattern == value {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            .padding(12)
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(dietaryPattern == value ? Color.green : Color.clear, lineWidth: 2)
+                            )
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+
+                // Allergies
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Any allergies or intolerances?")
+                        .font(.headline)
+
+                    let allergyOptions = ["gluten", "dairy", "nuts", "shellfish", "soy", "eggs"]
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
+                        ForEach(allergyOptions, id: \.self) { allergy in
+                            Button {
+                                if selectedAllergies.contains(allergy) {
+                                    selectedAllergies.remove(allergy)
+                                } else {
+                                    selectedAllergies.insert(allergy)
+                                }
+                                HapticsManager.shared.selection()
+                            } label: {
+                                Text(allergy.capitalized + "-Free")
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(selectedAllergies.contains(allergy) ? Color.orange : AppTheme.surface2)
+                                    .foregroundStyle(selectedAllergies.contains(allergy) ? .white : .primary)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                }
+
+                // Meals per day
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Meals per day")
+                            .font(.headline)
+                        Spacer()
+                        Text("\(mealsPerDay)")
+                            .font(.title2.bold())
+                            .foregroundStyle(.green)
+                    }
+
+                    Stepper("", value: $mealsPerDay, in: 2...5)
+                        .labelsHidden()
+                }
+
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Experience & Motivation Step
+
+    private var experienceStep: some View {
+        ScrollView {
+            VStack(spacing: 28) {
+                VStack(spacing: 8) {
+                    Text("Your Experience")
+                        .font(.title.bold())
+                    Text("This helps us tailor plan difficulty and goal aggressiveness")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+
+                // Experience level
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Training experience")
+                        .font(.headline)
+
+                    let expOptions: [(String, String, String)] = [
+                        ("beginner", "Beginner", "Less than 1 year"),
+                        ("intermediate", "Intermediate", "1-3 years"),
+                        ("advanced", "Advanced", "3+ years"),
+                    ]
+
+                    ForEach(expOptions, id: \.0) { value, label, desc in
+                        Button {
+                            experienceLevel = value
+                            HapticsManager.shared.selection()
+                        } label: {
+                            HStack(spacing: 14) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(label)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                    Text(desc)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                if experienceLevel == value {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            .padding(14)
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(experienceLevel == value ? Color.green : Color.clear, lineWidth: 2)
+                            )
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+
+                // Motivation
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What motivates you most?")
+                        .font(.headline)
+
+                    let motivationOptions: [(String, String, String)] = [
+                        ("health", "Feel healthier", "heart.fill"),
+                        ("aesthetics", "Look better", "sparkles"),
+                        ("performance", "Perform better in sport", "sportscourt.fill"),
+                        ("event_prep", "Prepare for an event", "calendar.badge.clock"),
+                        ("doctor", "Doctor recommended", "cross.case.fill"),
+                    ]
+
+                    ForEach(motivationOptions, id: \.0) { value, label, icon in
+                        Button {
+                            motivation = value
+                            HapticsManager.shared.selection()
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: icon)
+                                    .font(.title3)
+                                    .foregroundStyle(motivation == value ? .white : .blue)
+                                    .frame(width: 40, height: 40)
+                                    .background(motivation == value ? Color.blue : Color.blue.opacity(0.15))
+                                    .clipShape(Circle())
+
+                                Text(label)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                if motivation == value {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                            .padding(12)
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(motivation == value ? Color.blue : Color.clear, lineWidth: 2)
+                            )
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+
+                // Optional body fat %
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Body fat % (optional)")
+                        .font(.headline)
+                    Text("Enables more accurate calorie calculation")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        TextField("e.g. 15", text: $bodyFatInput)
+                            .keyboardType(.decimalPad)
+                            .font(.title3.bold())
+                            .frame(width: 80)
+                            .multilineTextAlignment(.center)
+                            .onChange(of: bodyFatInput) { _, newValue in
+                                bodyFatPct = Double(newValue)
+                            }
+
+                        Text("%")
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("Skip if unsure")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .background(AppTheme.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal)
         }
     }
 
@@ -1383,7 +1655,13 @@ struct OnboardingView: View {
                     equipment: selectedEquipment.map { $0.rawValue },
                     daysPerWeek: daysPerWeek,
                     preferredDays: Array(preferredDays).sorted(),
-                    socialOptIn: socialOptIn
+                    socialOptIn: socialOptIn,
+                    dietaryPattern: dietaryPattern,
+                    allergies: selectedAllergies.isEmpty ? nil : Array(selectedAllergies),
+                    mealsPerDay: mealsPerDay,
+                    experienceLevel: experienceLevel,
+                    motivation: motivation,
+                    bodyFatPct: bodyFatPct
                 )
 
                 try await APIService.shared.saveOnboardingProfile(profileData)
@@ -1432,7 +1710,7 @@ struct HealthKitBenefitRow: View {
                 .foregroundStyle(.green)
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -1481,6 +1759,14 @@ struct OnboardingProfile: Encodable {
     let preferredDays: [Int]?
     // Social
     let socialOptIn: Bool?
+    // Dietary profile
+    let dietaryPattern: String?
+    let allergies: [String]?
+    let mealsPerDay: Int?
+    // Experience & motivation
+    let experienceLevel: String?
+    let motivation: String?
+    let bodyFatPct: Double?
 
     enum CodingKeys: String, CodingKey {
         case displayName = "display_name"
@@ -1497,6 +1783,12 @@ struct OnboardingProfile: Encodable {
         case daysPerWeek = "days_per_week"
         case preferredDays = "preferred_days"
         case socialOptIn = "social_opt_in"
+        case dietaryPattern = "dietary_pattern"
+        case allergies
+        case mealsPerDay = "meals_per_day"
+        case experienceLevel = "experience_level"
+        case motivation
+        case bodyFatPct = "body_fat_pct"
     }
 }
 

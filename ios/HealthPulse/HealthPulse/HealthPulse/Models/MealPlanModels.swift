@@ -102,6 +102,36 @@ struct Recipe: Codable, Identifiable {
     }
 }
 
+// MARK: - Custom Recipe Create
+
+struct CustomRecipeCreate: Encodable {
+    var name: String
+    var category: String
+    var description: String?
+    var caloriesPerServing: Double
+    var proteinGPerServing: Double
+    var carbsGPerServing: Double
+    var fatGPerServing: Double
+    var fiberGPerServing: Double = 0
+    var servings: Int = 1
+    var tags: [String] = []
+    var goalTypes: [String] = []
+    var prepTimeMin: Int?
+    var cookTimeMin: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name, category, description, servings, tags
+        case caloriesPerServing = "calories_per_serving"
+        case proteinGPerServing = "protein_g_per_serving"
+        case carbsGPerServing = "carbs_g_per_serving"
+        case fatGPerServing = "fat_g_per_serving"
+        case fiberGPerServing = "fiber_g_per_serving"
+        case goalTypes = "goal_types"
+        case prepTimeMin = "prep_time_min"
+        case cookTimeMin = "cook_time_min"
+    }
+}
+
 // MARK: - Meal Plan Item
 
 struct MealPlanItem: Codable, Identifiable {
@@ -387,6 +417,12 @@ struct DayMacroSummary: Codable, Identifiable {
     let totalProteinG: Double
     let totalCarbsG: Double
     let totalFatG: Double
+    // Goal comparison
+    let targetCalories: Double?
+    let calorieDiff: Double?
+    let targetProteinG: Double?
+    let proteinDiff: Double?
+    let onTrack: Bool?
 
     enum CodingKeys: String, CodingKey {
         case dayOfWeek = "day_of_week"
@@ -394,6 +430,11 @@ struct DayMacroSummary: Codable, Identifiable {
         case totalProteinG = "total_protein_g"
         case totalCarbsG = "total_carbs_g"
         case totalFatG = "total_fat_g"
+        case targetCalories = "target_calories"
+        case calorieDiff = "calorie_diff"
+        case targetProteinG = "target_protein_g"
+        case proteinDiff = "protein_diff"
+        case onTrack = "on_track"
     }
 }
 

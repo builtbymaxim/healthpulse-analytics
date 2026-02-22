@@ -50,6 +50,14 @@ class OnboardingProfile(BaseModel):
     preferred_days: list[int] | None = None
     # Social
     social_opt_in: bool | None = None
+    # Dietary profile (Phase 8C Batch 2)
+    dietary_pattern: str | None = None  # omnivore, vegetarian, vegan, pescatarian, keto
+    allergies: list[str] | None = None  # gluten, dairy, nuts, shellfish, soy, eggs
+    meals_per_day: int | None = None  # 2-5
+    # Experience & motivation
+    experience_level: str | None = None  # beginner, intermediate, advanced
+    motivation: str | None = None  # health, aesthetics, performance, event_prep, doctor
+    body_fat_pct: float | None = None
 
 
 class UserSettings(BaseModel):
@@ -66,6 +74,14 @@ class UserSettings(BaseModel):
     daily_step_goal: int | None = None
     # Social
     social_opt_in: bool | None = None
+    # Dietary profile
+    dietary_pattern: str | None = None
+    allergies: list[str] | None = None
+    meals_per_day: int | None = None
+    # Experience & body composition
+    experience_level: str | None = None
+    motivation: str | None = None
+    body_fat_pct: float | None = None
 
 
 class UserProfileUpdate(BaseModel):
@@ -208,6 +224,15 @@ async def update_user_settings(
         settings_data["social_opt_in"] = settings.social_opt_in
     elif "social_opt_in" in current_settings:
         settings_data["social_opt_in"] = current_settings["social_opt_in"]
+
+    # Dietary profile fields
+    for key in ("dietary_pattern", "allergies", "meals_per_day",
+                "experience_level", "motivation", "body_fat_pct"):
+        val = getattr(settings, key)
+        if val is not None:
+            settings_data[key] = val
+        elif key in current_settings:
+            settings_data[key] = current_settings[key]
 
     update_data = {"settings": settings_data}
 
@@ -367,9 +392,23 @@ async def complete_onboarding(
             settings["preferred_days"] = profile.preferred_days
         if profile.social_opt_in is not None:
             settings["social_opt_in"] = profile.social_opt_in
+        # Dietary profile
+        if profile.dietary_pattern:
+            settings["dietary_pattern"] = profile.dietary_pattern
+        if profile.allergies is not None:
+            settings["allergies"] = profile.allergies
+        if profile.meals_per_day:
+            settings["meals_per_day"] = profile.meals_per_day
+        # Experience & motivation
+        if profile.experience_level:
+            settings["experience_level"] = profile.experience_level
+        if profile.motivation:
+            settings["motivation"] = profile.motivation
+        if profile.body_fat_pct is not None:
+            settings["body_fat_pct"] = profile.body_fat_pct
 
         supabase.table("profiles").update({"settings": settings}).eq("id", str(current_user.id)).execute()
-        logger.debug("Settings updated with training preferences")
+        logger.debug("Settings updated with training and dietary preferences")
 
         # Calculate and create nutrition goal
         calculator = get_nutrition_calculator()

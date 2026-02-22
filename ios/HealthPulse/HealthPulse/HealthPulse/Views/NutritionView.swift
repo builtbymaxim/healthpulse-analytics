@@ -19,6 +19,7 @@ struct NutritionView: View {
     @State private var showingWeeklyPlanner = false
     @State private var selectedDate = Date()
     @State private var animationTrigger = false  // Triggers animation on food log
+    @State private var editingEntry: FoodEntry?
 
     var body: some View {
         NavigationStack {
@@ -80,11 +81,27 @@ struct NutritionView: View {
                         }
 
                         // Today's Meals
-                        MealsListCard(entries: summary.entries)
+                        MealsListCard(
+                            entries: summary.entries,
+                            onEdit: { entry in editingEntry = entry },
+                            onDelete: { entry in
+                                Task {
+                                    do {
+                                        _ = try await APIService.shared.deleteFood(entryId: entry.id)
+                                        await loadData()
+                                        animationTrigger.toggle()
+                                        HapticsManager.shared.success()
+                                    } catch {
+                                        ToastManager.shared.error("Failed to delete entry")
+                                    }
+                                }
+                            }
+                        )
                     }
                 }
                 .padding()
             }
+            .background(ThemedBackground())
             .navigationTitle("Nutrition")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -153,6 +170,15 @@ struct NutritionView: View {
                         animationTrigger.toggle()
                     }
                 })
+            }
+            .sheet(item: $editingEntry) { entry in
+                FoodLogView(editingEntry: entry) { _ in
+                    Task {
+                        await loadData()
+                        animationTrigger.toggle()
+                        HapticsManager.shared.success()
+                    }
+                }
             }
             .refreshable {
                 await loadData()
@@ -273,17 +299,17 @@ struct CalorieProgressCard: View {
         }
         .padding()
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
         .onAppear {
             // Animate on first appear
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                 animatedProgress = progress
             }
         }
         .onChange(of: progress) { _, newValue in
             // Spring animation when progress changes
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                 animatedProgress = newValue
             }
         }
@@ -340,8 +366,8 @@ struct MacroProgressCard: View {
         }
         .padding()
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -385,13 +411,13 @@ struct MacroProgressBar: View {
                 }
                 .onAppear {
                     // Animate on first appear
-                    withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                         animatedWidth = geo.size.width * progress
                     }
                 }
                 .onChange(of: progress) { _, newValue in
                     // Spring animation when progress changes
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                         animatedWidth = geo.size.width * newValue
                     }
                 }
@@ -416,6 +442,8 @@ struct MacroProgressBar: View {
 
 struct MealsListCard: View {
     let entries: [FoodEntry]
+    var onEdit: ((FoodEntry) -> Void)?
+    var onDelete: ((FoodEntry) -> Void)?
 
     var groupedByMeal: [String: [FoodEntry]] {
         Dictionary(grouping: entries) { $0.mealType ?? "other" }
@@ -448,26 +476,28 @@ struct MealsListCard: View {
             } else {
                 ForEach(MealType.allCases, id: \.self) { mealType in
                     if let mealEntries = groupedByMeal[mealType.rawValue], !mealEntries.isEmpty {
-                        MealSection(mealType: mealType, entries: mealEntries)
+                        MealSection(mealType: mealType, entries: mealEntries, onEdit: onEdit, onDelete: onDelete)
                     }
                 }
 
                 // Other entries without meal type
                 if let otherEntries = groupedByMeal["other"], !otherEntries.isEmpty {
-                    MealSection(mealType: nil, entries: otherEntries)
+                    MealSection(mealType: nil, entries: otherEntries, onEdit: onEdit, onDelete: onDelete)
                 }
             }
         }
         .padding()
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
 struct MealSection: View {
     let mealType: MealType?
     let entries: [FoodEntry]
+    var onEdit: ((FoodEntry) -> Void)?
+    var onDelete: ((FoodEntry) -> Void)?
 
     var totalCalories: Double {
         entries.reduce(0) { $0 + $1.calories }
@@ -494,18 +524,57 @@ struct MealSection: View {
             }
 
             ForEach(entries) { entry in
-                HStack {
-                    Text(entry.name)
-                        .font(.subheadline)
-                    Spacer()
-                    Text("\(Int(entry.calories)) cal")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.leading, 24)
+                FoodEntryRow(entry: entry, onEdit: onEdit, onDelete: onDelete)
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct FoodEntryRow: View {
+    let entry: FoodEntry
+    var onEdit: ((FoodEntry) -> Void)?
+    var onDelete: ((FoodEntry) -> Void)?
+    @State private var showDeleteConfirm = false
+
+    var body: some View {
+        HStack {
+            Text(entry.name)
+                .font(.subheadline)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(Int(entry.calories)) cal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if entry.proteinG > 0 {
+                    Text("P\(Int(entry.proteinG)) C\(Int(entry.carbsG)) F\(Int(entry.fatG))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.leading, 24)
+        .contentShape(Rectangle())
+        .onTapGesture { onEdit?(entry) }
+        .contextMenu {
+            Button {
+                onEdit?(entry)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                showDeleteConfirm = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .alert("Delete Entry?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) { onDelete?(entry) }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Delete \"\(entry.name)\"? This cannot be undone.")
+        }
     }
 }
 

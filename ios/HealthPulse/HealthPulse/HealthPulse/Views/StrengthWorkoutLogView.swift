@@ -68,10 +68,10 @@ struct StrengthWorkoutLogView: View {
                                         Text("Add Set")
                                     }
                                     .font(.headline)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(AppTheme.primary)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.green.opacity(0.1))
+                                    .background(AppTheme.primary.opacity(0.1))
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
 
@@ -156,7 +156,7 @@ struct StrengthWorkoutLogView: View {
                             }
                             .padding()
                         }
-                        .background(Color(.systemBackground))
+                        .background(AppTheme.surface1)
                     }
                 }
             }
@@ -336,6 +336,7 @@ struct StrengthWorkoutLogView: View {
             if let firstPR = prSets.first, let name = firstPR.exerciseName {
                 prExerciseName = name
                 showPRAlert = true
+                HapticsManager.shared.doubleHeavy()
             }
 
             onSave(savedSets)
@@ -383,7 +384,7 @@ struct SetRowView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .padding()
-                .background(Color(.secondarySystemBackground))
+                .background(AppTheme.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
@@ -417,7 +418,7 @@ struct SetRowView: View {
                             .font(.title2.bold())
                             .frame(width: 80)
                             .padding(8)
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         Text("kg")
                             .font(.subheadline)
@@ -435,7 +436,7 @@ struct SetRowView: View {
                         .font(.title2.bold())
                         .frame(width: 60)
                         .padding(8)
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
@@ -450,9 +451,9 @@ struct SetRowView: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 5)
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .cardShadow()
     }
 
     private func formatWeight(_ w: Double) -> String {
@@ -563,7 +564,7 @@ struct FilterChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isSelected ? AppTheme.primary : Color(.secondarySystemBackground))
+            .background(isSelected ? AppTheme.primary : AppTheme.surface2)
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }

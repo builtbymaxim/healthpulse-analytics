@@ -14,6 +14,7 @@ from app.models.meal_plans import (
     CreateWeeklyPlanRequest, UpsertWeeklyPlanItemRequest,
     AutoFillRequest, ApplyToPlanRequest,
     DayMacroSummary, WeeklyShoppingListItem, WeeklyPlanItemResponse,
+    CustomRecipeCreate,
 )
 
 router = APIRouter()
@@ -29,6 +30,47 @@ async def list_recipes(
 ):
     service = get_meal_plan_service()
     return service.get_recipes(category=category, goal_type=goal_type, search=search, tag=tag)
+
+
+@router.get("/recipes/custom", response_model=list[RecipeListItem])
+async def list_custom_recipes(current_user: CurrentUser = Depends(get_current_user)):
+    service = get_meal_plan_service()
+    return service.get_custom_recipes(user_id=current_user.id)
+
+
+@router.post("/recipes/custom", response_model=RecipeResponse)
+async def create_custom_recipe(
+    data: CustomRecipeCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    service = get_meal_plan_service()
+    recipe = service.create_custom_recipe(user_id=current_user.id, data=data.model_dump())
+    return recipe
+
+
+@router.put("/recipes/custom/{recipe_id}", response_model=RecipeResponse)
+async def update_custom_recipe(
+    recipe_id: UUID,
+    data: CustomRecipeCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    service = get_meal_plan_service()
+    recipe = service.update_custom_recipe(user_id=current_user.id, recipe_id=recipe_id, data=data.model_dump())
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found or not owned by you")
+    return recipe
+
+
+@router.delete("/recipes/custom/{recipe_id}")
+async def delete_custom_recipe(
+    recipe_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    service = get_meal_plan_service()
+    deleted = service.delete_custom_recipe(user_id=current_user.id, recipe_id=recipe_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Recipe not found or not owned by you")
+    return {"message": "Recipe deleted"}
 
 
 @router.get("/recipes/{recipe_id}", response_model=RecipeResponse)

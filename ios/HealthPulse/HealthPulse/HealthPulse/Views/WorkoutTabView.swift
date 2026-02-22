@@ -17,6 +17,7 @@ struct WorkoutTabView: View {
     @State private var showPRCelebration = false
     @State private var achievedPRs: [PRInfo] = []
     @State private var recentWorkouts: [Workout] = []
+    @State private var unifiedWorkouts: [UnifiedWorkoutEntry] = []
     @State private var todaysWorkout: TodayWorkoutResponse?
     @State private var hasActivePlan = false
 
@@ -85,11 +86,11 @@ struct WorkoutTabView: View {
                     Divider()
                         .padding(.horizontal)
 
-                    // Recent Workouts
+                    // Recent Workouts (unified: freeform + plan sessions)
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderLabel(text: "Recent Workouts")
 
-                        if recentWorkouts.isEmpty {
+                        if unifiedWorkouts.isEmpty {
                             // Empty state
                             VStack(spacing: 12) {
                                 Image(systemName: "figure.run.circle")
@@ -107,16 +108,8 @@ struct WorkoutTabView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
                         } else {
-                            ForEach(recentWorkouts.prefix(5)) { workout in
-                                NavigationLink {
-                                    WorkoutDetailView(workout: workout) {
-                                        // Remove from local list immediately
-                                        recentWorkouts.removeAll { $0.id == workout.id }
-                                    }
-                                } label: {
-                                    RecentWorkoutRow(workout: workout)
-                                }
-                                .buttonStyle(.plain)
+                            ForEach(unifiedWorkouts.prefix(8)) { entry in
+                                UnifiedWorkoutRow(entry: entry)
                             }
                         }
                     }
@@ -126,6 +119,7 @@ struct WorkoutTabView: View {
                 }
                 .padding(.top)
             }
+            .background(ThemedBackground())
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -142,7 +136,7 @@ struct WorkoutTabView: View {
             }
             .fullScreenCover(isPresented: $showWorkoutExecution) {
                 if let workout = todaysWorkout {
-                    WorkoutExecutionView(workout: workout, planId: nil) { prs in
+                    WorkoutExecutionView(workout: workout, planId: workout.planId) { prs in
                         if !prs.isEmpty {
                             achievedPRs = prs
                             showPRCelebration = true
@@ -225,9 +219,11 @@ struct WorkoutTabView: View {
     private func loadRecentWorkouts() {
         Task {
             do {
-                recentWorkouts = try await APIService.shared.getWorkouts(days: 7)
+                async let freeform = APIService.shared.getWorkouts(days: 7)
+                async let unified = APIService.shared.getUnifiedWorkouts(days: 14, limit: 10)
+                recentWorkouts = try await freeform
+                unifiedWorkouts = try await unified
             } catch {
-                // Silently fail - empty state will show
                 print("Failed to load workouts: \(error)")
             }
         }
@@ -360,8 +356,8 @@ struct TodayPlanWorkoutCard: View {
         }
         .padding()
         .background(AppTheme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
     }
 }
 
@@ -581,6 +577,98 @@ struct GeneralWorkoutSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Unified Workout Row
+
+struct UnifiedWorkoutRow: View {
+    let entry: UnifiedWorkoutEntry
+
+    private var icon: String {
+        if entry.isPlanWorkout { return "dumbbell.fill" }
+        switch entry.workoutType {
+        case "running": return "figure.run"
+        case "cycling": return "figure.outdoor.cycle"
+        case "swimming": return "figure.pool.swim"
+        case "yoga": return "figure.yoga"
+        case "hiit": return "figure.highintensity.intervaltraining"
+        case "walking": return "figure.walk"
+        case "hiking": return "figure.hiking"
+        case "weight_training", "strength": return "dumbbell.fill"
+        default: return "figure.mixed.cardio"
+        }
+    }
+
+    private var iconColor: Color {
+        if entry.isPlanWorkout { return AppTheme.primary }
+        switch entry.workoutType {
+        case "running": return .orange
+        case "cycling": return .blue
+        case "swimming": return .cyan
+        case "yoga": return .purple
+        case "hiit": return .red
+        case "weight_training", "strength": return AppTheme.primary
+        default: return .gray
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(iconColor)
+                .frame(width: 44, height: 44)
+                .background(iconColor.opacity(0.1))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.displayName)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+
+                HStack(spacing: 8) {
+                    if let mins = entry.durationMinutes {
+                        Text("\(mins) min")
+                    }
+                    if entry.isPlanWorkout {
+                        Text("Plan")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.primary.opacity(0.15))
+                            .foregroundStyle(AppTheme.primary)
+                            .clipShape(Capsule())
+                    }
+                    if let cals = entry.caloriesBurned, cals > 0 {
+                        Text("\(cals) kcal")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(entry.startTime.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                if let rating = entry.overallRating {
+                    HStack(spacing: 1) {
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= rating ? "star.fill" : "star")
+                                .font(.system(size: 8))
+                                .foregroundColor(star <= rating ? .yellow : .gray.opacity(0.4))
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

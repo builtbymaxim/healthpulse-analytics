@@ -10,6 +10,7 @@ import SwiftUI
 struct FoodLogView: View {
     @Environment(\.dismiss) private var dismiss
 
+    let editingEntry: FoodEntry?
     let onSave: (FoodEntry) -> Void
 
     @State private var name = ""
@@ -28,6 +29,13 @@ struct FoodLogView: View {
 
     @State private var isSaving = false
     @State private var error: String?
+
+    var isEditing: Bool { editingEntry != nil }
+
+    init(editingEntry: FoodEntry? = nil, onSave: @escaping (FoodEntry) -> Void) {
+        self.editingEntry = editingEntry
+        self.onSave = onSave
+    }
 
     // Computed totals
     var amount: Double {
@@ -70,7 +78,7 @@ struct FoodLogView: View {
                         TextField("Food name", text: $name)
                             .font(.title3)
                             .padding()
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         // Meal type selector
@@ -124,7 +132,7 @@ struct FoodLogView: View {
                                         .font(.subheadline.bold())
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 8)
-                                        .background(amountGrams == String(grams) ? Color.green : Color(.secondarySystemBackground))
+                                        .background(amountGrams == String(grams) ? Color.green : AppTheme.surface2)
                                         .foregroundStyle(amountGrams == String(grams) ? .white : .primary)
                                         .clipShape(Capsule())
                                 }
@@ -144,7 +152,7 @@ struct FoodLogView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .padding(8)
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                     }
@@ -164,7 +172,7 @@ struct FoodLogView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground))
+                        .background(AppTheme.surface2)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding(.horizontal)
                     }
@@ -246,7 +254,7 @@ struct FoodLogView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text("Log Food")
+                            Text(isEditing ? "Update Entry" : "Log Food")
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -261,7 +269,8 @@ struct FoodLogView: View {
                 }
                 .padding(.top)
             }
-            .navigationTitle("Log Food")
+            .navigationTitle(isEditing ? "Edit Entry" : "Log Food")
+            .onAppear { prefillIfEditing() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -291,6 +300,20 @@ struct FoodLogView: View {
         HapticsManager.shared.light()
     }
 
+    private func prefillIfEditing() {
+        guard let entry = editingEntry else { return }
+        name = entry.name
+        if let mealStr = entry.mealType, let meal = MealType(rawValue: mealStr) {
+            selectedMealType = meal
+        }
+        // Pre-fill with total values (assume 100g serving for editing)
+        caloriesPer100g = String(Int(entry.calories))
+        proteinPer100g = String(format: "%.1f", entry.proteinG)
+        carbsPer100g = String(format: "%.1f", entry.carbsG)
+        fatPer100g = String(format: "%.1f", entry.fatG)
+        amountGrams = "100"
+    }
+
     private func saveEntry() async {
         guard isValid else { return }
 
@@ -298,20 +321,35 @@ struct FoodLogView: View {
         error = nil
         HapticsManager.shared.medium()
 
-        let entry = FoodEntryCreate(
-            name: name,
-            mealType: selectedMealType,
-            calories: totalCalories,
-            proteinG: totalProtein,
-            carbsG: totalCarbs,
-            fatG: totalFat,
-            notes: nil
-        )
-
         do {
-            let savedEntry = try await APIService.shared.logFood(entry)
-            HapticsManager.shared.success()
-            onSave(savedEntry)
+            if let existing = editingEntry {
+                // Update existing entry
+                let update = FoodEntryUpdate(
+                    name: name,
+                    mealType: selectedMealType.rawValue,
+                    calories: totalCalories,
+                    proteinG: totalProtein,
+                    carbsG: totalCarbs,
+                    fatG: totalFat
+                )
+                let savedEntry = try await APIService.shared.updateFood(entryId: existing.id, update: update)
+                HapticsManager.shared.success()
+                onSave(savedEntry)
+            } else {
+                // Create new entry
+                let entry = FoodEntryCreate(
+                    name: name,
+                    mealType: selectedMealType,
+                    calories: totalCalories,
+                    proteinG: totalProtein,
+                    carbsG: totalCarbs,
+                    fatG: totalFat,
+                    notes: nil
+                )
+                let savedEntry = try await APIService.shared.logFood(entry)
+                HapticsManager.shared.success()
+                onSave(savedEntry)
+            }
             dismiss()
         } catch {
             self.error = error.localizedDescription
@@ -339,7 +377,7 @@ struct MealTypeChip: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(isSelected ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))
+            .background(isSelected ? Color.green.opacity(0.2) : AppTheme.surface2)
             .foregroundStyle(isSelected ? .green : .primary)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
@@ -417,7 +455,7 @@ struct QuickFoodChip: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color(.secondarySystemBackground))
+            .background(AppTheme.surface2)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)

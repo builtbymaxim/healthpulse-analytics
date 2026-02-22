@@ -142,7 +142,7 @@ struct FoodScannerView: View {
                     }
                 }
                 .padding()
-                .background(Color(.secondarySystemBackground))
+                .background(AppTheme.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -326,7 +326,7 @@ struct FoodScannerView: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -372,7 +372,7 @@ struct FoodScannerView: View {
                             .font(.subheadline.bold())
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity)
-                            .background(selectedMealType == meal ? Color.green : Color(.secondarySystemBackground))
+                            .background(selectedMealType == meal ? Color.green : AppTheme.surface2)
                             .foregroundStyle(selectedMealType == meal ? .white : .primary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }

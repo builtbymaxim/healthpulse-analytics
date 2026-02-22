@@ -59,7 +59,7 @@ struct MealPlanBrowseView: View {
                                         .font(.subheadline.bold())
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 8)
-                                        .background(viewModel.selectedGoalType == goalType ? Color.green : Color(.secondarySystemBackground))
+                                        .background(viewModel.selectedGoalType == goalType ? AppTheme.primary : AppTheme.surface2)
                                         .foregroundStyle(viewModel.selectedGoalType == goalType ? .white : .primary)
                                         .clipShape(Capsule())
                                 }
@@ -159,9 +159,9 @@ private struct MealPlanCard: View {
                 }
             }
             .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 8)
+            .background(AppTheme.surface1)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .cardShadow()
         }
         .sheet(isPresented: $showingDetail) {
             MealPlanDetailSheet(templateId: template.id, onMealsAdded: onMealsAdded)
@@ -257,7 +257,7 @@ private struct MealPlanDetailSheet: View {
                                     .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(showSuccess ? Color.green : Color.green)
+                                    .background(AppTheme.primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                                 }
                                 .disabled(isAddingAll || showSuccess)
@@ -344,7 +344,7 @@ private struct MealPlanDetailSheet: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
@@ -402,7 +402,7 @@ private struct MealPlanDetailSheet: View {
                     }
                 }
             }
-            .background(Color(.secondarySystemBackground))
+            .background(AppTheme.surface2)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }

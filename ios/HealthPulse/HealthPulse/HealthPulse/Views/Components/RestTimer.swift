@@ -55,7 +55,7 @@ struct RestTimer: View {
                                 .font(.subheadline.bold())
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                                .background(selectedDuration == duration ? Color.green : Color(.secondarySystemBackground))
+                                .background(selectedDuration == duration ? Color.green : AppTheme.surface2)
                                 .foregroundStyle(selectedDuration == duration ? .white : .primary)
                                 .clipShape(Capsule())
                         }

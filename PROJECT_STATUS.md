@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-20
+> Last updated: 2026-02-22
 
 ## Overview
 
@@ -98,6 +98,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - JWT token verification (ES256 via JWKS + HS256 fallback)
 - Token stored in iOS Keychain (migrated from UserDefaults)
 - User profile: age, height, weight, gender, activity level, fitness goal
+- Dietary preferences: diet type, allergies, meals per day, fasting window
+- Training experience level + motivation + optional body fat %
 - Baseline settings: HRV baseline, resting HR baseline, target sleep, step goal
 - Unit preferences (metric/imperial)
 
@@ -130,10 +132,13 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Training plan integration (plan workouts + ad-hoc)
 
 ### Training Plans
-- 6 plan templates (Full Body, Upper/Lower, PPL, Home Bodyweight, C25K, Hybrid)
+- 10 plan templates (Full Body, Upper/Lower, PPL, Home Bodyweight, C25K, Hybrid, Time-Crunched, Glute & Hypertrophy, Longevity & Mobility, Athletic Performance)
 - Plan setup wizard: goal → modality → equipment → schedule
 - Weekly schedule view with workout cards
 - Plan editing (swap exercises, change days) with calendar conflict indicators
+- Exercise swap sheet with muscle-group-matched alternatives
+- Experience-level auto-filtering (beginner/intermediate/advanced)
+- Difficulty badges on template cards (color-coded)
 - Deactivate plan with confirmation
 - Today's workout card linking to execution
 - Calendar sync: auto-create events in dedicated HealthPulse calendar (4 weeks rolling)
@@ -142,9 +147,14 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 ### Nutrition
 - Daily calorie and macro tracking
 - Food logging with meal type (breakfast/lunch/dinner/snack)
+- Swipe-to-delete and tap-to-edit on food entries
 - Animated calorie progress ring and macro progress bars
-- Nutrition goal calculation based on profile (BMR/TDEE)
+- Dual BMR: Mifflin-St Jeor + Katch-McArdle (when body fat % known)
+- Calorie/macro cycling: training day +10% kcal (higher carbs), rest day compensating (higher protein)
+- Goal-setting guardrails with safe rate validation and calorie floors
 - Custom calorie target override
+- Custom recipe creation (user-owned recipes)
+- Dietary preference filtering (vegan/vegetarian/keto/pescatarian + allergen exclusion)
 - Pull-to-refresh without hiding content
 
 ### Sleep
@@ -199,8 +209,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 |---------|---------|
 | `dashboard_service.py` | Composite dashboard data aggregation |
 | `prediction_service.py` | ML predictions (recovery, readiness, trends) |
-| `nutrition_calculator.py` | BMR/TDEE + macro target calculations |
-| `nutrition_service.py` | Food entry CRUD + daily summaries |
+| `nutrition_calculator.py` | Dual BMR (Mifflin-St Jeor + Katch-McArdle), TDEE, calorie/macro cycling, goal guardrails |
+| `nutrition_service.py` | Food entry CRUD, daily summaries, daily cycling-aware targets |
 | `exercise_service.py` | Exercise library + strength analytics |
 | `progression_service.py` | Progressive overload weight suggestions |
 | `sleep_service.py` | Sleep metrics + scoring |
@@ -213,7 +223,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 |------|---------|
 | `ContentView` | Root tab navigation + greeting overlay |
 | `AuthView` | Login/signup |
-| `OnboardingView` | Profile setup wizard (12 steps incl. name) |
+| `OnboardingView` | Profile setup wizard (15 steps incl. name, dietary profile, experience) |
 | `GreetingView` | Animated daily greeting splash on app open |
 | `TodayView` | Smart dashboard (500+ lines) |
 | `WorkoutTabView` | Workout hub (today's plan + ad-hoc + history) |
@@ -354,7 +364,7 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - All cross-user queries server-side (backend uses service key, no RLS changes on existing tables)
 
 ### Phase 9 — Meal Plans, Recipes & Barcode Scanning
-- Recipe library: ~35 pre-seeded recipes with ingredients, instructions, macros per serving
+- Recipe library: ~65 pre-seeded recipes with ingredients, instructions, macros per serving
 - Recipes tagged by category (breakfast/lunch/dinner/snack/dessert/shake) and goal type
 - 12 meal plan templates (3 per goal: lose_weight, build_muscle, maintain, general_health)
 - Quick-add: one-tap recipe → food_entry with correct macros (`source="recipe"`)
@@ -494,6 +504,25 @@ Structured `logger.info/debug/error` added to all service and API files that lac
 ./shannon start URL=http://localhost:8000 REPO=/path/to/healthpulse-analytics
 ```
 Results written to `audit-logs/`. Fix any high/critical findings before public launch.
+
+### Phase 8C — Sports Science Overhaul
+
+**Batch 1: Core Science & CRUD Fixes**
+
+| # | Area | What Shipped |
+|---|------|-------------|
+| 1 | Nutrition Engine | Dual BMR (Mifflin-St Jeor + Katch-McArdle when body fat % known), calorie/macro cycling (training +10% kcal, rest day compensating), `GET /daily-targets` endpoint, protein floor 1.6 g/kg, goal-specific macro splits |
+| 2 | Goal-Setting Guardrails | Timeline step in onboarding (step 5), safe rate validation (0.5-1% BW/week loss, 0.25-0.5% gain), calorie floors (1200F/1500M), color-coded safety indicators (green/yellow/orange/red), auto-recalc on profile change |
+| 3 | Unified Workout History | `GET /workouts/unified` merging `workouts` + `workout_sessions`, planId threading fix in WorkoutTabView, unified history feed with source discriminator |
+| 4 | Meal Editing & Deletion | `PUT /food/{entry_id}` endpoint, swipe-to-delete on food entries, tap-to-edit with pre-filled FoodLogView |
+
+**Batch 2: Personalization & Content Expansion**
+
+| # | Area | What Shipped |
+|---|------|-------------|
+| 5 | User Profiling | 2 new onboarding steps (dietary preferences: omnivore/vegetarian/vegan/pescatarian/keto + allergies multi-select; experience/motivation/body fat %), post-onboarding editing in ProfileView |
+| 6 | Recipe & Meal Plan Alignment | Dietary preference filtering in recipe suggestions, per-meal calorie budgeting, macro comparison overlay in weekly plan macros, custom recipe CRUD (create/list/update/delete), 30 new seed recipes (vegan, keto, pescatarian, gluten-free, bulking) |
+| 7 | Training Plan Expansion | 4 new templates (Time-Crunched Professional, Glute & Hypertrophy Focus, Longevity & Mobility Base, Athletic Performance), exercise swap UI with muscle-group-matched alternatives, experience-level auto-filtering, difficulty badges |
 
 ### App Icon & Landing Page Rebrand
 

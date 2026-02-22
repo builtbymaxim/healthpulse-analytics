@@ -47,6 +47,47 @@ class MealPlanService:
         result = self.supabase.table("recipes").select("*").eq("id", str(recipe_id)).maybe_single().execute()
         return result.data if result and result.data else None
 
+    # ─── Custom Recipe CRUD ──────────────────────────────────────────
+
+    def create_custom_recipe(self, user_id: UUID, data: dict) -> dict:
+        data["user_id"] = str(user_id)
+        result = self.supabase.table("recipes").insert(data).execute()
+        if not result.data:
+            raise ValueError("Failed to create recipe")
+        return result.data[0]
+
+    def get_custom_recipes(self, user_id: UUID):
+        result = (
+            self.supabase.table("recipes")
+            .select("id, name, category, description, calories_per_serving, protein_g_per_serving, "
+                    "carbs_g_per_serving, fat_g_per_serving, fiber_g_per_serving, tags, goal_types, "
+                    "prep_time_min, cook_time_min")
+            .eq("user_id", str(user_id))
+            .order("name")
+            .execute()
+        )
+        return result.data or []
+
+    def update_custom_recipe(self, user_id: UUID, recipe_id: UUID, data: dict) -> dict | None:
+        result = (
+            self.supabase.table("recipes")
+            .update(data)
+            .eq("id", str(recipe_id))
+            .eq("user_id", str(user_id))
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    def delete_custom_recipe(self, user_id: UUID, recipe_id: UUID) -> bool:
+        result = (
+            self.supabase.table("recipes")
+            .delete()
+            .eq("id", str(recipe_id))
+            .eq("user_id", str(user_id))
+            .execute()
+        )
+        return bool(result.data)
+
     def get_meal_plan_templates(self, goal_type=None):
         query = self.supabase.table("meal_plan_templates").select("*")
         if goal_type:
@@ -123,8 +164,17 @@ class MealPlanService:
 
     def get_suggested_recipes(self, user_id: UUID, meal_type: str | None = None):
         # Get user's goal type from nutrition_goals
-        goal_result = self.supabase.table("nutrition_goals").select("goal_type").eq("user_id", str(user_id)).maybe_single().execute()
+        goal_result = self.supabase.table("nutrition_goals").select("goal_type, calorie_target").eq("user_id", str(user_id)).maybe_single().execute()
         goal_type = goal_result.data["goal_type"] if goal_result and goal_result.data else None
+        calorie_target = goal_result.data.get("calorie_target") if goal_result and goal_result.data else None
+
+        # Get user's dietary preferences from profile settings
+        profile_result = self.supabase.table("profiles").select("settings").eq("id", str(user_id)).maybe_single().execute()
+        settings = (profile_result.data or {}).get("settings") or {}
+        dietary_pattern = settings.get("dietary_pattern")
+        allergies = settings.get("allergies") or []
+        meals_per_day = settings.get("meals_per_day") or 3
+
         # Fetch recipes
         query = self.supabase.table("recipes").select(
             "id, name, category, description, calories_per_serving, protein_g_per_serving, "
@@ -135,8 +185,45 @@ class MealPlanService:
             query = query.contains("goal_types", [goal_type])
         if meal_type:
             query = query.eq("category", meal_type)
-        result = query.order("name").limit(20).execute()
-        return result.data or []
+
+        # Apply dietary pattern filtering via tags
+        if dietary_pattern and dietary_pattern != "omnivore":
+            tag_map = {
+                "vegan": "vegan",
+                "vegetarian": "vegetarian",
+                "pescatarian": "pescatarian",
+                "keto": "keto",
+            }
+            if dietary_pattern in tag_map:
+                query = query.contains("tags", [tag_map[dietary_pattern]])
+
+        result = query.order("name").limit(50).execute()
+        recipes = result.data or []
+
+        # Filter out recipes containing allergens (tag-based exclusion)
+        if allergies:
+            allergen_tag_map = {
+                "gluten": "gluten_free",
+                "dairy": "dairy_free",
+            }
+            # For allergens that have a "free" tag, only keep recipes with that tag
+            for allergy in allergies:
+                free_tag = allergen_tag_map.get(allergy)
+                if free_tag:
+                    recipes = [r for r in recipes if free_tag in (r.get("tags") or [])]
+
+        # Per-meal calorie budgeting: rank by proximity to budget
+        if calorie_target and meals_per_day:
+            per_meal_budget = calorie_target / meals_per_day
+            budget_min = per_meal_budget * 0.5
+            budget_max = per_meal_budget * 1.5
+            # Prefer recipes within budget range, then sort by proximity
+            in_budget = [r for r in recipes if budget_min <= r.get("calories_per_serving", 0) <= budget_max]
+            out_budget = [r for r in recipes if r not in in_budget]
+            in_budget.sort(key=lambda r: abs(r.get("calories_per_serving", 0) - per_meal_budget))
+            recipes = in_budget + out_budget
+
+        return recipes[:20]
 
     def lookup_barcode(self, barcode: str) -> dict:
         """Proxy to Open Food Facts API with retry and circuit breaker."""
@@ -411,10 +498,19 @@ class MealPlanService:
         return self.get_weekly_plan(user_id, plan_id)
 
     def get_day_macro_summary(self, user_id: UUID, plan_id: UUID) -> list[dict]:
-        """Aggregate macros by day_of_week for a weekly plan."""
+        """Aggregate macros by day_of_week for a weekly plan, with goal comparison."""
         plan = self.get_weekly_plan(user_id, plan_id)
         if not plan:
             return []
+
+        # Fetch user's nutrition goal for comparison
+        goal_result = self.supabase.table("nutrition_goals").select(
+            "calorie_target, protein_target_g"
+        ).eq("user_id", str(user_id)).maybe_single().execute()
+        goal = goal_result.data if goal_result and goal_result.data else None
+        target_cal = goal.get("calorie_target") if goal else None
+        target_protein = goal.get("protein_target_g") if goal else None
+
         day_map: dict[int, dict] = {}
         for item in plan.get("items", []):
             d = item.get("day_of_week", 1)
@@ -430,12 +526,20 @@ class MealPlanService:
             day_map[d]["total_protein_g"] += item.get("total_protein_g", 0)
             day_map[d]["total_carbs_g"] += item.get("total_carbs_g", 0)
             day_map[d]["total_fat_g"] += item.get("total_fat_g", 0)
-        # Round values
+        # Round values and add goal comparison
         for d in day_map.values():
             d["total_calories"] = round(d["total_calories"], 1)
             d["total_protein_g"] = round(d["total_protein_g"], 1)
             d["total_carbs_g"] = round(d["total_carbs_g"], 1)
             d["total_fat_g"] = round(d["total_fat_g"], 1)
+            if target_cal:
+                d["target_calories"] = target_cal
+                d["calorie_diff"] = round(d["total_calories"] - target_cal, 1)
+            if target_protein:
+                d["target_protein_g"] = target_protein
+                d["protein_diff"] = round(d["total_protein_g"] - target_protein, 1)
+            if target_cal:
+                d["on_track"] = abs(d["total_calories"] - target_cal) <= target_cal * 0.1
         return sorted(day_map.values(), key=lambda x: x["day_of_week"])
 
     def apply_plan_to_food_log(self, user_id: UUID, plan_id: UUID, mode: str) -> int:

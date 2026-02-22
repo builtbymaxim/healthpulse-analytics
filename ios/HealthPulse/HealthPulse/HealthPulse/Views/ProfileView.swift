@@ -600,6 +600,14 @@ struct ProfileAndGoalsView: View {
     @State private var activityLevel: ActivityLevel = .moderate
     @State private var fitnessGoal: FitnessGoal = .health
 
+    // Dietary & experience
+    @State private var dietaryPattern: String = "omnivore"
+    @State private var selectedAllergies: Set<String> = []
+    @State private var mealsPerDay: Int = 3
+    @State private var experienceLevel: String = "intermediate"
+    @State private var motivation: String = "health"
+    @State private var bodyFatPct: String = ""
+
     // Calculated targets
     @State private var caloriePreview: CalorieTargetsPreview?
     @State private var useCustomCalories: Bool = false
@@ -772,6 +780,80 @@ struct ProfileAndGoalsView: View {
                 }
             }
 
+            // Dietary Preferences
+            Section("Dietary Preferences") {
+                Picker("Diet Type", selection: $dietaryPattern) {
+                    Text("Omnivore").tag("omnivore")
+                    Text("Vegetarian").tag("vegetarian")
+                    Text("Vegan").tag("vegan")
+                    Text("Pescatarian").tag("pescatarian")
+                    Text("Keto / Low-Carb").tag("keto")
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Allergies & Intolerances")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    let allergyOptions = ["gluten", "dairy", "nuts", "shellfish", "soy", "eggs"]
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 8) {
+                        ForEach(allergyOptions, id: \.self) { allergy in
+                            Button {
+                                if selectedAllergies.contains(allergy) {
+                                    selectedAllergies.remove(allergy)
+                                } else {
+                                    selectedAllergies.insert(allergy)
+                                }
+                                HapticsManager.shared.selection()
+                            } label: {
+                                Text(allergy.capitalized)
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .frame(maxWidth: .infinity)
+                                    .background(selectedAllergies.contains(allergy) ? Color.red.opacity(0.2) : Color(.tertiarySystemBackground))
+                                    .foregroundStyle(selectedAllergies.contains(allergy) ? .red : .primary)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Stepper("Meals per day: \(mealsPerDay)", value: $mealsPerDay, in: 2...5)
+            }
+
+            // Experience & Motivation
+            Section("Experience & Motivation") {
+                Picker("Training Experience", selection: $experienceLevel) {
+                    Text("Beginner (< 1 year)").tag("beginner")
+                    Text("Intermediate (1-3 years)").tag("intermediate")
+                    Text("Advanced (3+ years)").tag("advanced")
+                }
+
+                Picker("Primary Motivation", selection: $motivation) {
+                    Text("Feel Healthier").tag("health")
+                    Text("Look Better").tag("aesthetics")
+                    Text("Perform Better").tag("performance")
+                    Text("Prepare for Event").tag("event_prep")
+                    Text("Doctor Recommended").tag("doctor")
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Body Fat % (optional)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        TextField("e.g. 18", text: $bodyFatPct)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Text("%")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             // Calculated Targets Section
             Section {
                 if isCalculating {
@@ -878,6 +960,16 @@ struct ProfileAndGoalsView: View {
                 fitnessGoal = FitnessGoal(rawValue: userGoal) ?? .health
             }
 
+            // Load dietary & experience from settings
+            if let settings = user.settings {
+                if let dp = settings.dietaryPattern { dietaryPattern = dp }
+                if let al = settings.allergies { selectedAllergies = Set(al) }
+                if let mpd = settings.mealsPerDay { mealsPerDay = mpd }
+                if let el = settings.experienceLevel { experienceLevel = el }
+                if let mot = settings.motivation { motivation = mot }
+                if let bf = settings.bodyFatPct { bodyFatPct = String(format: "%.1f", bf) }
+            }
+
             // Load latest weight
             if let latestWeight = try? await APIService.shared.getLatestWeight() {
                 weightKg = Int(latestWeight)
@@ -937,10 +1029,20 @@ struct ProfileAndGoalsView: View {
                     fitnessGoal: fitnessGoal.rawValue
                 )
 
-                // 2. Log weight
+                // 2. Save dietary & experience preferences
+                try await APIService.shared.updateDietaryPreferences(
+                    dietaryPattern: dietaryPattern,
+                    allergies: Array(selectedAllergies),
+                    mealsPerDay: mealsPerDay,
+                    experienceLevel: experienceLevel,
+                    motivation: motivation,
+                    bodyFatPct: Double(bodyFatPct)
+                )
+
+                // 3. Log weight
                 try await APIService.shared.logWeight(currentWeight)
 
-                // 3. Save nutrition goal
+                // 4. Save nutrition goal
                 let goal = NutritionGoalCreate(
                     goalType: fitnessGoal,
                     customCalorieTarget: useCustomCalories ? customCalories : nil,

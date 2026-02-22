@@ -31,7 +31,7 @@ struct TrendsView: View {
                                     Text(metric.capitalized)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 8)
-                                        .background(selectedMetric == metric ? Color.green : Color(.secondarySystemBackground))
+                                        .background(selectedMetric == metric ? Color.green : AppTheme.surface2)
                                         .foregroundStyle(selectedMetric == metric ? .white : .primary)
                                         .clipShape(Capsule())
                                 }
@@ -215,7 +215,7 @@ struct StatBox: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -242,7 +242,7 @@ struct HistoryRow: View {
                 .foregroundStyle(scoreColor)
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 

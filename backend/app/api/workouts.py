@@ -121,7 +121,97 @@ def calculate_training_load(
     return round(load, 1)
 
 
+# Unified Workout Entry (for merged history feed)
+class UnifiedWorkoutEntry(BaseModel):
+    """A workout from any source (freeform or plan session)."""
+    id: UUID
+    source: str  # "freeform" or "plan"
+    workout_type: str
+    start_time: datetime
+    duration_minutes: int | None
+    calories_burned: int | None = None
+    notes: str | None = None
+    # Plan-specific fields
+    plan_id: UUID | None = None
+    planned_workout_name: str | None = None
+    overall_rating: int | None = None
+    intensity: str | None = None
+
+
 # Endpoints
+
+@router.get("/unified", response_model=list[UnifiedWorkoutEntry])
+async def get_unified_workouts(
+    current_user: CurrentUser = Depends(get_current_user),
+    days: int = Query(default=30, le=365),
+    limit: int = Query(default=20, le=100),
+    offset: int = 0,
+):
+    """Get unified workout history from both freeform workouts and plan sessions."""
+    supabase = get_supabase_client()
+    from_date = (datetime.now() - timedelta(days=days)).isoformat()
+    user_id = str(current_user.id)
+
+    # Fetch freeform workouts
+    freeform_result = (
+        supabase.table("workouts")
+        .select("id, workout_type, start_time, duration_minutes, calories_burned, notes, intensity, plan_id, planned_workout_name, overall_rating")
+        .eq("user_id", user_id)
+        .gte("start_time", from_date)
+        .order("start_time", desc=True)
+        .execute()
+    )
+
+    # Fetch plan sessions
+    session_result = (
+        supabase.table("workout_sessions")
+        .select("id, started_at, duration_minutes, planned_workout_name, plan_id, overall_rating, notes")
+        .eq("user_id", user_id)
+        .gte("started_at", from_date)
+        .order("started_at", desc=True)
+        .execute()
+    )
+
+    # Merge into unified format
+    entries: list[dict] = []
+
+    for w in (freeform_result.data or []):
+        entries.append({
+            "id": w["id"],
+            "source": "freeform",
+            "workout_type": w["workout_type"],
+            "start_time": w["start_time"],
+            "duration_minutes": w.get("duration_minutes"),
+            "calories_burned": w.get("calories_burned"),
+            "notes": w.get("notes"),
+            "plan_id": w.get("plan_id"),
+            "planned_workout_name": w.get("planned_workout_name"),
+            "overall_rating": w.get("overall_rating"),
+            "intensity": w.get("intensity"),
+        })
+
+    for s in (session_result.data or []):
+        entries.append({
+            "id": s["id"],
+            "source": "plan",
+            "workout_type": "strength",
+            "start_time": s["started_at"],
+            "duration_minutes": s.get("duration_minutes"),
+            "calories_burned": None,
+            "notes": s.get("notes"),
+            "plan_id": s.get("plan_id"),
+            "planned_workout_name": s.get("planned_workout_name"),
+            "overall_rating": s.get("overall_rating"),
+            "intensity": None,
+        })
+
+    # Sort by start_time descending, apply offset + limit
+    entries.sort(key=lambda e: e["start_time"], reverse=True)
+    entries = entries[offset:offset + limit]
+
+    return entries
+
+
 @router.post("", response_model=WorkoutResponse)
 async def create_workout(
     workout: WorkoutCreate,

@@ -477,6 +477,10 @@ class APIService {
         try await request(endpoint: "/workouts?days=\(days)")
     }
 
+    func getUnifiedWorkouts(days: Int = 30, limit: Int = 20) async throws -> [UnifiedWorkoutEntry] {
+        try await request(endpoint: "/workouts/unified?days=\(days)&limit=\(limit)")
+    }
+
     func deleteWorkout(id: UUID) async throws {
         let _: EmptyResponse = try await request(endpoint: "/workouts/\(id)", method: "DELETE")
     }
@@ -595,6 +599,42 @@ class APIService {
         let _: User = try await request(endpoint: "/users/me/settings", method: "PUT", body: body)
     }
 
+    func updateDietaryPreferences(
+        dietaryPattern: String?,
+        allergies: [String]?,
+        mealsPerDay: Int?,
+        experienceLevel: String?,
+        motivation: String?,
+        bodyFatPct: Double?
+    ) async throws {
+        struct DietaryUpdate: Encodable {
+            let dietaryPattern: String?
+            let allergies: [String]?
+            let mealsPerDay: Int?
+            let experienceLevel: String?
+            let motivation: String?
+            let bodyFatPct: Double?
+
+            enum CodingKeys: String, CodingKey {
+                case dietaryPattern = "dietary_pattern"
+                case allergies
+                case mealsPerDay = "meals_per_day"
+                case experienceLevel = "experience_level"
+                case motivation
+                case bodyFatPct = "body_fat_pct"
+            }
+        }
+        let body = DietaryUpdate(
+            dietaryPattern: dietaryPattern,
+            allergies: allergies,
+            mealsPerDay: mealsPerDay,
+            experienceLevel: experienceLevel,
+            motivation: motivation,
+            bodyFatPct: bodyFatPct
+        )
+        let _: User = try await request(endpoint: "/users/me/settings", method: "PUT", body: body)
+    }
+
     // MARK: - Metrics (Weight)
 
     func logWeight(_ weightKg: Double) async throws {
@@ -696,6 +736,10 @@ class APIService {
         return try await request(endpoint: endpoint)
     }
 
+    func updateFood(entryId: UUID, update: FoodEntryUpdate) async throws -> FoodEntry {
+        try await request(endpoint: "/nutrition/food/\(entryId)", method: "PUT", body: update)
+    }
+
     func deleteFood(entryId: UUID) async throws -> EmptyResponse {
         try await request(endpoint: "/nutrition/food/\(entryId)", method: "DELETE")
     }
@@ -776,8 +820,8 @@ class APIService {
         try await request(endpoint: "/training-plans/active", method: "DELETE")
     }
 
-    func updateTrainingPlan(planId: UUID, name: String? = nil, schedule: [String: String]? = nil) async throws -> UpdatePlanResponse {
-        let body = UpdatePlanRequest(name: name, schedule: schedule)
+    func updateTrainingPlan(planId: UUID, name: String? = nil, schedule: [String: String]? = nil, customizations: [String: [String: String]]? = nil) async throws -> UpdatePlanResponse {
+        let body = UpdatePlanRequest(name: name, schedule: schedule, customizations: customizations)
         return try await request(endpoint: "/training-plans/\(planId)", method: "PUT", body: body)
     }
 
@@ -917,6 +961,20 @@ class APIService {
 
     func getShoppingList(templateId: UUID) async throws -> [ShoppingListItem] {
         try await request(endpoint: "/meal-plans/templates/\(templateId)/shopping-list")
+    }
+
+    // MARK: - Custom Recipes
+
+    func getCustomRecipes() async throws -> [Recipe] {
+        try await request(endpoint: "/meal-plans/recipes/custom")
+    }
+
+    func createCustomRecipe(_ recipe: CustomRecipeCreate) async throws -> Recipe {
+        try await request(endpoint: "/meal-plans/recipes/custom", method: "POST", body: recipe)
+    }
+
+    func deleteCustomRecipe(recipeId: UUID) async throws {
+        let _: EmptyResponse = try await request(endpoint: "/meal-plans/recipes/custom/\(recipeId)", method: "DELETE")
     }
 
     // MARK: - Weekly Meal Plans (Phase 9A)

@@ -272,7 +272,7 @@ struct WorkoutLogView: View {
                         TextField("How did it feel?", text: $notes, axis: .vertical)
                             .lineLimit(3...6)
                             .padding()
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
 
@@ -363,7 +363,7 @@ struct WorkoutTypeButton: View {
                     .font(.caption2)
             }
             .frame(width: 70, height: 60)
-            .background(isSelected ? Color.green.opacity(0.2) : Color(.secondarySystemBackground))
+            .background(isSelected ? Color.green.opacity(0.2) : AppTheme.surface2)
             .foregroundStyle(isSelected ? .green : .primary)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
@@ -399,7 +399,7 @@ struct MetricLogView: View {
                     }
                     .pickerStyle(.menu)
                     .padding()
-                    .background(Color(.secondarySystemBackground))
+                    .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
@@ -411,7 +411,7 @@ struct MetricLogView: View {
                         TextField("Enter value", text: $value)
                             .keyboardType(.decimalPad)
                             .padding()
-                            .background(Color(.secondarySystemBackground))
+                            .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         Text(unitForMetric)
