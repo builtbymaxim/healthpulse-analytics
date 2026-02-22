@@ -71,52 +71,24 @@ struct MainTabView: View {
     @EnvironmentObject var authService: AuthService
 
     var body: some View {
-        TabView(selection: $tabRouter.selectedTab) {
-            // Dashboard - main overview
-            TodayView()
-                .tabItem {
-                    Label("Dashboard", systemImage: "square.grid.2x2.fill")
-                }
-                .tag(AppTab.dashboard)
+        ZStack(alignment: .bottom) {
+            TabView(selection: $tabRouter.selectedTab) {
+                TodayView()
+                    .tag(AppTab.dashboard)
+                NutritionView()
+                    .tag(AppTab.nutrition)
+                WorkoutTabView()
+                    .tag(AppTab.workout)
+                SleepView()
+                    .tag(AppTab.sleep)
+                SocialView()
+                    .tag(AppTab.social)
+                ProfileView()
+                    .tag(AppTab.profile)
+            }
+            .toolbar(.hidden, for: .tabBar)
 
-            // Nutrition - food tracking
-            NutritionView()
-                .tabItem {
-                    Label("Nutrition", systemImage: "fork.knife")
-                }
-                .tag(AppTab.nutrition)
-
-            // Workout - exercise tracking
-            WorkoutTabView()
-                .tabItem {
-                    Label("Workout", systemImage: "figure.run")
-                }
-                .tag(AppTab.workout)
-
-            // Sleep tracking
-            SleepView()
-                .tabItem {
-                    Label("Sleep", systemImage: "moon.zzz.fill")
-                }
-                .tag(AppTab.sleep)
-
-            // Social - always visible; SocialView handles activation card vs. live content
-            SocialView()
-                .tabItem {
-                    Label("Social", systemImage: "person.2.fill")
-                }
-                .tag(AppTab.social)
-
-            // Profile & settings
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
-                .tag(AppTab.profile)
-        }
-        .tint(AppTheme.primary)
-        .onChange(of: tabRouter.selectedTab) { _, _ in
-            HapticsManager.shared.selection()
+            CustomTabBar(selectedTab: $tabRouter.selectedTab)
         }
     }
 }

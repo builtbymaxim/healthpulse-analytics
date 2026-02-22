@@ -460,6 +460,290 @@ struct WeeklyStatItem: View {
     }
 }
 
+// MARK: - Readiness Header
+
+struct ReadinessHeaderView: View {
+    let readinessScore: Double
+    let greetingContext: String
+    let narrative: String
+
+    private var readinessColor: Color {
+        if readinessScore >= 70 { return .green }
+        if readinessScore >= 40 { return .orange }
+        return .red
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Score ring
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 6)
+                    .frame(width: 52, height: 52)
+
+                Circle()
+                    .trim(from: 0, to: readinessScore / 100)
+                    .stroke(readinessColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 52, height: 52)
+                    .rotationEffect(.degrees(-90))
+                    .animation(MotionTokens.ring, value: readinessScore)
+
+                Text("\(Int(readinessScore))")
+                    .font(.system(size: 16, weight: .bold))
+                    .contentTransition(.numericText())
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greetingContext.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(readinessColor)
+
+                Text(narrative)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+    }
+}
+
+// MARK: - Commitment Strip
+
+struct CommitmentStripView: View {
+    let commitments: [CommitmentSlot]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(commitments) { slot in
+                CommitmentCard(slot: slot)
+            }
+        }
+    }
+}
+
+struct CommitmentCard: View {
+    let slot: CommitmentSlot
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Slot label badge
+            Text(slot.slotLabel)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(slot.slotColor)
+                .clipShape(Capsule())
+
+            // Icon circle
+            ZStack {
+                Circle()
+                    .fill(slot.slotColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: slot.icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(slot.slotColor)
+            }
+
+            // Title & subtitle
+            Text(slot.title)
+                .font(.caption.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(slot.subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.8)
+
+            // Load modifier badge
+            if let modifier = slot.loadModifier {
+                LoadModifierBadge(modifier: modifier)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 6)
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.border.opacity(0.5), lineWidth: 1)
+        )
+    }
+}
+
+struct LoadModifierBadge: View {
+    let modifier: String
+
+    private var isReducing: Bool {
+        modifier.hasPrefix("reduce")
+    }
+
+    private var label: String {
+        isReducing ? "EASE OFF" : "PUSH IT"
+    }
+
+    private var color: Color {
+        isReducing ? .orange : .green
+    }
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .clipShape(Capsule())
+    }
+}
+
+// MARK: - Causal Recovery Card
+
+struct CausalRecoveryCard: View {
+    let recovery: EnhancedRecoveryResponse
+    let annotation: CausalAnnotation?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EnhancedRecoveryCard(recovery: recovery)
+
+            // Causal annotation banner
+            if let annotation = annotation {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.primary)
+
+                    Text("mainly because \(annotation.primaryDriver)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppTheme.primary.opacity(0.08))
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 20,
+                        bottomTrailingRadius: 20,
+                        topTrailingRadius: 0
+                    )
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Dashboard Card Router
+
+struct DashboardCardRouter: View {
+    let cardType: String
+    @ObservedObject var viewModel: TodayViewModel
+    @EnvironmentObject var tabRouter: TabRouter
+
+    var body: some View {
+        switch cardType {
+        case "workout":
+            if let todaysWorkout = viewModel.todaysWorkout {
+                TodayWorkoutCard(
+                    workout: todaysWorkout,
+                    onTap: { tabRouter.navigateTo(.workout) }
+                )
+            }
+        case "nutrition":
+            NutritionProgressCard(
+                calories: viewModel.todayCalories,
+                calorieGoal: viewModel.calorieGoal,
+                protein: viewModel.todayProtein,
+                proteinGoal: viewModel.proteinGoal,
+                carbs: viewModel.todayCarbs,
+                carbsGoal: viewModel.carbsGoal,
+                fat: viewModel.todayFat,
+                fatGoal: viewModel.fatGoal
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.nutrition)
+                HapticsManager.shared.light()
+            }
+        case "recovery":
+            if let recovery = viewModel.enhancedRecovery {
+                CausalRecoveryCard(
+                    recovery: recovery,
+                    annotation: viewModel.causalAnnotation(for: "recovery")
+                )
+            }
+        case "sleep":
+            if viewModel.hasSleepData {
+                SleepPatternCard(
+                    avgHours: viewModel.avgSleepHours,
+                    consistencyScore: viewModel.sleepConsistencyScore,
+                    trend: viewModel.sleepTrend
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.sleep)
+                    HapticsManager.shared.light()
+                }
+            }
+        case "streak":
+            WorkoutStreakCard(
+                streakDays: viewModel.workoutStreak,
+                lastWorkoutDate: viewModel.lastWorkoutDate
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.workout)
+                HapticsManager.shared.light()
+            }
+        case "progress":
+            if let progress = viewModel.progressSummary {
+                ProgressDashboardSection(progress: progress)
+            }
+        case "weekly":
+            if let summary = viewModel.weeklySummary {
+                WeeklySummaryCard(summary: summary)
+            }
+        case "nutrition_adherence":
+            if viewModel.hasNutritionHistory {
+                NutritionAdherenceCard(
+                    weeklyData: viewModel.weeklyNutritionData,
+                    adherenceScore: viewModel.weeklyAdherenceScore
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.nutrition)
+                    HapticsManager.shared.light()
+                }
+            }
+        case "last_workout":
+            if let lastWorkout = viewModel.lastWorkout {
+                LastWorkoutCard(
+                    workout: lastWorkout,
+                    improvement: viewModel.lastWorkoutImprovement
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.workout)
+                    HapticsManager.shared.light()
+                }
+            }
+        default:
+            EmptyView()
+        }
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Enhanced Recovery Card") {

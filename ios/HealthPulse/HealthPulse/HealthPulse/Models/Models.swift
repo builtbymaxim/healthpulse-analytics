@@ -876,6 +876,101 @@ struct WeeklySummary: Codable {
     }
 }
 
+// MARK: - Narrative Dashboard (Phase 11B)
+
+struct CausalAnnotation: Codable, Identifiable {
+    var id: String { metricName }
+    let metricName: String
+    let currentValue: Double
+    let primaryDriver: String
+    let driverFactor: String
+    let driverImpactPct: Double
+    let secondaryDriver: String?
+
+    enum CodingKeys: String, CodingKey {
+        case metricName = "metric_name"
+        case currentValue = "current_value"
+        case primaryDriver = "primary_driver"
+        case driverFactor = "driver_factor"
+        case driverImpactPct = "driver_impact_pct"
+        case secondaryDriver = "secondary_driver"
+    }
+}
+
+struct CommitmentSlot: Codable, Identifiable {
+    var id: String { slot }
+    let slot: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    let category: String
+    let actionRoute: String?
+    let loadModifier: String?
+
+    enum CodingKeys: String, CodingKey {
+        case slot, title, subtitle, icon, category
+        case actionRoute = "action_route"
+        case loadModifier = "load_modifier"
+    }
+
+    var slotLabel: String {
+        switch slot {
+        case "now": return "NOW"
+        case "next": return "NEXT"
+        case "tonight": return "TONIGHT"
+        default: return slot.uppercased()
+        }
+    }
+
+    var slotColor: Color {
+        switch slot {
+        case "now": return AppTheme.primary
+        case "next": return .orange
+        case "tonight": return .indigo
+        default: return .gray
+        }
+    }
+}
+
+struct PrioritizedCard: Codable, Identifiable, Equatable {
+    var id: String { cardType }
+    let cardType: String
+    let priority: Int
+    let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case cardType = "card_type"
+        case priority, reason
+    }
+}
+
+struct NarrativeDashboardResponse: Codable {
+    let enhancedRecovery: EnhancedRecoveryResponse
+    let readinessScore: Double
+    let readinessIntensity: String
+    let progress: ProgressSummary
+    let recommendations: [SmartRecommendation]
+    let weeklySummary: WeeklySummary
+    let causalAnnotations: [CausalAnnotation]
+    let commitments: [CommitmentSlot]
+    let cardPriorityOrder: [PrioritizedCard]
+    let greetingContext: String
+    let readinessNarrative: String
+
+    enum CodingKeys: String, CodingKey {
+        case enhancedRecovery = "enhanced_recovery"
+        case readinessScore = "readiness_score"
+        case readinessIntensity = "readiness_intensity"
+        case progress, recommendations
+        case weeklySummary = "weekly_summary"
+        case causalAnnotations = "causal_annotations"
+        case commitments
+        case cardPriorityOrder = "card_priority_order"
+        case greetingContext = "greeting_context"
+        case readinessNarrative = "readiness_narrative"
+    }
+}
+
 // Helper for decoding dynamic JSON values
 struct AnyCodable: Codable {
     let value: Any

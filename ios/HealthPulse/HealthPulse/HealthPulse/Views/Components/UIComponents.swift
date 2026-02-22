@@ -249,6 +249,24 @@ struct SectionHeaderLabel: View {
     }
 }
 
+// MARK: - Motion Tokens
+
+/// Centralized animation tokens — use these instead of inline spring values
+enum MotionTokens {
+    /// Standard interaction (card reveal, value change) — 0.45s, 0.82 damping
+    static let primary   = Animation.spring(response: 0.45, dampingFraction: 0.82)
+    /// Button press, micro-interactions — 0.25s, 0.70 damping
+    static let snappy    = Animation.spring(response: 0.25, dampingFraction: 0.70)
+    /// Toast pop, icon spin — 0.40s, 0.60 damping
+    static let micro     = Animation.spring(response: 0.40, dampingFraction: 0.60)
+    /// Form fields, toggles — 0.35s, 0.85 damping
+    static let form      = Animation.spring(response: 0.35, dampingFraction: 0.85)
+    /// View entrance, staggered reveals — 0.50s, 0.78 damping
+    static let entrance  = Animation.spring(response: 0.50, dampingFraction: 0.78)
+    /// Progress ring fill — 0.80s, 0.75 damping
+    static let ring      = Animation.spring(response: 0.80, dampingFraction: 0.75)
+}
+
 // MARK: - Press Effect Button Style
 
 /// Subtle scale-down press effect for all primary buttons
@@ -256,7 +274,7 @@ struct PressEffect: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(MotionTokens.snappy, value: configuration.isPressed)
     }
 }
 
@@ -435,7 +453,7 @@ private struct AnimatedToastIcon: View {
             .rotationEffect(.degrees(type == .error ? rotation : 0))
             .opacity(opacity)
             .onAppear {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                withAnimation(MotionTokens.micro) {
                     scale = 1.0
                     rotation = 0
                     opacity = 1
@@ -497,7 +515,7 @@ class ToastManager: ObservableObject {
             withAnimation(.easeIn(duration: 0.15)) { isShowing = false }
         }
         currentToast = (message, type)
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+        withAnimation(MotionTokens.micro) {
             isShowing = true
         }
         Task {
@@ -527,7 +545,7 @@ struct ToastContainer: View {
                     .padding(.bottom, 96) // Clear the tab bar + safe area
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.72), value: manager.isShowing)
+        .animation(MotionTokens.micro, value: manager.isShowing)
     }
 }
 
@@ -548,12 +566,12 @@ struct AnimatedNumber: View {
         Text(String(format: format, animatedValue))
             .contentTransition(.numericText())
             .onAppear {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                withAnimation(MotionTokens.primary) {
                     animatedValue = value
                 }
             }
             .onChange(of: value) { _, newValue in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                withAnimation(MotionTokens.form) {
                     animatedValue = newValue
                 }
             }
@@ -581,12 +599,12 @@ struct ProgressRing: View {
                 .rotationEffect(.degrees(-90))
         }
         .onAppear {
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.75)) {
+            withAnimation(MotionTokens.ring) {
                 animatedProgress = progress
             }
         }
         .onChange(of: progress) { _, newValue in
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            withAnimation(MotionTokens.primary) {
                 animatedProgress = newValue
             }
         }
@@ -617,7 +635,7 @@ struct StaggeredAnimation: ViewModifier {
 extension View {
     func staggeredAnimation(
         index: Int,
-        animation: Animation = .spring(response: 0.45, dampingFraction: 0.82)
+        animation: Animation = MotionTokens.primary
     ) -> some View {
         modifier(StaggeredAnimation(index: index, animation: animation))
     }
@@ -695,6 +713,60 @@ struct LoadingOverlay: ViewModifier {
 extension View {
     func loadingOverlay(isLoading: Bool, message: String? = nil) -> some View {
         modifier(LoadingOverlay(isLoading: isLoading, message: message))
+    }
+}
+
+// MARK: - Custom Tab Bar
+
+/// Animated tab bar with spring bounce on icon selection
+struct CustomTabBar: View {
+    @Binding var selectedTab: AppTab
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let tabs: [(tab: AppTab, icon: String, label: String)] = [
+        (.dashboard, "square.grid.2x2.fill", "Dashboard"),
+        (.nutrition, "fork.knife", "Nutrition"),
+        (.workout, "figure.run", "Workout"),
+        (.sleep, "moon.zzz.fill", "Sleep"),
+        (.social, "person.2.fill", "Social"),
+        (.profile, "person.fill", "Profile"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs, id: \.tab) { item in
+                Button {
+                    HapticsManager.shared.selection()
+                    selectedTab = item.tab
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 20))
+                            .symbolEffect(.bounce, value: selectedTab == item.tab)
+
+                        Text(item.label)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(selectedTab == item.tab ? AppTheme.primary : AppTheme.textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 10)
+        .padding(.bottom, 2)
+        .background {
+            ZStack {
+                Rectangle()
+                    .fill(colorScheme == .dark ? AppTheme.surface2.opacity(0.95) : Color.white.opacity(0.97))
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                // Top border
+                VStack { Divider().foregroundStyle(AppTheme.border); Spacer() }
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 }
 

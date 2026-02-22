@@ -21,7 +21,23 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // New User Welcome Checklist
+                    // 1. Readiness Header (narrative mode)
+                    if !viewModel.readinessNarrative.isEmpty {
+                        ReadinessHeaderView(
+                            readinessScore: viewModel.readinessScore,
+                            greetingContext: viewModel.greetingContext,
+                            narrative: viewModel.readinessNarrative
+                        )
+                        .padding(.horizontal)
+                    }
+
+                    // 2. Commitment Strip (NOW / NEXT / TONIGHT)
+                    if !viewModel.commitments.isEmpty {
+                        CommitmentStripView(commitments: viewModel.commitments)
+                            .padding(.horizontal)
+                    }
+
+                    // 3. New User Welcome Checklist
                     if viewModel.isNewUser {
                         WelcomeChecklistCard(
                             displayName: viewModel.displayName,
@@ -37,104 +53,25 @@ struct TodayView: View {
                         .padding(.horizontal)
                     }
 
-                    // Today's Workout Card (from training plan)
-                    if let todaysWorkout = viewModel.todaysWorkout {
-                        TodayWorkoutCard(
-                            workout: todaysWorkout,
-                            onTap: {
-                                if todaysWorkout.isRestDay {
-                                    // Just navigate to workout tab on rest days
-                                    tabRouter.navigateTo(.workout)
-                                } else {
-                                    // Start workout execution
-                                    showWorkoutExecution = true
-                                }
-                            }
-                        )
-                        .padding(.horizontal)
-                    }
-
-                    // Smart Recommendations (non-new users only)
-                    if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
-                        SmartRecommendationsSection(recommendations: viewModel.recommendations)
-                            .padding(.horizontal)
-                    }
-
-                    // Today's Nutrition Progress
-                    NutritionProgressCard(
-                        calories: viewModel.todayCalories,
-                        calorieGoal: viewModel.calorieGoal,
-                        protein: viewModel.todayProtein,
-                        proteinGoal: viewModel.proteinGoal,
-                        carbs: viewModel.todayCarbs,
-                        carbsGoal: viewModel.carbsGoal,
-                        fat: viewModel.todayFat,
-                        fatGoal: viewModel.fatGoal
-                    )
-                    .onTapGesture {
-                        tabRouter.navigateTo(.nutrition)
-                        HapticsManager.shared.light()
-                    }
-                    .padding(.horizontal)
-
-                    // Weekly Summary (non-new users with data)
-                    if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
-                        WeeklySummaryCard(summary: summary)
-                            .padding(.horizontal)
-                    }
-
-                    // Workout Streak
-                    WorkoutStreakCard(
-                        streakDays: viewModel.workoutStreak,
-                        lastWorkoutDate: viewModel.lastWorkoutDate
-                    )
-                    .onTapGesture {
-                        tabRouter.navigateTo(.workout)
-                        HapticsManager.shared.light()
-                    }
-                    .padding(.horizontal)
-
-                    // Last Workout Performance
-                    if let lastWorkout = viewModel.lastWorkout {
-                        LastWorkoutCard(
-                            workout: lastWorkout,
-                            improvement: viewModel.lastWorkoutImprovement
-                        )
-                        .onTapGesture {
-                            tabRouter.navigateTo(.workout)
-                            HapticsManager.shared.light()
+                    // 4. Dynamic Card Stack (narrative mode) or static fallback
+                    if !viewModel.cardPriorityOrder.isEmpty {
+                        // Narrative-driven card ordering
+                        ForEach(viewModel.cardPriorityOrder) { card in
+                            DashboardCardRouter(cardType: card.cardType, viewModel: viewModel)
+                                .padding(.horizontal)
                         }
-                        .padding(.horizontal)
-                    }
 
-                    // Nutrition Adherence (weekly habits) - only show if has real data
-                    if viewModel.hasNutritionHistory {
-                        NutritionAdherenceCard(
-                            weeklyData: viewModel.weeklyNutritionData,
-                            adherenceScore: viewModel.weeklyAdherenceScore
-                        )
-                        .onTapGesture {
-                            tabRouter.navigateTo(.nutrition)
-                            HapticsManager.shared.light()
+                        // Smart Recommendations after dynamic cards
+                        if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
+                            SmartRecommendationsSection(recommendations: viewModel.recommendations)
+                                .padding(.horizontal)
                         }
-                        .padding(.horizontal)
+                    } else {
+                        // Static fallback (legacy dashboard or no narrative data)
+                        staticCardStack
                     }
 
-                    // Sleep Pattern Card - only show if has data
-                    if viewModel.hasSleepData {
-                        SleepPatternCard(
-                            avgHours: viewModel.avgSleepHours,
-                            consistencyScore: viewModel.sleepConsistencyScore,
-                            trend: viewModel.sleepTrend
-                        )
-                        .onTapGesture {
-                            tabRouter.navigateTo(.sleep)
-                            HapticsManager.shared.light()
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Quick Stats Row
+                    // 5. Quick Stats Row (always last)
                     HStack(spacing: 12) {
                         QuickStatCard(
                             icon: "figure.walk",
@@ -167,20 +104,8 @@ struct TodayView: View {
                     }
                     .padding(.horizontal)
 
-                    // Enhanced Recovery Card (if dashboard data available)
-                    if !viewModel.isNewUser, let recovery = viewModel.enhancedRecovery {
-                        EnhancedRecoveryCard(recovery: recovery)
-                            .padding(.horizontal)
-                    }
-
-                    // Progress Section (if dashboard data available)
-                    if !viewModel.isNewUser, let progress = viewModel.progressSummary {
-                        ProgressDashboardSection(progress: progress)
-                            .padding(.horizontal)
-                    }
-
-                    // Fallback: Compact Recovery & Readiness (only if no enhanced data)
-                    if !viewModel.isNewUser && viewModel.enhancedRecovery == nil {
+                    // Fallback: Compact Recovery & Readiness (only if no narrative and no enhanced data)
+                    if !viewModel.isNewUser && viewModel.enhancedRecovery == nil && viewModel.readinessNarrative.isEmpty {
                         HStack(spacing: 12) {
                             CompactScoreCard(
                                 title: "Recovery",
@@ -239,6 +164,117 @@ struct TodayView: View {
                 }
                 .presentationDetents([.medium])
             }
+        }
+    }
+
+    // Static card layout used when narrative endpoint is unavailable
+    @ViewBuilder
+    private var staticCardStack: some View {
+        // Today's Workout Card
+        if let todaysWorkout = viewModel.todaysWorkout {
+            TodayWorkoutCard(
+                workout: todaysWorkout,
+                onTap: {
+                    if todaysWorkout.isRestDay {
+                        tabRouter.navigateTo(.workout)
+                    } else {
+                        showWorkoutExecution = true
+                    }
+                }
+            )
+            .padding(.horizontal)
+        }
+
+        // Smart Recommendations
+        if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
+            SmartRecommendationsSection(recommendations: viewModel.recommendations)
+                .padding(.horizontal)
+        }
+
+        // Today's Nutrition Progress
+        NutritionProgressCard(
+            calories: viewModel.todayCalories,
+            calorieGoal: viewModel.calorieGoal,
+            protein: viewModel.todayProtein,
+            proteinGoal: viewModel.proteinGoal,
+            carbs: viewModel.todayCarbs,
+            carbsGoal: viewModel.carbsGoal,
+            fat: viewModel.todayFat,
+            fatGoal: viewModel.fatGoal
+        )
+        .onTapGesture {
+            tabRouter.navigateTo(.nutrition)
+            HapticsManager.shared.light()
+        }
+        .padding(.horizontal)
+
+        // Weekly Summary
+        if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
+            WeeklySummaryCard(summary: summary)
+                .padding(.horizontal)
+        }
+
+        // Workout Streak
+        WorkoutStreakCard(
+            streakDays: viewModel.workoutStreak,
+            lastWorkoutDate: viewModel.lastWorkoutDate
+        )
+        .onTapGesture {
+            tabRouter.navigateTo(.workout)
+            HapticsManager.shared.light()
+        }
+        .padding(.horizontal)
+
+        // Last Workout Performance
+        if let lastWorkout = viewModel.lastWorkout {
+            LastWorkoutCard(
+                workout: lastWorkout,
+                improvement: viewModel.lastWorkoutImprovement
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.workout)
+                HapticsManager.shared.light()
+            }
+            .padding(.horizontal)
+        }
+
+        // Nutrition Adherence
+        if viewModel.hasNutritionHistory {
+            NutritionAdherenceCard(
+                weeklyData: viewModel.weeklyNutritionData,
+                adherenceScore: viewModel.weeklyAdherenceScore
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.nutrition)
+                HapticsManager.shared.light()
+            }
+            .padding(.horizontal)
+        }
+
+        // Sleep Pattern
+        if viewModel.hasSleepData {
+            SleepPatternCard(
+                avgHours: viewModel.avgSleepHours,
+                consistencyScore: viewModel.sleepConsistencyScore,
+                trend: viewModel.sleepTrend
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.sleep)
+                HapticsManager.shared.light()
+            }
+            .padding(.horizontal)
+        }
+
+        // Enhanced Recovery
+        if !viewModel.isNewUser, let recovery = viewModel.enhancedRecovery {
+            EnhancedRecoveryCard(recovery: recovery)
+                .padding(.horizontal)
+        }
+
+        // Progress Section
+        if !viewModel.isNewUser, let progress = viewModel.progressSummary {
+            ProgressDashboardSection(progress: progress)
+                .padding(.horizontal)
         }
     }
 
@@ -837,6 +873,7 @@ struct NutritionAdherenceCard: View {
                 Spacer()
                 Text("\(adherenceScore)% this week")
                     .font(.caption)
+                    .contentTransition(.numericText())
                     .foregroundStyle(adherenceScore >= 80 ? .green : (adherenceScore >= 60 ? .orange : .secondary))
             }
 
@@ -927,6 +964,7 @@ struct SleepPatternCard: View {
                         .font(.caption)
                     Text("\(consistencyScore)% consistent")
                         .font(.caption)
+                        .contentTransition(.numericText())
                 }
                 .foregroundStyle(trend.color)
             }
@@ -1031,6 +1069,17 @@ class TodayViewModel: ObservableObject {
     @Published var recommendations: [SmartRecommendation] = []
     @Published var weeklySummary: WeeklySummary?
 
+    // Narrative dashboard data
+    @Published var commitments: [CommitmentSlot] = []
+    @Published var cardPriorityOrder: [PrioritizedCard] = []
+    @Published var causalAnnotations: [CausalAnnotation] = []
+    @Published var greetingContext: String = ""
+    @Published var readinessNarrative: String = ""
+
+    func causalAnnotation(for metric: String) -> CausalAnnotation? {
+        causalAnnotations.first { $0.metricName == metric }
+    }
+
     @Published var isLoading = false
 
     func loadData() async {
@@ -1057,6 +1106,32 @@ class TodayViewModel: ObservableObject {
     }
 
     private func loadDashboardData() async {
+        // Try narrative endpoint first, fall back to legacy dashboard
+        do {
+            let narrative = try await APIService.shared.getNarrativeDashboard()
+            enhancedRecovery = narrative.enhancedRecovery
+            progressSummary = narrative.progress
+            recommendations = narrative.recommendations
+            weeklySummary = narrative.weeklySummary
+
+            // Narrative-specific fields
+            commitments = narrative.commitments
+            cardPriorityOrder = narrative.cardPriorityOrder
+            causalAnnotations = narrative.causalAnnotations
+            greetingContext = narrative.greetingContext
+            readinessNarrative = narrative.readinessNarrative
+
+            // Compact scores
+            recoveryScore = narrative.enhancedRecovery.score
+            recoveryStatus = narrative.enhancedRecovery.status
+            readinessScore = narrative.readinessScore
+            recommendedIntensity = narrative.readinessIntensity
+            return
+        } catch {
+            print("Narrative dashboard unavailable, falling back: \(error)")
+        }
+
+        // Fallback to legacy dashboard
         do {
             let dashboard = try await APIService.shared.getDashboardData()
             dashboardData = dashboard
@@ -1065,14 +1140,12 @@ class TodayViewModel: ObservableObject {
             recommendations = dashboard.recommendations
             weeklySummary = dashboard.weeklySummary
 
-            // Also update the compact scores for backward compatibility
             recoveryScore = dashboard.enhancedRecovery.score
             recoveryStatus = dashboard.enhancedRecovery.status
             readinessScore = dashboard.readinessScore
             recommendedIntensity = dashboard.readinessIntensity
         } catch {
             print("Failed to load dashboard data: \(error)")
-            // Fallback to individual prediction calls
             await loadPredictions()
         }
     }

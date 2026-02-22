@@ -100,6 +100,55 @@ class DashboardResponse(BaseModel):
 
 
 # ============================================
+# Narrative Dashboard Models (Phase 11B)
+# ============================================
+
+class CausalAnnotation(BaseModel):
+    """Explains WHY a metric has its current value."""
+    metric_name: str           # "recovery", "readiness"
+    current_value: float
+    primary_driver: str        # "sleep was 5h 40m"
+    driver_factor: str         # "sleep_hours"
+    driver_impact_pct: float
+    secondary_driver: str | None = None
+
+
+class CommitmentSlot(BaseModel):
+    """A single action slot in the Now/Next/Tonight framework."""
+    slot: str                  # "now", "next", "tonight"
+    title: str
+    subtitle: str
+    icon: str                  # SF Symbol name
+    category: str              # "workout", "nutrition", "recovery", "sleep"
+    action_route: str | None = None
+    load_modifier: str | None = None  # "reduce_30", "reduce_10", "normal", "increase_5"
+
+
+class PrioritizedCard(BaseModel):
+    """A dashboard card with its computed priority."""
+    card_type: str             # "workout", "nutrition", "recovery", "sleep", "streak", "progress", "weekly"
+    priority: int
+    reason: str
+
+
+class NarrativeDashboardResponse(BaseModel):
+    """Extended dashboard with causal story."""
+    # Existing fields (superset of DashboardResponse)
+    enhanced_recovery: EnhancedRecoveryResponse
+    readiness_score: float
+    readiness_intensity: str
+    progress: ProgressSummary
+    recommendations: list[SmartRecommendation]
+    weekly_summary: WeeklySummary
+    # Narrative fields
+    causal_annotations: list[CausalAnnotation]
+    commitments: list[CommitmentSlot]
+    card_priority_order: list[PrioritizedCard]
+    greeting_context: str
+    readiness_narrative: str
+
+
+# ============================================
 # Dashboard Service
 # ============================================
 
@@ -163,6 +212,320 @@ class DashboardService:
             recommendations=recommendations,
             weekly_summary=weekly,
         )
+
+    async def get_narrative_dashboard(self, user_id: UUID) -> NarrativeDashboardResponse:
+        """Get dashboard data with causal narrative and commitment slots."""
+        logger.info("Building narrative dashboard for user %s", user_id)
+
+        # 1. Get base dashboard data (reuses existing logic)
+        base = await self.get_dashboard(user_id)
+
+        # 2. Build causal annotations
+        causal = self._build_causal_annotations(base)
+
+        # 3. Build commitment slots (Now/Next/Tonight)
+        commitments = self._build_commitments(base)
+
+        # 4. Compute card priority order based on readiness
+        card_order = self._compute_card_priority(base)
+
+        # 5. Generate greeting context and narrative
+        greeting_context = self._get_greeting_context(base)
+        narrative = self._build_readiness_narrative(base, causal)
+
+        return NarrativeDashboardResponse(
+            enhanced_recovery=base.enhanced_recovery,
+            readiness_score=base.readiness_score,
+            readiness_intensity=base.readiness_intensity,
+            progress=base.progress,
+            recommendations=base.recommendations,
+            weekly_summary=base.weekly_summary,
+            causal_annotations=causal,
+            commitments=commitments,
+            card_priority_order=card_order,
+            greeting_context=greeting_context,
+            readiness_narrative=narrative,
+        )
+
+    def _build_causal_annotations(self, dashboard: DashboardResponse) -> list[CausalAnnotation]:
+        """Find the primary driver for each key metric."""
+        annotations = []
+        factors = dashboard.enhanced_recovery.factors
+
+        if factors:
+            worst = min(factors, key=lambda f: f.score)
+            annotations.append(CausalAnnotation(
+                metric_name="recovery",
+                current_value=dashboard.enhanced_recovery.score,
+                primary_driver=self._factor_to_human(worst),
+                driver_factor=worst.name,
+                driver_impact_pct=round(100 - worst.score, 1),
+                secondary_driver=(
+                    self._factor_to_human(max(factors, key=lambda f: f.score))
+                    if len(factors) > 1 else None
+                ),
+            ))
+
+        # Readiness annotation
+        primary_driver = "recovery is low" if dashboard.enhanced_recovery.score < 60 else "training load"
+        if factors:
+            worst = min(factors, key=lambda f: f.score)
+            primary_driver = self._factor_to_human(worst)
+
+        annotations.append(CausalAnnotation(
+            metric_name="readiness",
+            current_value=dashboard.readiness_score,
+            primary_driver=primary_driver,
+            driver_factor="recovery" if dashboard.enhanced_recovery.score < 60 else "training_load",
+            driver_impact_pct=abs(dashboard.readiness_score - 70),
+        ))
+
+        return annotations
+
+    def _factor_to_human(self, factor: RecoveryFactor) -> str:
+        """Convert a RecoveryFactor to human-readable string."""
+        if factor.name == "sleep_hours":
+            hours = int(factor.value)
+            minutes = int((factor.value - hours) * 60)
+            if minutes > 0:
+                return f"sleep was {hours}h {minutes}m"
+            return f"sleep was {hours}h"
+        elif factor.name == "training_load":
+            if factor.value > 400:
+                return "training load is high"
+            elif factor.value < 150:
+                return "training load is light"
+            return "training load is moderate"
+        elif factor.name == "hrv":
+            if factor.score < 50:
+                return f"HRV is low at {int(factor.value)}ms"
+            return f"HRV is good at {int(factor.value)}ms"
+        return f"{factor.name} is {int(factor.value)}"
+
+    def _build_commitments(self, dashboard: DashboardResponse) -> list[CommitmentSlot]:
+        """Build Now/Next/Tonight commitment slots."""
+        hour = datetime.now().hour
+        readiness = dashboard.readiness_score
+        recovery = dashboard.enhanced_recovery
+
+        # Determine load modifier
+        if readiness < 40:
+            load_modifier = "reduce_30"
+        elif readiness < 60:
+            load_modifier = "reduce_10"
+        elif readiness >= 85:
+            load_modifier = "increase_5"
+        else:
+            load_modifier = "normal"
+
+        now_slot = self._compute_now_slot(hour, readiness, recovery, dashboard, load_modifier)
+        next_slot = self._compute_next_slot(hour, readiness, now_slot, dashboard)
+        tonight_slot = self._compute_tonight_slot(recovery)
+
+        return [now_slot, next_slot, tonight_slot]
+
+    def _compute_now_slot(
+        self, hour: int, readiness: float, recovery: EnhancedRecoveryResponse,
+        dashboard: DashboardResponse, load_modifier: str,
+    ) -> CommitmentSlot:
+        """Compute the NOW commitment based on readiness and time."""
+        # Low readiness → active recovery
+        if readiness < 40:
+            return CommitmentSlot(
+                slot="now",
+                title="Active Recovery",
+                subtitle="Light movement: walk, stretch, or mobility",
+                icon="figure.walk",
+                category="recovery",
+                action_route=None,
+            )
+
+        # High enough readiness + recovered muscles → workout
+        if readiness >= 60 and dashboard.progress.muscle_balance:
+            recovered = [m for m in dashboard.progress.muscle_balance if m.status == "recovered"]
+            if recovered:
+                best = max(recovered, key=lambda m: m.days_since_trained or 0)
+                if best.days_since_trained and best.days_since_trained >= 2:
+                    return CommitmentSlot(
+                        slot="now",
+                        title=f"{best.category.title()} Workout",
+                        subtitle=f"Fully recovered ({best.days_since_trained}d rest)",
+                        icon="dumbbell.fill",
+                        category="workout",
+                        action_route="workout",
+                        load_modifier=load_modifier,
+                    )
+
+        # Default: nutrition
+        return CommitmentSlot(
+            slot="now",
+            title="Log a Meal",
+            subtitle="Stay on track with your nutrition goals",
+            icon="fork.knife",
+            category="nutrition",
+            action_route="nutrition",
+        )
+
+    def _compute_next_slot(
+        self, hour: int, readiness: float, now_slot: CommitmentSlot,
+        dashboard: DashboardResponse,
+    ) -> CommitmentSlot:
+        """Compute the NEXT commitment (2-4 hours ahead)."""
+        # If NOW is a workout → NEXT should be nutrition
+        if now_slot.category == "workout":
+            return CommitmentSlot(
+                slot="next",
+                title="Post-Workout Protein",
+                subtitle="Hit your protein target within 2 hours",
+                icon="fork.knife",
+                category="nutrition",
+                action_route="nutrition",
+            )
+
+        # If NOW is recovery → suggest light planning
+        if now_slot.category == "recovery":
+            return CommitmentSlot(
+                slot="next",
+                title="Plan Tomorrow",
+                subtitle="Review your training plan for tomorrow",
+                icon="calendar",
+                category="workout",
+                action_route="workout",
+            )
+
+        # Morning: suggest workout prep
+        if hour < 12:
+            if readiness >= 60:
+                return CommitmentSlot(
+                    slot="next",
+                    title="Workout Prep",
+                    subtitle="Your readiness is good — plan your session",
+                    icon="dumbbell.fill",
+                    category="workout",
+                    action_route="workout",
+                )
+
+        # Afternoon/evening: wind-down
+        if hour >= 17:
+            return CommitmentSlot(
+                slot="next",
+                title="Evening Wind-Down",
+                subtitle="Start dimming screens to protect sleep quality",
+                icon="moon.stars",
+                category="sleep",
+                action_route=None,
+            )
+
+        # Default: nutrition check-in
+        adherence = dashboard.weekly_summary.nutrition_adherence_pct
+        if adherence < 60:
+            return CommitmentSlot(
+                slot="next",
+                title="Track Your Meals",
+                subtitle=f"Only {adherence:.0f}% tracked this week",
+                icon="fork.knife",
+                category="nutrition",
+                action_route="nutrition",
+            )
+
+        return CommitmentSlot(
+            slot="next",
+            title="Stay Hydrated",
+            subtitle="Aim for 8+ glasses of water today",
+            icon="drop.fill",
+            category="nutrition",
+            action_route=None,
+        )
+
+    def _compute_tonight_slot(self, recovery: EnhancedRecoveryResponse) -> CommitmentSlot:
+        """Compute the TONIGHT commitment — always sleep/recovery focused."""
+        deficit = recovery.sleep_deficit_hours or 0
+        if deficit > 1:
+            target_hours = 8 + deficit
+            return CommitmentSlot(
+                slot="tonight",
+                title=f"Sleep {target_hours:.0f}+ Hours",
+                subtitle=f"You have a {deficit:.1f}h sleep deficit to recover",
+                icon="moon.zzz.fill",
+                category="sleep",
+                action_route="sleep",
+            )
+
+        return CommitmentSlot(
+            slot="tonight",
+            title="Wind Down by 10pm",
+            subtitle="Maintain your good sleep consistency",
+            icon="moon.zzz.fill",
+            category="sleep",
+            action_route="sleep",
+        )
+
+    def _compute_card_priority(self, dashboard: DashboardResponse) -> list[PrioritizedCard]:
+        """Reorder dashboard cards based on readiness score."""
+        readiness = dashboard.readiness_score
+
+        if readiness >= 70:
+            return [
+                PrioritizedCard(card_type="workout", priority=1, reason="High readiness — ready to train"),
+                PrioritizedCard(card_type="progress", priority=2, reason="Show momentum when ready"),
+                PrioritizedCard(card_type="nutrition", priority=3, reason="Fuel the workout"),
+                PrioritizedCard(card_type="streak", priority=4, reason="Motivation"),
+                PrioritizedCard(card_type="weekly", priority=5, reason="Context"),
+                PrioritizedCard(card_type="adherence", priority=6, reason="Habits"),
+                PrioritizedCard(card_type="recovery", priority=7, reason="Less urgent when recovered"),
+                PrioritizedCard(card_type="sleep", priority=8, reason="Informational"),
+            ]
+        elif readiness >= 40:
+            return [
+                PrioritizedCard(card_type="recovery", priority=1, reason="Moderate readiness — recovery context first"),
+                PrioritizedCard(card_type="workout", priority=2, reason="Modified workout still OK"),
+                PrioritizedCard(card_type="nutrition", priority=3, reason="Recovery nutrition matters"),
+                PrioritizedCard(card_type="sleep", priority=4, reason="Sleep drives recovery"),
+                PrioritizedCard(card_type="progress", priority=5, reason="Context"),
+                PrioritizedCard(card_type="streak", priority=6, reason="Motivation"),
+                PrioritizedCard(card_type="adherence", priority=7, reason="Habits"),
+                PrioritizedCard(card_type="weekly", priority=8, reason="Summary"),
+            ]
+        else:
+            return [
+                PrioritizedCard(card_type="recovery", priority=1, reason="Low readiness — recovery is top priority"),
+                PrioritizedCard(card_type="sleep", priority=2, reason="Sleep deficit is likely culprit"),
+                PrioritizedCard(card_type="nutrition", priority=3, reason="Recovery nutrition"),
+                PrioritizedCard(card_type="weekly", priority=4, reason="Context for rest decision"),
+                PrioritizedCard(card_type="workout", priority=5, reason="Light movement only"),
+                PrioritizedCard(card_type="streak", priority=6, reason="De-emphasized"),
+                PrioritizedCard(card_type="adherence", priority=7, reason="De-emphasized"),
+                PrioritizedCard(card_type="progress", priority=8, reason="De-emphasized when resting"),
+            ]
+
+    def _get_greeting_context(self, dashboard: DashboardResponse) -> str:
+        """Return a contextual label based on readiness and state."""
+        readiness = dashboard.readiness_score
+        if readiness >= 80:
+            return "Push Day"
+        elif readiness >= 60:
+            return "Training Day"
+        elif readiness >= 40:
+            return "Easy Day"
+        else:
+            return "Recovery Day"
+
+    def _build_readiness_narrative(
+        self, dashboard: DashboardResponse, causal: list[CausalAnnotation],
+    ) -> str:
+        """Build a human-readable readiness narrative."""
+        score = dashboard.readiness_score
+        recovery_annotation = next((a for a in causal if a.metric_name == "recovery"), None)
+        driver = recovery_annotation.primary_driver if recovery_annotation else "multiple factors"
+
+        if score >= 80:
+            return f"Your body is {int(score)}% ready — great shape for an intense session"
+        elif score >= 60:
+            return f"Your body is {int(score)}% ready — {driver}, but overall good to go"
+        elif score >= 40:
+            return f"Your body is {int(score)}% ready — mainly because {driver}"
+        else:
+            return f"Your body needs rest at {int(score)}% — {driver}"
 
     async def _get_enhanced_recovery(self, user_id: UUID) -> EnhancedRecoveryResponse:
         """Get recovery score with contributing factors."""

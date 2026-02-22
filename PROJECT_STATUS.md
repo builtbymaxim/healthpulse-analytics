@@ -104,17 +104,20 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Unit preferences (metric/imperial)
 
 ### Dashboard (TodayView)
+- Readiness header with score ring, greeting context ("Push Day" / "Recovery Day"), and narrative text
+- "Now / Next / Tonight" commitment strip with load modifier badges
 - Welcome checklist for new users
+- Dynamic card ordering based on readiness score (high → workout first; low → recovery first)
 - Today's planned workout card
 - Nutrition progress (calorie ring + macro bars)
 - Smart recommendations (personalized based on data)
 - Weekly summary (workouts, sleep, nutrition adherence)
-- Enhanced recovery card with contributing factors
+- Causal recovery card with inline annotation ("mainly because sleep was 5h 40m")
 - Progress section (key lifts, PRs, muscle balance)
 - Workout streak + last workout
 - Nutrition adherence chart (7-day)
 - Quick stats (steps, sleep, resting HR)
-- Readiness score
+- Graceful fallback to static card order when narrative endpoint unavailable
 
 ### Workouts
 - Running workout with GPS tracking, live pace, background execution
@@ -197,7 +200,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `exercises.py` | `/api/v1/exercises` | GET `/`, `/analytics/volume`, `/analytics/muscle-groups`; POST `/sets` |
 | `nutrition.py` | `/api/v1/nutrition` | POST/GET `/food`, `/goal`; GET `/summary`, `/summary/weekly` |
 | `sleep.py` | `/api/v1/sleep` | POST/GET `/`; GET `/summary`, `/history`, `/analytics` |
-| `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/recovery`, `/readiness` |
+| `predictions.py` | `/api/v1/predictions` | GET `/dashboard`, `/dashboard/narrative`, `/recovery`, `/readiness` |
 | `training_plans.py` | `/api/v1/training-plans` | GET `/templates`, `/today`; POST `/activate`, `/suggestions`; PUT `/{id}` |
 | `social.py` | `/api/v1/social` | POST/GET `/invite-codes`; GET `/partners`, `/leaderboard/{category}`; PUT `/partners/{id}/accept` |
 | `meal_plans.py` | `/api/v1/meal-plans` | GET `/recipes`, `/templates`, `/suggestions`, `/barcode/{code}`; POST `/quick-add`; CRUD `/weekly-plans` (13 endpoints) |
@@ -551,44 +554,27 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 
 ---
 
-### Phase 11 — UI/UX Visual Refresh & The Daily Causal Story Dashboard
+### Phase 11 — Visual Polish & Daily Causal Story Dashboard (COMPLETED)
 
-**Milestone:** Transform the visual layer and reframe the dashboard from a stack of data cards
-into a single, readable narrative that changes based on the user's physiological state.
-
-#### 11A — "Emerald Night" Visual Refresh
-- **New color palette:** Deepen primary from neon mint (`#4ADE80`) to rich emerald (`#16C784`);
-  green-tinted dark surfaces (`#0F1511`, `#161D18`) replace flat grays; typography gains hierarchy
-  via ALL-CAPS tracked section headers and refined text secondary/tertiary tokens
-- **Glassmorphism upgrade:** Layered custom glass (Surface2 @90% + top gradient overlay + gradient
-  border) replaces raw `.ultraThinMaterial`
-- **Unified border radius system:** XL 28px · L 20px · M 16px · S 12px · XS 8px
-- **Elevation system:** Three shadow levels (black @20%/35%/55%) replace near-invisible current
-  shadows; primary glow (`@20%, radius 24`) for active elements
-- **Premium auth flow:** Logo bloom radial pulse → typewriter tagline → staggered form rise →
-  field focus glow → submit shimmer → success morph (replaces basic heartbeat loop)
-- **Motion overhaul:** Default spring `(response: 0.45, dampingFraction: 0.82)` throughout;
-  tab icon spring bounce; `.contentTransition(.numericText())` for all stat counters;
-  blur-to-clear greeting reveal; pill-shaped bottom toasts with self-drawing icons
-- **Haptic strategy:** Add `.selection()` on every tab tap (currently missing); double `.heavy()`
-  for PR achievements; `.success()` on all healthy-behavior saves
-- **Social tab fix:** Always-visible 6th tab (activation card when disabled → live content when
-  enabled); eliminates jarring layout-shift reflow from current settings toggle
+#### 11A — Motion Polish
+- **Centralized motion tokens:** `MotionTokens` enum (primary, snappy, micro, form, entrance, ring) replacing all inline spring values across the app
+- **Custom tab bar:** Spring bounce animation via `.symbolEffect(.bounce)` on tab icons; glass-style background with `ultraThinMaterial`; selection haptics on every tab tap
+- **Numeric text transitions:** `.contentTransition(.numericText())` on all stat counters (nutrition adherence %, sleep consistency %, recovery scores, key lift weights)
 
 #### 11B — The Daily Causal Story Dashboard
-- **State-morphing layout:** Dashboard card priority order dynamically reorders based on current
-  readiness score — high readiness surfaces training; low readiness surfaces recovery guidance
-- **"Now / Next / Tonight" commitment framework:** Three persistent action slots replace the
-  unstructured card stack:
-  - **Now** — the single most important action right now (start workout / eat protein window / rest)
-  - **Next** — what to prepare for in the next 2–4 hours
-  - **Tonight** — one sleep/recovery commitment to protect tomorrow's readiness
-- **Causal annotation:** Each dashboard metric shows its primary driver ("Your recovery is 58% —
-  mainly because sleep was 5h 40m, 1h 22m below your target")
-- **Readiness-aware workout card:** Suggests load modification ("Today's plan: Push Day — we
-  recommend dropping to 80% volume given your readiness")
-- **Backend:** New `dashboard_service` mode — `readiness_narrative` endpoint returns prioritized
-  card order + causal annotations + commitment suggestions
+- **Narrative dashboard endpoint:** `GET /predictions/dashboard/narrative` returns causal annotations, commitment slots, card priority order, readiness narrative, and greeting context as a superset of the existing dashboard response
+- **Causal annotations:** Each metric shows its primary driver ("mainly because sleep was 5h 40m") with driver factor and impact percentage
+- **"Now / Next / Tonight" commitment framework:** Three time-based action slots driven by readiness score and time of day:
+  - **Now** — workout (high readiness), active recovery (low readiness), or nutrition fallback
+  - **Next** — nutrition/prep focus based on what Now suggested
+  - **Tonight** — always sleep/recovery focused, with sleep deficit awareness
+- **Load modifier badges:** Visual "EASE OFF" (orange) / "PUSH IT" (green) indicators on workout commitment cards based on readiness thresholds
+- **Readiness-driven card reordering:** Dashboard cards dynamically reorder based on physiological state — high readiness (≥70) surfaces training; moderate (40-69) surfaces recovery; low (<40) surfaces recovery + sleep
+- **Readiness header:** Compact score ring (52pt) + greeting context label (e.g. "PUSH DAY" / "RECOVERY DAY") + narrative text explaining the score
+- **Graceful fallback:** If narrative endpoint is unavailable, app seamlessly falls back to legacy `/dashboard` endpoint with static card order — no crashes, no blank screens
+- **New backend methods:** `get_narrative_dashboard()` + 9 helpers (`_build_causal_annotations`, `_build_commitments`, `_compute_now/next/tonight_slot`, `_compute_card_priority`, `_get_greeting_context`, `_build_readiness_narrative`)
+- **New iOS components:** `ReadinessHeaderView`, `CommitmentStripView`, `CommitmentCard`, `LoadModifierBadge`, `CausalRecoveryCard`, `DashboardCardRouter`
+- **New iOS models:** `CausalAnnotation`, `CommitmentSlot`, `PrioritizedCard`, `NarrativeDashboardResponse`
 
 ---
 

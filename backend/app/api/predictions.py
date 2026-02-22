@@ -14,6 +14,7 @@ from app.services.prediction_service import get_prediction_service
 from app.services.dashboard_service import (
     get_dashboard_service,
     DashboardResponse,
+    NarrativeDashboardResponse,
 )
 
 router = APIRouter()
@@ -323,6 +324,15 @@ async def trigger_analysis(
         message=f"Analysis complete. Updated {len(updated)} predictions.",
         predictions_updated=updated,
     )
+
+
+@router.get("/dashboard/narrative", response_model=NarrativeDashboardResponse)
+async def get_narrative_dashboard(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get dashboard with causal narrative, commitments, and prioritized card order."""
+    service = get_dashboard_service()
+    return await service.get_narrative_dashboard(current_user.id)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
