@@ -127,10 +127,32 @@ async def get_suggestions(
     return service.get_suggested_recipes(user_id=current_user.id, meal_type=meal_type)
 
 
+@router.get("/food-search", response_model=list[BarcodeProductResponse])
+async def search_food(
+    query: str = Query(min_length=2, max_length=100),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    service = get_meal_plan_service()
+    return service.search_food(query)
+
+
 @router.get("/barcode/{barcode}", response_model=BarcodeProductResponse)
 async def lookup_barcode(barcode: str, current_user: CurrentUser = Depends(get_current_user)):
     service = get_meal_plan_service()
     result = service.lookup_barcode(barcode)
+    return result
+
+
+@router.get("/recipes/{recipe_id}/shopping-list", response_model=list[ShoppingListItem])
+async def get_recipe_shopping_list(
+    recipe_id: UUID,
+    servings: float = Query(default=1, ge=0.5, le=10),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    service = get_meal_plan_service()
+    result = service.get_recipe_shopping_list(recipe_id, servings)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
     return result
 
 

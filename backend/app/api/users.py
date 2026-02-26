@@ -87,6 +87,7 @@ class UserSettings(BaseModel):
 class UserProfileUpdate(BaseModel):
     """User profile update request."""
     display_name: str | None = None
+    avatar_url: str | None = None
     age: int | None = None
     height_cm: float | None = None
     gender: str | None = None
@@ -129,6 +130,8 @@ async def update_my_profile(
     update_data = {}
     if profile.display_name is not None:
         update_data["display_name"] = profile.display_name
+    if profile.avatar_url is not None:
+        update_data["avatar_url"] = profile.avatar_url
     if profile.age is not None:
         update_data["age"] = profile.age
     if profile.height_cm is not None:

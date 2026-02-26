@@ -140,7 +140,9 @@ enum MetricSource: String, Codable {
 
 // MARK: - Workouts
 
-struct Workout: Codable, Identifiable {
+struct Workout: Codable, Identifiable, Hashable {
+    static func == (lhs: Workout, rhs: Workout) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
     let id: UUID
     let userId: UUID
     let workoutType: WorkoutType
@@ -932,6 +934,21 @@ struct CommitmentSlot: Codable, Identifiable {
     }
 }
 
+struct DailyAction: Codable, Identifiable {
+    let id: String
+    let title: String
+    let icon: String
+    let actionRoute: String
+    let isCompleted: Bool
+    let priority: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, icon, priority
+        case actionRoute = "action_route"
+        case isCompleted = "is_completed"
+    }
+}
+
 struct PrioritizedCard: Codable, Identifiable, Equatable {
     var id: String { cardType }
     let cardType: String
@@ -956,6 +973,7 @@ struct NarrativeDashboardResponse: Codable {
     let cardPriorityOrder: [PrioritizedCard]
     let greetingContext: String
     let readinessNarrative: String
+    let dailyActions: [DailyAction]
 
     enum CodingKeys: String, CodingKey {
         case enhancedRecovery = "enhanced_recovery"
@@ -968,6 +986,23 @@ struct NarrativeDashboardResponse: Codable {
         case cardPriorityOrder = "card_priority_order"
         case greetingContext = "greeting_context"
         case readinessNarrative = "readiness_narrative"
+        case dailyActions = "daily_actions"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enhancedRecovery = try container.decode(EnhancedRecoveryResponse.self, forKey: .enhancedRecovery)
+        readinessScore = try container.decode(Double.self, forKey: .readinessScore)
+        readinessIntensity = try container.decode(String.self, forKey: .readinessIntensity)
+        progress = try container.decode(ProgressSummary.self, forKey: .progress)
+        recommendations = try container.decode([SmartRecommendation].self, forKey: .recommendations)
+        weeklySummary = try container.decode(WeeklySummary.self, forKey: .weeklySummary)
+        causalAnnotations = try container.decode([CausalAnnotation].self, forKey: .causalAnnotations)
+        commitments = try container.decode([CommitmentSlot].self, forKey: .commitments)
+        cardPriorityOrder = try container.decode([PrioritizedCard].self, forKey: .cardPriorityOrder)
+        greetingContext = try container.decode(String.self, forKey: .greetingContext)
+        readinessNarrative = try container.decode(String.self, forKey: .readinessNarrative)
+        dailyActions = try container.decodeIfPresent([DailyAction].self, forKey: .dailyActions) ?? []
     }
 }
 

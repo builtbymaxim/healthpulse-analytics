@@ -372,7 +372,7 @@ struct PendingPartnerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "person.crop.circle.fill")
+                Image(systemName: partner.partnerAvatar ?? "person.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
 
@@ -469,7 +469,7 @@ struct ActivePartnerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "person.crop.circle.fill")
+                Image(systemName: partner.partnerAvatar ?? "person.circle.fill")
                     .font(.title2)
                     .foregroundStyle(AppTheme.primary)
 
@@ -880,7 +880,7 @@ struct LeaderboardDetailView: View {
             } else {
                 Section {
                     ForEach(entries) { entry in
-                        HStack(spacing: 16) {
+                        HStack(spacing: 12) {
                             // Rank badge
                             ZStack {
                                 Circle()
@@ -890,6 +890,12 @@ struct LeaderboardDetailView: View {
                                     .font(.subheadline.bold())
                                     .foregroundStyle(rankColor(entry.rank))
                             }
+
+                            // Avatar
+                            Image(systemName: entry.avatarUrl ?? "person.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(entry.isCurrentUser ? .green : rankColor(entry.rank))
+                                .frame(width: 28)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.displayName ?? "Partner")

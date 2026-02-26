@@ -253,6 +253,9 @@ struct RecipeDetailSheet: View {
     @State private var isAdding = false
     @State private var showSuccess = false
     @State private var loadError: String?
+    @State private var showShoppingList = false
+    @State private var shoppingListItems: [ShoppingListItem] = []
+    @State private var isLoadingShoppingList = false
 
     private let servingOptions: [Double] = [0.5, 1, 1.5, 2]
     private let mealTypes = ["breakfast", "lunch", "dinner", "snack"]
@@ -284,6 +287,30 @@ struct RecipeDetailSheet: View {
                     // Ingredients
                     if let ingredients = displayRecipe.ingredients, !ingredients.isEmpty {
                         ingredientsSection(ingredients)
+
+                        // Shopping List button
+                        Button {
+                            Task { await loadShoppingList() }
+                        } label: {
+                            HStack {
+                                if isLoadingShoppingList {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(.orange)
+                                } else {
+                                    Image(systemName: "cart.fill")
+                                }
+                                Text("Shopping List")
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.orange.opacity(0.15))
+                            .foregroundStyle(.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .disabled(isLoadingShoppingList)
+                        .padding(.horizontal)
                     }
 
                     // Instructions
@@ -333,6 +360,26 @@ struct RecipeDetailSheet: View {
                 }
             }
             .task { await loadFullRecipe() }
+            .sheet(isPresented: $showShoppingList) {
+                NavigationStack {
+                    List(shoppingListItems) { item in
+                        HStack {
+                            Text(item.name)
+                            Spacer()
+                            Text(item.displayAmount)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .navigationTitle("Shopping List")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showShoppingList = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
         }
     }
 
@@ -526,6 +573,19 @@ struct RecipeDetailSheet: View {
         } catch {
             loadError = "Failed to load recipe details."
         }
+    }
+
+    private func loadShoppingList() async {
+        isLoadingShoppingList = true
+        do {
+            shoppingListItems = try await APIService.shared.getRecipeShoppingList(
+                recipeId: recipe.id, servings: selectedServings
+            )
+            showShoppingList = true
+        } catch {
+            loadError = "Failed to load shopping list."
+        }
+        isLoadingShoppingList = false
     }
 
     private func formatAmount(_ value: Double) -> String {

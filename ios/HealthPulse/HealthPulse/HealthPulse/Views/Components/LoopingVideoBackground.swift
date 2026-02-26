@@ -19,6 +19,8 @@ struct LoopingVideoBackground: UIViewRepresentable {
         guard let url = Bundle.main.url(forResource: videoName, withExtension: "mp4") else {
             return view
         }
+        // Don't interrupt other audio (music) — we only use the video visually
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, options: .mixWithOthers)
         let item = AVPlayerItem(url: url)
         let player = AVQueuePlayer(playerItem: item)
         player.isMuted = true

@@ -21,7 +21,13 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 1. Readiness Header (narrative mode)
+                    // 1. Greeting — always visible at top
+                    Text(viewModel.personalizedGreeting)
+                        .font(.title2.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+
+                    // 2. Readiness Header (narrative mode)
                     if !viewModel.readinessNarrative.isEmpty {
                         ReadinessHeaderView(
                             readinessScore: viewModel.readinessScore,
@@ -31,16 +37,19 @@ struct TodayView: View {
                         .padding(.horizontal)
                     }
 
-                    // 2. Commitment Strip (NOW / NEXT / TONIGHT)
+                    // 3. Commitment Strip (NOW / NEXT / TONIGHT) — tappable
                     if !viewModel.commitments.isEmpty {
-                        CommitmentStripView(commitments: viewModel.commitments)
-                            .padding(.horizontal)
+                        CommitmentStripView(commitments: viewModel.commitments) { route in
+                            navigateToRoute(route)
+                        }
+                        .padding(.horizontal)
                     }
 
-                    // 3. New User Welcome Checklist
+                    // 4. Daily Actions — for ALL users
                     if viewModel.isNewUser {
+                        // New users: onboarding checklist
                         WelcomeChecklistCard(
-                            displayName: viewModel.displayName,
+                            displayName: nil, // greeting is now standalone above
                             hasLoggedWorkout: viewModel.hasLoggedWorkout,
                             hasLoggedMeal: viewModel.hasLoggedMeal,
                             hasLoggedSleep: viewModel.hasLoggedSleep,
@@ -51,27 +60,31 @@ struct TodayView: View {
                             onTrainingPlanTap: { showTrainingPlanSetup = true }
                         )
                         .padding(.horizontal)
+                    } else if !viewModel.dailyActions.isEmpty {
+                        // Established users: daily actions from backend
+                        DailyActionsCard(actions: viewModel.dailyActions) { route in
+                            navigateToRoute(route)
+                        }
+                        .padding(.horizontal)
                     }
 
-                    // 4. Dynamic Card Stack (narrative mode) or static fallback
+                    // 5. Dynamic Card Stack (narrative mode) or static fallback
                     if !viewModel.cardPriorityOrder.isEmpty {
-                        // Narrative-driven card ordering
                         ForEach(viewModel.cardPriorityOrder) { card in
                             DashboardCardRouter(cardType: card.cardType, viewModel: viewModel)
                                 .padding(.horizontal)
                         }
 
-                        // Smart Recommendations after dynamic cards
-                        if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
-                            SmartRecommendationsSection(recommendations: viewModel.recommendations)
+                        // Filtered recommendations (no duplication with commitments)
+                        if !viewModel.isNewUser && !viewModel.filteredRecommendations.isEmpty {
+                            SmartRecommendationsSection(recommendations: viewModel.filteredRecommendations)
                                 .padding(.horizontal)
                         }
                     } else {
-                        // Static fallback (legacy dashboard or no narrative data)
                         staticCardStack
                     }
 
-                    // 5. Quick Stats Row (always last)
+                    // 6. Quick Stats Row (always last)
                     HStack(spacing: 12) {
                         QuickStatCard(
                             icon: "figure.walk",
@@ -104,7 +117,7 @@ struct TodayView: View {
                     }
                     .padding(.horizontal)
 
-                    // Fallback: Compact Recovery & Readiness (only if no narrative and no enhanced data)
+                    // Fallback: Compact Recovery & Readiness
                     if !viewModel.isNewUser && viewModel.enhancedRecovery == nil && viewModel.readinessNarrative.isEmpty {
                         HStack(spacing: 12) {
                             CompactScoreCard(
@@ -162,7 +175,7 @@ struct TodayView: View {
                     showPRCelebration = false
                     achievedPRs = []
                 }
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -185,9 +198,9 @@ struct TodayView: View {
             .padding(.horizontal)
         }
 
-        // Smart Recommendations
-        if !viewModel.isNewUser && !viewModel.recommendations.isEmpty {
-            SmartRecommendationsSection(recommendations: viewModel.recommendations)
+        // Smart Recommendations (filtered to avoid duplication with commitments)
+        if !viewModel.isNewUser && !viewModel.filteredRecommendations.isEmpty {
+            SmartRecommendationsSection(recommendations: viewModel.filteredRecommendations)
                 .padding(.horizontal)
         }
 
@@ -278,6 +291,23 @@ struct TodayView: View {
         }
     }
 
+    private func navigateToRoute(_ route: String?) {
+        guard let route else { return }
+        HapticsManager.shared.light()
+        switch route {
+        case "workout":
+            tabRouter.navigateTo(.workout)
+        case "nutrition":
+            tabRouter.navigateTo(.nutrition)
+        case "sleep":
+            tabRouter.navigateTo(.sleep)
+        case "social":
+            tabRouter.navigateTo(.social)
+        default:
+            break
+        }
+    }
+
     private func statusColor(_ status: String?) -> Color {
         switch status {
         case "recovered": return .green
@@ -326,7 +356,7 @@ struct WelcomeChecklistCard: View {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(personalizedGreeting)
+                    Text("Getting Started")
                         .font(.headline)
                     Text("Let's build your routine")
                         .font(.subheadline)
@@ -1075,9 +1105,35 @@ class TodayViewModel: ObservableObject {
     @Published var causalAnnotations: [CausalAnnotation] = []
     @Published var greetingContext: String = ""
     @Published var readinessNarrative: String = ""
+    @Published var dailyActions: [DailyAction] = []
 
     func causalAnnotation(for metric: String) -> CausalAnnotation? {
         causalAnnotations.first { $0.metricName == metric }
+    }
+
+    var personalizedGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let timeGreeting: String
+        if hour < 12 {
+            timeGreeting = "Good morning"
+        } else if hour < 17 {
+            timeGreeting = "Good afternoon"
+        } else {
+            timeGreeting = "Good evening"
+        }
+        if let name = displayName, !name.isEmpty {
+            return "\(timeGreeting), \(name)!"
+        }
+        return "\(timeGreeting)!"
+    }
+
+    /// Filter recommendations whose actionRoute duplicates a commitment's actionRoute
+    var filteredRecommendations: [SmartRecommendation] {
+        let commitmentRoutes = Set(commitments.compactMap { $0.actionRoute })
+        return recommendations.filter { rec in
+            guard let route = rec.actionRoute else { return true }
+            return !commitmentRoutes.contains(route)
+        }
     }
 
     @Published var isLoading = false
@@ -1120,6 +1176,7 @@ class TodayViewModel: ObservableObject {
             causalAnnotations = narrative.causalAnnotations
             greetingContext = narrative.greetingContext
             readinessNarrative = narrative.readinessNarrative
+            dailyActions = narrative.dailyActions
 
             // Compact scores
             recoveryScore = narrative.enhancedRecovery.score
@@ -1341,30 +1398,29 @@ class TodayViewModel: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
-        // Get unique workout days
+        // Get unique workout days sorted descending
         let workoutDays = Set(workouts.map { calendar.startOfDay(for: $0.startedAt) })
+            .sorted(by: >)
 
-        var streak = 0
-        var checkDate = today
+        guard let mostRecent = workoutDays.first else { return 0 }
 
-        // Check if there's a workout today or yesterday to start the streak
-        if !workoutDays.contains(today) {
-            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
-                return 0
-            }
-            if !workoutDays.contains(yesterday) {
-                return 0  // Streak broken
-            }
-            checkDate = yesterday
-        }
+        // Allow up to 2-day gap from today (rest day tolerance)
+        let daysSinceLast = calendar.dateComponents([.day], from: mostRecent, to: today).day ?? 0
+        if daysSinceLast > 2 { return 0 }
 
-        // Count consecutive days
-        while workoutDays.contains(checkDate) {
-            streak += 1
-            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: checkDate) else {
-                break
+        // Walk backwards through workout days, allowing 1 rest day between each
+        var streak = 1
+        var previousWorkoutDay = mostRecent
+
+        for day in workoutDays.dropFirst() {
+            let gap = calendar.dateComponents([.day], from: day, to: previousWorkoutDay).day ?? 0
+            if gap <= 2 {
+                // 1 = consecutive, 2 = one rest day between — both count
+                streak += 1
+                previousWorkoutDay = day
+            } else {
+                break  // Streak broken — more than 1 rest day gap
             }
-            checkDate = previousDay
         }
 
         return streak

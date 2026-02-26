@@ -560,6 +560,58 @@ class APIService {
         try await request(endpoint: "/users/me/onboarding", method: "POST", body: profile)
     }
 
+    // MARK: - Account Management
+
+    struct MessageResponse: Decodable {
+        let message: String
+    }
+
+    func changePassword(currentPassword: String, newPassword: String) async throws -> MessageResponse {
+        struct Body: Encodable {
+            let currentPassword: String
+            let newPassword: String
+            enum CodingKeys: String, CodingKey {
+                case currentPassword = "current_password"
+                case newPassword = "new_password"
+            }
+        }
+        return try await request(endpoint: "/account/change-password", method: "POST", body: Body(currentPassword: currentPassword, newPassword: newPassword))
+    }
+
+    func changeEmail(newEmail: String, currentPassword: String) async throws -> MessageResponse {
+        struct Body: Encodable {
+            let newEmail: String
+            let currentPassword: String
+            enum CodingKeys: String, CodingKey {
+                case newEmail = "new_email"
+                case currentPassword = "current_password"
+            }
+        }
+        return try await request(endpoint: "/account/change-email", method: "POST", body: Body(newEmail: newEmail, currentPassword: currentPassword))
+    }
+
+    func updateAvatar(_ symbol: String) async throws {
+        struct Body: Encodable {
+            let avatarUrl: String
+            enum CodingKeys: String, CodingKey {
+                case avatarUrl = "avatar_url"
+            }
+        }
+        let _: User = try await request(endpoint: "/users/me", method: "PUT", body: Body(avatarUrl: symbol))
+    }
+
+    func updateDisplayNameAndAvatar(displayName: String, avatarUrl: String) async throws {
+        struct Body: Encodable {
+            let displayName: String
+            let avatarUrl: String
+            enum CodingKeys: String, CodingKey {
+                case displayName = "display_name"
+                case avatarUrl = "avatar_url"
+            }
+        }
+        let _: User = try await request(endpoint: "/users/me", method: "PUT", body: Body(displayName: displayName, avatarUrl: avatarUrl))
+    }
+
     func updateUserProfile(age: Int, heightCm: Double, gender: String, activityLevel: String, fitnessGoal: String) async throws {
         struct ProfileUpdate: Encodable {
             let age: Int
@@ -939,6 +991,15 @@ class APIService {
 
     func lookupBarcode(_ barcode: String) async throws -> BarcodeProduct {
         try await request(endpoint: "/meal-plans/barcode/\(barcode)")
+    }
+
+    func searchFood(query: String) async throws -> [BarcodeProduct] {
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        return try await request(endpoint: "/meal-plans/food-search?query=\(encoded)")
+    }
+
+    func getRecipeShoppingList(recipeId: UUID, servings: Double) async throws -> [ShoppingListItem] {
+        try await request(endpoint: "/meal-plans/recipes/\(recipeId)/shopping-list?servings=\(servings)")
     }
 
     // MARK: - AI Food Scan (Phase 12)

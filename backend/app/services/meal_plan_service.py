@@ -225,6 +225,56 @@ class MealPlanService:
 
         return recipes[:20]
 
+    def search_food(self, query: str) -> list[dict]:
+        """Search Open Food Facts by text query with circuit breaker."""
+        if _barcode_cb.is_open:
+            logger.warning("Food search skipped — circuit open for openfoodfacts")
+            return []
+
+        url = "https://world.openfoodfacts.org/cgi/search.pl"
+        params = {
+            "search_terms": query,
+            "json": "1",
+            "page_size": "20",
+            "fields": "code,product_name,brands,nutriments,image_url,serving_size",
+        }
+        try:
+            with httpx.Client(timeout=10) as client:
+                response = call_with_retry(
+                    client.get, url,
+                    max_attempts=2,
+                    base_delay=1.0,
+                    exceptions=(httpx.HTTPError, httpx.TimeoutException),
+                    params=params,
+                )
+                response.raise_for_status()
+                data = response.json()
+            _barcode_cb.record_success()
+            results = []
+            for product in data.get("products", []):
+                nutriments = product.get("nutriments", {})
+                name = product.get("product_name")
+                if not name:
+                    continue
+                results.append({
+                    "barcode": product.get("code", ""),
+                    "name": name,
+                    "brand": product.get("brands"),
+                    "calories_per_100g": nutriments.get("energy-kcal_100g", 0) or 0,
+                    "protein_g_per_100g": nutriments.get("proteins_100g", 0) or 0,
+                    "carbs_g_per_100g": nutriments.get("carbohydrates_100g", 0) or 0,
+                    "fat_g_per_100g": nutriments.get("fat_100g", 0) or 0,
+                    "fiber_g_per_100g": nutriments.get("fiber_100g", 0) or 0,
+                    "serving_size": product.get("serving_size"),
+                    "image_url": product.get("image_url"),
+                    "found": True,
+                })
+            return results
+        except Exception:
+            _barcode_cb.record_failure()
+            logger.warning("Food search failed for %r", query, exc_info=True)
+            return []
+
     def lookup_barcode(self, barcode: str) -> dict:
         """Proxy to Open Food Facts API with retry and circuit breaker."""
         if _barcode_cb.is_open:
@@ -266,6 +316,24 @@ class MealPlanService:
             _barcode_cb.record_failure()
             logger.warning("Barcode lookup failed for %s", barcode, exc_info=True)
             return {"barcode": barcode, "found": False}
+
+    def get_recipe_shopping_list(self, recipe_id: UUID, servings: float = 1) -> list[dict] | None:
+        """Get shopping list for a single recipe, scaled by servings."""
+        recipe = self.get_recipe(recipe_id)
+        if not recipe:
+            return None
+        ingredients = recipe.get("ingredients", [])
+        if not ingredients:
+            return []
+        result = []
+        for ing in ingredients:
+            if isinstance(ing, dict):
+                result.append({
+                    "name": ing["name"],
+                    "total_amount": round(ing.get("amount", 0) * servings, 1),
+                    "unit": ing.get("unit", ""),
+                })
+        return sorted(result, key=lambda x: x["name"])
 
     def get_shopping_list(self, template_id: UUID) -> list[dict]:
         """Get consolidated shopping list for a meal plan template."""

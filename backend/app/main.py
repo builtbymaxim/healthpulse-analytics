@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.logging_config import setup_logging
 from app.rate_limit import limiter
 from app.middleware.request_id import RequestIdMiddleware
-from app.api import auth, health, metrics, nutrition, predictions, users, workouts, exercises, sleep, training_plans, social, meal_plans
+from app.api import account, auth, health, metrics, nutrition, predictions, users, workouts, exercises, sleep, training_plans, social, meal_plans
 
 settings = get_settings()
 setup_logging(debug=settings.debug)
@@ -56,6 +56,7 @@ app.include_router(sleep.router, prefix="/api/v1/sleep", tags=["Sleep"])
 app.include_router(training_plans.router, prefix="/api/v1/training-plans", tags=["Training Plans"])
 app.include_router(social.router, prefix="/api/v1/social", tags=["Social"])
 app.include_router(meal_plans.router, prefix="/api/v1/meal-plans", tags=["Meal Plans"])
+app.include_router(account.router, prefix="/api/v1/account", tags=["Account"])
 
 
 @app.get("/")

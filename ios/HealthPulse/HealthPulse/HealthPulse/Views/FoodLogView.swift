@@ -30,6 +30,12 @@ struct FoodLogView: View {
     @State private var isSaving = false
     @State private var error: String?
 
+    // Food search
+    @State private var searchQuery = ""
+    @State private var searchResults: [BarcodeProduct] = []
+    @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
+
     var isEditing: Bool { editingEntry != nil }
 
     init(editingEntry: FoodEntry? = nil, onSave: @escaping (FoodEntry) -> Void) {
@@ -89,6 +95,70 @@ struct FoodLogView: View {
                                     HapticsManager.shared.selection()
                                 }
                             }
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    // Food Search
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            TextField("Search foods (e.g. chicken breast)", text: $searchQuery)
+                                .textInputAutocapitalization(.never)
+                                .onChange(of: searchQuery) { _, newValue in
+                                    searchTask?.cancel()
+                                    guard newValue.count >= 2 else {
+                                        searchResults = []
+                                        return
+                                    }
+                                    searchTask = Task {
+                                        try? await Task.sleep(nanoseconds: 500_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        await performSearch(newValue)
+                                    }
+                                }
+                            if isSearching {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                        }
+                        .padding()
+                        .background(AppTheme.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        if !searchResults.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(searchResults.prefix(8), id: \.barcode) { product in
+                                    Button {
+                                        selectSearchResult(product)
+                                    } label: {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(product.name ?? "Unknown")
+                                                    .font(.subheadline.bold())
+                                                    .foregroundStyle(.primary)
+                                                    .lineLimit(1)
+                                                if let brand = product.brand, !brand.isEmpty {
+                                                    Text(brand)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            Spacer()
+                                            Text("\(Int(product.caloriesPer100g)) kcal")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.green)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                    }
+                                    Divider()
+                                }
+                            }
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     }
                     .padding(.horizontal)
@@ -288,6 +358,34 @@ struct FoodLogView: View {
                 })
             }
         }
+    }
+
+    private func performSearch(_ query: String) async {
+        await MainActor.run { isSearching = true }
+        do {
+            let results = try await APIService.shared.searchFood(query: query)
+            await MainActor.run {
+                searchResults = results
+                isSearching = false
+            }
+        } catch {
+            await MainActor.run {
+                searchResults = []
+                isSearching = false
+            }
+        }
+    }
+
+    private func selectSearchResult(_ product: BarcodeProduct) {
+        name = product.name ?? "Unknown"
+        caloriesPer100g = String(Int(product.caloriesPer100g))
+        proteinPer100g = String(format: "%.1f", product.proteinGPer100g)
+        carbsPer100g = String(format: "%.1f", product.carbsGPer100g)
+        fatPer100g = String(format: "%.1f", product.fatGPer100g)
+        amountGrams = "100"
+        searchResults = []
+        searchQuery = ""
+        HapticsManager.shared.light()
     }
 
     private func fillQuickAdd(name: String, cal: Double, p: Double, c: Double, f: Double) {

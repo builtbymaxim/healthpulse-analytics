@@ -24,21 +24,25 @@ struct ProfileView: View {
             List {
                 // Profile section
                 Section {
-                    HStack(spacing: 16) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 50))
-                            .foregroundStyle(.green)
+                    NavigationLink {
+                        EditProfileView()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: authService.currentUser?.avatarUrl ?? "person.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundStyle(.green)
 
-                        VStack(alignment: .leading) {
-                            Text(authService.currentUser?.displayName ?? "User")
-                                .font(.headline)
+                            VStack(alignment: .leading) {
+                                Text(authService.currentUser?.displayName ?? "User")
+                                    .font(.headline)
 
-                            Text(authService.currentUser?.email ?? "")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                Text(authService.currentUser?.email ?? "")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
 
                 // Health Kit section
@@ -231,51 +235,145 @@ struct ShareSheet: UIViewControllerRepresentable {
 // MARK: - Sub Views
 
 struct DataSourcesView: View {
+    @EnvironmentObject var healthKitService: HealthKitService
+    @State private var showingHealthKitInfo = false
+    @State private var notifyStrava = UserDefaults.standard.bool(forKey: "notify_strava")
+    @State private var notifyGarmin = UserDefaults.standard.bool(forKey: "notify_garmin")
+    @State private var notifyOura = UserDefaults.standard.bool(forKey: "notify_oura")
+    @State private var notifyWhoop = UserDefaults.standard.bool(forKey: "notify_whoop")
+
     var body: some View {
         List {
-            Section("Connected") {
-                DataSourceRow(name: "Apple Health", icon: "heart.fill", color: .red, connected: true)
+            // Apple Health — functional
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.red)
+                        .font(.title3)
+                        .frame(width: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Apple Health")
+                            .font(.body.weight(.medium))
+                        Text("Steps, heart rate, sleep, workouts")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if healthKitService.isAuthorized {
+                        Text("Connected")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+
+                if healthKitService.isAuthorized {
+                    Button(role: .destructive) {
+                        showingHealthKitInfo = true
+                    } label: {
+                        Label("Disconnect", systemImage: "xmark.circle")
+                    }
+                } else {
+                    Button {
+                        Task { await healthKitService.requestAuthorization() }
+                    } label: {
+                        Label("Connect", systemImage: "link")
+                    }
+                }
+            } header: {
+                Text("Health Data")
             }
 
-            Section("Available") {
-                DataSourceRow(name: "Strava", icon: "figure.outdoor.cycle", color: .orange, connected: false)
-                DataSourceRow(name: "Garmin", icon: "applewatch", color: .blue, connected: false)
-                DataSourceRow(name: "Oura", icon: "circle.circle", color: .gray, connected: false)
-                DataSourceRow(name: "Whoop", icon: "waveform.path.ecg", color: .green, connected: false)
+            // Future integrations
+            Section {
+                FutureIntegrationRow(
+                    name: "Strava",
+                    icon: "figure.outdoor.cycle",
+                    color: .orange,
+                    description: "Import runs & rides",
+                    notifyMe: $notifyStrava,
+                    key: "notify_strava"
+                )
+                FutureIntegrationRow(
+                    name: "Garmin",
+                    icon: "applewatch",
+                    color: .blue,
+                    description: "Sync wearable data",
+                    notifyMe: $notifyGarmin,
+                    key: "notify_garmin"
+                )
+                FutureIntegrationRow(
+                    name: "Oura",
+                    icon: "circle.circle",
+                    color: .gray,
+                    description: "Sleep & readiness scores",
+                    notifyMe: $notifyOura,
+                    key: "notify_oura"
+                )
+                FutureIntegrationRow(
+                    name: "Whoop",
+                    icon: "waveform.path.ecg",
+                    color: .green,
+                    description: "Strain & recovery tracking",
+                    notifyMe: $notifyWhoop,
+                    key: "notify_whoop"
+                )
+            } header: {
+                Text("Coming Soon")
+            } footer: {
+                Text("Toggle \"Notify Me\" to be alerted when new integrations launch.")
             }
         }
         .navigationTitle("Data Sources")
+        .alert("Disconnect Apple Health?", isPresented: $showingHealthKitInfo) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("HealthKit permissions can only be fully revoked in Settings > Health > Data Access & Devices > HealthPulse.")
+        }
     }
 }
 
-struct DataSourceRow: View {
+struct FutureIntegrationRow: View {
     let name: String
     let icon: String
     let color: Color
-    let connected: Bool
+    let description: String
+    @Binding var notifyMe: Bool
+    let key: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundStyle(color)
-                .frame(width: 30)
+                .font(.title3)
+                .frame(width: 32)
 
-            Text(name)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.body.weight(.medium))
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
 
-            if connected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            } else {
-                Text("Coming Soon")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(.tertiarySystemBackground))
-                    .clipShape(Capsule())
-            }
+            Toggle("Notify Me", isOn: $notifyMe)
+                .labelsHidden()
+                .onChange(of: notifyMe) { _, value in
+                    UserDefaults.standard.set(value, forKey: key)
+                }
         }
     }
 }

@@ -20,6 +20,8 @@ struct WorkoutTabView: View {
     @State private var unifiedWorkouts: [UnifiedWorkoutEntry] = []
     @State private var todaysWorkout: TodayWorkoutResponse?
     @State private var hasActivePlan = false
+    @State private var selectedWorkout: Workout?
+    @State private var isLoadingDetail = false
 
     var body: some View {
         NavigationStack {
@@ -109,7 +111,12 @@ struct WorkoutTabView: View {
                             .padding(.vertical, 40)
                         } else {
                             ForEach(unifiedWorkouts.prefix(8)) { entry in
-                                UnifiedWorkoutRow(entry: entry)
+                                Button {
+                                    Task { await loadWorkoutDetail(id: entry.id) }
+                                } label: {
+                                    UnifiedWorkoutRow(entry: entry)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -153,7 +160,13 @@ struct WorkoutTabView: View {
                     showPRCelebration = false
                     achievedPRs = []
                 }
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
+            }
+            .navigationDestination(item: $selectedWorkout) { workout in
+                WorkoutDetailView(workout: workout) {
+                    selectedWorkout = nil
+                    loadRecentWorkouts()
+                }
             }
             .sheet(isPresented: $showStrengthSheet) {
                 StrengthWorkoutLogView(workoutId: nil) { savedSets in
@@ -227,6 +240,19 @@ struct WorkoutTabView: View {
                 print("Failed to load workouts: \(error)")
             }
         }
+    }
+
+    private func loadWorkoutDetail(id: UUID) async {
+        isLoadingDetail = true
+        do {
+            let workout = try await APIService.shared.getWorkouts(days: 90).first { $0.id == id }
+            if let workout {
+                selectedWorkout = workout
+            }
+        } catch {
+            print("Failed to load workout detail: \(error)")
+        }
+        isLoadingDetail = false
     }
 }
 

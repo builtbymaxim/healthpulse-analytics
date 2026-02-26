@@ -254,6 +254,7 @@ struct AuthView: View {
                 runShimmer()
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     // MARK: - Computed

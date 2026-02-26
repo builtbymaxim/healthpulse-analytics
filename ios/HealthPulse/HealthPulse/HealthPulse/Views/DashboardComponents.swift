@@ -518,11 +518,14 @@ struct ReadinessHeaderView: View {
 
 struct CommitmentStripView: View {
     let commitments: [CommitmentSlot]
+    var onTap: ((String?) -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
             ForEach(commitments) { slot in
-                CommitmentCard(slot: slot)
+                CommitmentCard(slot: slot) {
+                    onTap?(slot.actionRoute)
+                }
             }
         }
     }
@@ -530,57 +533,189 @@ struct CommitmentStripView: View {
 
 struct CommitmentCard: View {
     let slot: CommitmentSlot
+    var onTap: () -> Void
+
+    @State private var isPressed = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Slot label badge
-            Text(slot.slotLabel)
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(slot.slotColor)
-                .clipShape(Capsule())
+        Button {
+            HapticsManager.shared.light()
+            onTap()
+        } label: {
+            VStack(spacing: 8) {
+                // Slot label badge
+                Text(slot.slotLabel)
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(slot.slotColor)
+                    .clipShape(Capsule())
 
-            // Icon circle
-            ZStack {
-                Circle()
-                    .fill(slot.slotColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
+                // Icon circle
+                ZStack {
+                    Circle()
+                        .fill(slot.slotColor.opacity(0.15))
+                        .frame(width: 36, height: 36)
 
-                Image(systemName: slot.icon)
-                    .font(.system(size: 16))
-                    .foregroundStyle(slot.slotColor)
+                    Image(systemName: slot.icon)
+                        .font(.system(size: 16))
+                        .foregroundStyle(slot.slotColor)
+                }
+
+                // Title & subtitle
+                Text(slot.title)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(slot.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+
+                // Load modifier badge
+                if let modifier = slot.loadModifier {
+                    LoadModifierBadge(modifier: modifier)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 6)
+            .background(AppTheme.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppTheme.border.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(CommitmentButtonStyle())
+    }
+}
+
+struct CommitmentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Daily Actions Card
+
+struct DailyActionsCard: View {
+    let actions: [DailyAction]
+    var onTap: ((String) -> Void)?
+
+    private var pendingActions: [DailyAction] {
+        actions.filter { !$0.isCompleted }.sorted { $0.priority < $1.priority }
+    }
+
+    private var completedActions: [DailyAction] {
+        actions.filter { $0.isCompleted }
+    }
+
+    private var allDone: Bool {
+        !actions.isEmpty && pendingActions.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack {
+                Text("Today's Actions")
+                    .font(.headline)
+                Spacer()
+                if !actions.isEmpty {
+                    Text("\(completedActions.count)/\(actions.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(allDone ? Color.green.opacity(0.15) : AppTheme.primary.opacity(0.15))
+                        .foregroundStyle(allDone ? .green : AppTheme.primary)
+                        .clipShape(Capsule())
+                }
             }
 
-            // Title & subtitle
-            Text(slot.title)
-                .font(.caption.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            if allDone {
+                // All caught up state
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.title2)
+                        .foregroundStyle(.green)
 
-            Text(slot.subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.8)
-
-            // Load modifier badge
-            if let modifier = slot.loadModifier {
-                LoadModifierBadge(modifier: modifier)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("You're all caught up!")
+                            .font(.subheadline.bold())
+                        Text("All daily actions completed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(pendingActions) { action in
+                        DailyActionRow(action: action) {
+                            onTap?(action.actionRoute)
+                        }
+                    }
+                    ForEach(completedActions) { action in
+                        DailyActionRow(action: action) {}
+                    }
+                }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 6)
-        .background(AppTheme.surface2)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.border.opacity(0.5), lineWidth: 1)
-        )
+        .padding()
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+    }
+}
+
+struct DailyActionRow: View {
+    let action: DailyAction
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: {
+            if !action.isCompleted {
+                HapticsManager.shared.light()
+                onTap()
+            }
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: action.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(action.isCompleted ? .green : .secondary)
+
+                Image(systemName: action.icon)
+                    .font(.subheadline)
+                    .foregroundStyle(action.isCompleted ? .secondary : AppTheme.primary)
+                    .frame(width: 24)
+
+                Text(action.title)
+                    .font(.subheadline)
+                    .foregroundStyle(action.isCompleted ? .secondary : .primary)
+                    .strikethrough(action.isCompleted, color: .secondary)
+
+                Spacer()
+
+                if !action.isCompleted {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+        .disabled(action.isCompleted)
     }
 }
 

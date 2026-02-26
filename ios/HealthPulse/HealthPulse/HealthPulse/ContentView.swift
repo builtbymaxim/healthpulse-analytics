@@ -16,7 +16,15 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authService.isAuthenticated {
+            if authService.isRestoringSession {
+                // Minimal splash while checking stored session
+                ZStack {
+                    AppTheme.backgroundDark
+                        .ignoresSafeArea()
+                    ProgressView()
+                        .tint(.white)
+                }
+            } else if authService.isAuthenticated {
                 if authService.isOnboardingComplete {
                     ZStack {
                         MainTabView()
@@ -40,6 +48,7 @@ struct ContentView: View {
                 AuthView()
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: authService.isRestoringSession)
         .animation(.easeInOut(duration: 0.3), value: authService.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: authService.isOnboardingComplete)
         .onChange(of: authService.isAuthenticated) { _, authenticated in

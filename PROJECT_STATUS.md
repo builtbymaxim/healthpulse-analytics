@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-22
+> Last updated: 2026-02-26
 
 ## Overview
 
@@ -575,6 +575,43 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 - **New backend methods:** `get_narrative_dashboard()` + 9 helpers (`_build_causal_annotations`, `_build_commitments`, `_compute_now/next/tonight_slot`, `_compute_card_priority`, `_get_greeting_context`, `_build_readiness_narrative`)
 - **New iOS components:** `ReadinessHeaderView`, `CommitmentStripView`, `CommitmentCard`, `LoadModifierBadge`, `CausalRecoveryCard`, `DashboardCardRouter`
 - **New iOS models:** `CausalAnnotation`, `CommitmentSlot`, `PrioritizedCard`, `NarrativeDashboardResponse`
+
+### Phase 11C — Dashboard Overhaul, Profile Editing & Auth Hardening (COMPLETED)
+
+#### Profile Editing & Account Management
+- **EditProfileView:** Display name editing, avatar picker with 4 categories (Fitness, Animals, Power, Vibes — 30+ SF Symbols)
+- **Account management:** Change email + change password flows via `backend/app/api/account.py` endpoints
+- **Profile page upgrade:** NavigationLink to edit profile + data sources section
+
+#### Dashboard Improvements
+- **Training-plan-aware commitments:** NOW slot checks active training plan schedule for today's workout
+- **Daily actions system:** Established users see real-time checklist (workout, meals, sleep) instead of static new-user checklist
+- **Greeting standalone:** Personalized greeting moved to standalone position at top of dashboard
+- **Tappable commitments:** CommitmentStripView cards route to relevant tabs with press animation
+- **Filtered recommendations:** "For You" section filters by `actionRoute` to avoid duplication with commitment cards
+- **Streak fix:** Rest-day tolerance — Mon/Wed/Fri training counts as 3-day streak (allows 1 rest day between sessions)
+- **Reduced card redundancy:** Removed `streak`, `weekly`, and `adherence` card types from priority order
+- **Stabilized loading:** Dashboard cards render consistently on refresh
+
+#### Social Tab Avatars
+- Partner cards and leaderboard entries display user's chosen SF Symbol avatar
+
+#### Auth Flow Hardening
+- `isRestoringSession` guard prevents flash of AuthView/OnboardingView on app launch
+- Splash screen in ContentView during session restore
+- Foreground resume token refresh via `willEnterForegroundNotification`
+- `loadProfile()` no longer resets `isOnboardingComplete` on network failure
+- `.preferredColorScheme(.dark)` on auth screen for text visibility over video
+- `AVAudioSession.ambient` prevents login video from stopping background music
+
+#### Nutrition Enhancements
+- **Text-based food search:** Open Food Facts search via `GET /meal-plans/food-search?query=...` — debounced search bar in FoodLogView with result pre-fill
+- **Recipe shopping list:** `GET /meal-plans/recipes/{id}/shopping-list?servings=N` — button in RecipeDetailSheet shows scaled ingredient list
+- **Backend:** `search_food()` and `get_recipe_shopping_list()` methods in `meal_plan_service.py`
+
+#### Workout Tab Improvements
+- **Tappable recent workouts:** Unified workout rows now navigate to WorkoutDetailView on tap
+- **PR celebration scroll:** PRCelebrationView uses ScrollView with fixed header/button, expandable `.medium`/`.large` detent
 
 ---
 

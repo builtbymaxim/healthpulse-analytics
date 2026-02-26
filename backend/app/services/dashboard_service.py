@@ -131,6 +131,16 @@ class PrioritizedCard(BaseModel):
     reason: str
 
 
+class DailyAction(BaseModel):
+    """A daily action item for the dashboard checklist."""
+    id: str                    # e.g. "log_workout", "track_meals"
+    title: str
+    icon: str                  # SF Symbol name
+    action_route: str          # tab to navigate to
+    is_completed: bool
+    priority: int
+
+
 class NarrativeDashboardResponse(BaseModel):
     """Extended dashboard with causal story."""
     # Existing fields (superset of DashboardResponse)
@@ -146,6 +156,7 @@ class NarrativeDashboardResponse(BaseModel):
     card_priority_order: list[PrioritizedCard]
     greeting_context: str
     readiness_narrative: str
+    daily_actions: list[DailyAction] = []
 
 
 # ============================================
@@ -223,15 +234,21 @@ class DashboardService:
         # 2. Build causal annotations
         causal = self._build_causal_annotations(base)
 
-        # 3. Build commitment slots (Now/Next/Tonight)
-        commitments = self._build_commitments(base)
+        # 3. Fetch today's planned workout from training plan
+        today_workout = await self._get_todays_planned_workout(user_id)
 
-        # 4. Compute card priority order based on readiness
+        # 4. Build commitment slots (Now/Next/Tonight) — training-plan-aware
+        commitments = self._build_commitments(base, today_workout)
+
+        # 5. Compute card priority order based on readiness
         card_order = self._compute_card_priority(base)
 
-        # 5. Generate greeting context and narrative
+        # 6. Generate greeting context and narrative
         greeting_context = self._get_greeting_context(base)
         narrative = self._build_readiness_narrative(base, causal)
+
+        # 7. Build daily action items from real user data
+        daily_actions = await self._build_daily_actions(user_id, today_workout)
 
         return NarrativeDashboardResponse(
             enhanced_recovery=base.enhanced_recovery,
@@ -245,6 +262,7 @@ class DashboardService:
             card_priority_order=card_order,
             greeting_context=greeting_context,
             readiness_narrative=narrative,
+            daily_actions=daily_actions,
         )
 
     def _build_causal_annotations(self, dashboard: DashboardResponse) -> list[CausalAnnotation]:
@@ -302,7 +320,9 @@ class DashboardService:
             return f"HRV is good at {int(factor.value)}ms"
         return f"{factor.name} is {int(factor.value)}"
 
-    def _build_commitments(self, dashboard: DashboardResponse) -> list[CommitmentSlot]:
+    def _build_commitments(
+        self, dashboard: DashboardResponse, today_workout: str | None = None,
+    ) -> list[CommitmentSlot]:
         """Build Now/Next/Tonight commitment slots."""
         hour = datetime.now().hour
         readiness = dashboard.readiness_score
@@ -318,7 +338,9 @@ class DashboardService:
         else:
             load_modifier = "normal"
 
-        now_slot = self._compute_now_slot(hour, readiness, recovery, dashboard, load_modifier)
+        now_slot = self._compute_now_slot(
+            hour, readiness, recovery, dashboard, load_modifier, today_workout,
+        )
         next_slot = self._compute_next_slot(hour, readiness, now_slot, dashboard)
         tonight_slot = self._compute_tonight_slot(recovery)
 
@@ -327,9 +349,22 @@ class DashboardService:
     def _compute_now_slot(
         self, hour: int, readiness: float, recovery: EnhancedRecoveryResponse,
         dashboard: DashboardResponse, load_modifier: str,
+        today_workout: str | None = None,
     ) -> CommitmentSlot:
-        """Compute the NOW commitment based on readiness and time."""
-        # Low readiness → active recovery
+        """Compute the NOW commitment based on training plan, readiness, and time."""
+        # 1. Training plan takes priority — if today has a scheduled workout
+        if today_workout:
+            return CommitmentSlot(
+                slot="now",
+                title=today_workout,
+                subtitle="Scheduled in your training plan",
+                icon="dumbbell.fill",
+                category="workout",
+                action_route="workout",
+                load_modifier=load_modifier,
+            )
+
+        # 2. Low readiness → active recovery
         if readiness < 40:
             return CommitmentSlot(
                 slot="now",
@@ -337,10 +372,10 @@ class DashboardService:
                 subtitle="Light movement: walk, stretch, or mobility",
                 icon="figure.walk",
                 category="recovery",
-                action_route=None,
+                action_route="workout",
             )
 
-        # High enough readiness + recovered muscles → workout
+        # 3. High readiness + recovered muscles → suggest workout
         if readiness >= 60 and dashboard.progress.muscle_balance:
             recovered = [m for m in dashboard.progress.muscle_balance if m.status == "recovered"]
             if recovered:
@@ -356,7 +391,7 @@ class DashboardService:
                         load_modifier=load_modifier,
                     )
 
-        # Default: nutrition
+        # 4. Default: nutrition
         return CommitmentSlot(
             slot="now",
             title="Log a Meal",
@@ -368,7 +403,7 @@ class DashboardService:
 
     def _compute_next_slot(
         self, hour: int, readiness: float, now_slot: CommitmentSlot,
-        dashboard: DashboardResponse,
+        dashboard: DashboardResponse,  # noqa: ARG002 — kept for future use
     ) -> CommitmentSlot:
         """Compute the NEXT commitment (2-4 hours ahead)."""
         # If NOW is a workout → NEXT should be nutrition
@@ -393,48 +428,37 @@ class DashboardService:
                 action_route="workout",
             )
 
+        # NOW is nutrition — avoid double-nutrition for NEXT
         # Morning: suggest workout prep
-        if hour < 12:
-            if readiness >= 60:
-                return CommitmentSlot(
-                    slot="next",
-                    title="Workout Prep",
-                    subtitle="Your readiness is good — plan your session",
-                    icon="dumbbell.fill",
-                    category="workout",
-                    action_route="workout",
-                )
-
-        # Afternoon/evening: wind-down
-        if hour >= 17:
+        if hour < 12 and readiness >= 60:
             return CommitmentSlot(
                 slot="next",
-                title="Evening Wind-Down",
-                subtitle="Start dimming screens to protect sleep quality",
-                icon="moon.stars",
-                category="sleep",
-                action_route=None,
+                title="Workout Prep",
+                subtitle="Your readiness is good — plan your session",
+                icon="dumbbell.fill",
+                category="workout",
+                action_route="workout",
             )
 
-        # Default: nutrition check-in
-        adherence = dashboard.weekly_summary.nutrition_adherence_pct
-        if adherence < 60:
+        # Afternoon: review progress
+        if hour < 17:
             return CommitmentSlot(
                 slot="next",
-                title="Track Your Meals",
-                subtitle=f"Only {adherence:.0f}% tracked this week",
-                icon="fork.knife",
-                category="nutrition",
-                action_route="nutrition",
+                title="Check Your Progress",
+                subtitle="See how your week is shaping up",
+                icon="chart.line.uptrend.xyaxis",
+                category="workout",
+                action_route="workout",
             )
 
+        # Evening: wind-down
         return CommitmentSlot(
             slot="next",
-            title="Stay Hydrated",
-            subtitle="Aim for 8+ glasses of water today",
-            icon="drop.fill",
-            category="nutrition",
-            action_route=None,
+            title="Evening Wind-Down",
+            subtitle="Start dimming screens to protect sleep quality",
+            icon="moon.stars",
+            category="sleep",
+            action_route="sleep",
         )
 
     def _compute_tonight_slot(self, recovery: EnhancedRecoveryResponse) -> CommitmentSlot:
@@ -469,11 +493,8 @@ class DashboardService:
                 PrioritizedCard(card_type="workout", priority=1, reason="High readiness — ready to train"),
                 PrioritizedCard(card_type="progress", priority=2, reason="Show momentum when ready"),
                 PrioritizedCard(card_type="nutrition", priority=3, reason="Fuel the workout"),
-                PrioritizedCard(card_type="streak", priority=4, reason="Motivation"),
-                PrioritizedCard(card_type="weekly", priority=5, reason="Context"),
-                PrioritizedCard(card_type="adherence", priority=6, reason="Habits"),
-                PrioritizedCard(card_type="recovery", priority=7, reason="Less urgent when recovered"),
-                PrioritizedCard(card_type="sleep", priority=8, reason="Informational"),
+                PrioritizedCard(card_type="recovery", priority=4, reason="Less urgent when recovered"),
+                PrioritizedCard(card_type="sleep", priority=5, reason="Informational"),
             ]
         elif readiness >= 40:
             return [
@@ -482,20 +503,14 @@ class DashboardService:
                 PrioritizedCard(card_type="nutrition", priority=3, reason="Recovery nutrition matters"),
                 PrioritizedCard(card_type="sleep", priority=4, reason="Sleep drives recovery"),
                 PrioritizedCard(card_type="progress", priority=5, reason="Context"),
-                PrioritizedCard(card_type="streak", priority=6, reason="Motivation"),
-                PrioritizedCard(card_type="adherence", priority=7, reason="Habits"),
-                PrioritizedCard(card_type="weekly", priority=8, reason="Summary"),
             ]
         else:
             return [
                 PrioritizedCard(card_type="recovery", priority=1, reason="Low readiness — recovery is top priority"),
                 PrioritizedCard(card_type="sleep", priority=2, reason="Sleep deficit is likely culprit"),
                 PrioritizedCard(card_type="nutrition", priority=3, reason="Recovery nutrition"),
-                PrioritizedCard(card_type="weekly", priority=4, reason="Context for rest decision"),
-                PrioritizedCard(card_type="workout", priority=5, reason="Light movement only"),
-                PrioritizedCard(card_type="streak", priority=6, reason="De-emphasized"),
-                PrioritizedCard(card_type="adherence", priority=7, reason="De-emphasized"),
-                PrioritizedCard(card_type="progress", priority=8, reason="De-emphasized when resting"),
+                PrioritizedCard(card_type="workout", priority=4, reason="Light movement only"),
+                PrioritizedCard(card_type="progress", priority=5, reason="De-emphasized when resting"),
             ]
 
     def _get_greeting_context(self, dashboard: DashboardResponse) -> str:
@@ -977,6 +992,120 @@ class DashboardService:
         # Count distinct dates with entries
         dates_with_entries = len({row["entry_date"] for row in (result.data or [])})
         return (dates_with_entries / days) * 100 if days > 0 else 0
+
+    async def _get_todays_planned_workout(self, user_id: UUID) -> str | None:
+        """Get today's workout name from the active training plan, or None for rest day."""
+        result = (
+            self.supabase.table("user_training_plans")
+            .select("schedule")
+            .eq("user_id", str(user_id))
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            return None
+
+        schedule = result.data[0].get("schedule", {})
+        # ISO weekday: 1=Mon ... 7=Sun
+        iso_weekday = date.today().isoweekday()
+        day_key = str(iso_weekday)
+
+        workout_name = schedule.get(day_key)
+        if workout_name and isinstance(workout_name, str):
+            return workout_name
+        # Also try day name keys (some plans use "monday", "tuesday", etc.)
+        day_names = ["", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        if iso_weekday < len(day_names):
+            workout_name = schedule.get(day_names[iso_weekday])
+            if workout_name and isinstance(workout_name, str):
+                return workout_name
+
+        return None
+
+    async def _build_daily_actions(
+        self, user_id: UUID, today_workout: str | None,
+    ) -> list[DailyAction]:
+        """Build daily action items based on what the user has/hasn't done today."""
+        actions: list[DailyAction] = []
+        today_str = date.today().isoformat()
+
+        # 1. Log workout (if today is a workout day)
+        if today_workout:
+            workout_result = (
+                self.supabase.table("workout_sessions")
+                .select("id")
+                .eq("user_id", str(user_id))
+                .eq("date", today_str)
+                .limit(1)
+                .execute()
+            )
+            has_workout = bool(workout_result.data)
+            actions.append(DailyAction(
+                id="log_workout",
+                title=f"Complete {today_workout}",
+                icon="dumbbell.fill",
+                action_route="workout",
+                is_completed=has_workout,
+                priority=1,
+            ))
+
+        # 2. Track meals
+        food_result = (
+            self.supabase.table("food_entries")
+            .select("id")
+            .eq("user_id", str(user_id))
+            .eq("entry_date", today_str)
+            .limit(1)
+            .execute()
+        )
+        has_meals = bool(food_result.data)
+        actions.append(DailyAction(
+            id="track_meals",
+            title="Track your meals",
+            icon="fork.knife",
+            action_route="nutrition",
+            is_completed=has_meals,
+            priority=2,
+        ))
+
+        # 3. Weigh in (check if weight logged this week)
+        week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+        weight_result = (
+            self.supabase.table("health_metrics")
+            .select("id")
+            .eq("user_id", str(user_id))
+            .eq("metric_type", "weight")
+            .gte("recorded_at", week_start)
+            .limit(1)
+            .execute()
+        )
+        has_weight = bool(weight_result.data)
+        actions.append(DailyAction(
+            id="weigh_in",
+            title="Log your weight",
+            icon="scalemass.fill",
+            action_route="profile",
+            is_completed=has_weight,
+            priority=3,
+        ))
+
+        # 4. Weekly review prompt (Sunday or Monday)
+        weekday = date.today().weekday()  # 0=Mon, 6=Sun
+        if weekday in (0, 6):
+            actions.append(DailyAction(
+                id="weekly_review",
+                title="Check your weekly review",
+                icon="chart.bar.doc.horizontal",
+                action_route="workout",
+                is_completed=False,  # No tracking for this yet
+                priority=4,
+            ))
+
+        # Sort by priority
+        actions.sort(key=lambda a: (a.is_completed, a.priority))
+        return actions
 
 
 # Singleton instance

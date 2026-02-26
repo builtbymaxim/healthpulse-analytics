@@ -1052,45 +1052,54 @@ struct PRCelebrationView: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "trophy.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.yellow)
-
-            Text("New Personal Records!")
-                .font(.title.bold())
-
+        VStack(spacing: 0) {
+            // Fixed header
             VStack(spacing: 12) {
-                ForEach(prs) { pr in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(pr.exerciseName)
-                                .font(.headline)
-                            Text(pr.recordType.uppercased())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.yellow)
 
-                        Spacer()
+                Text("New Personal Records!")
+                    .font(.title.bold())
+            }
+            .padding(.top, 32)
+            .padding(.bottom, 16)
 
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(Int(pr.value)) kg")
-                                .font(.title3.bold())
-                                .foregroundStyle(.green)
-                            if let previous = pr.previousValue {
-                                Text("+\(Int(pr.value - previous)) kg")
+            // Scrollable PR list
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(prs) { pr in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(pr.exerciseName)
+                                    .font(.headline)
+                                Text(pr.recordType.uppercased())
                                     .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(Int(pr.value)) kg")
+                                    .font(.title3.bold())
                                     .foregroundStyle(.green)
+                                if let previous = pr.previousValue {
+                                    Text("+\(Int(pr.value - previous)) kg")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                }
                             }
                         }
+                        .padding()
+                        .background(AppTheme.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
-                    .padding()
-                    .background(AppTheme.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
 
+            // Fixed bottom button
             Button("Awesome!") {
                 onDismiss()
             }
@@ -1101,8 +1110,8 @@ struct PRCelebrationView: View {
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
+            .padding(.bottom, 32)
         }
-        .padding(.vertical, 32)
         .onAppear {
             HapticsManager.shared.doubleHeavy()
         }

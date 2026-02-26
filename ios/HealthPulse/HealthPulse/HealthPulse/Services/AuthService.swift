@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 class AuthService: ObservableObject {
@@ -14,16 +15,19 @@ class AuthService: ObservableObject {
 
     @Published var isAuthenticated = false
     @Published var isOnboardingComplete = false
+    @Published var isRestoringSession = true
     @Published var currentUser: User?
     @Published var isLoading = false
     @Published var error: String?
 
     private var refreshTask: Task<Void, Never>?
+    private var foregroundObserver: NSObjectProtocol?
 
     private init() {
         checkStoredSession()
         setupAuthFailureListener()
         setupTokenRefreshListener()
+        setupForegroundRefresh()
     }
 
     private func setupAuthFailureListener() {
@@ -53,6 +57,24 @@ class AuthService: ObservableObject {
                 }
                 if let refreshToken {
                     KeychainService.save(key: "refresh_token", value: refreshToken)
+                }
+            }
+        }
+    }
+
+    private func setupForegroundRefresh() {
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.isAuthenticated,
+                      KeychainService.load(key: "refresh_token") != nil else { return }
+                let success = await APIService.shared.refreshAccessTokenPublic()
+                if success {
+                    self.scheduleTokenRefresh()
                 }
             }
         }
@@ -91,12 +113,18 @@ class AuthService: ObservableObject {
             if let refreshToken = KeychainService.load(key: "refresh_token") {
                 APIService.shared.setRefreshToken(refreshToken)
             }
+            // Set from cache immediately to prevent flash
             isAuthenticated = true
             isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
             scheduleTokenRefresh()
             Task {
+                // Refresh token to ensure it's valid
+                _ = await APIService.shared.refreshAccessTokenPublic()
                 await loadProfile()
+                isRestoringSession = false
             }
+        } else {
+            isRestoringSession = false
         }
     }
 
@@ -170,13 +198,12 @@ class AuthService: ObservableObject {
     func loadProfile() async {
         do {
             currentUser = try await APIService.shared.getProfile()
-            // Check if onboarding is complete (user has set basic profile info)
             isOnboardingComplete = currentUser?.isProfileComplete ?? false
             UserDefaults.standard.set(isOnboardingComplete, forKey: "onboarding_complete")
         } catch {
             print("Failed to load profile: \(error)")
-            // If profile load fails, assume onboarding needed
-            isOnboardingComplete = false
+            // Don't reset onboarding state on network failure —
+            // keep cached value to avoid flashing onboarding for established users
         }
     }
 }
