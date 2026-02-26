@@ -47,7 +47,11 @@ def _extract_json(text: str) -> dict:
     # Strip markdown code fences
     cleaned = re.sub(r"```(?:json)?\s*", "", text).strip()
     cleaned = re.sub(r"```\s*$", "", cleaned).strip()
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        logger.warning("Could not parse vision response as JSON: %s", cleaned[:200])
+        return {"items": []}
 
 
 class VisionProvider(abc.ABC):

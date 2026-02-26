@@ -439,6 +439,22 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile (5 tabs)
 - Social ON: Dashboard, Nutrition, Workout, Sleep, Social, Profile (6 tabs)
 
+### Phase 12 — AI Food Scanner (Hybrid CoreML + Cloud Vision)
+- **On-device classification:** CoreML Food-101 model for instant local classification
+- **Cloud vision fallback:** When CoreML confidence < 70%, falls back to Gemini 2.5 Flash Lite
+- **USDA macro lookup:** High-confidence CoreML results skip cloud API, use free USDA FoodData Central
+- **Provider abstraction:** Supports Gemini (default), OpenAI GPT-4o-mini, and Claude Haiku via env var
+- **Gemini activated:** End-to-end tested — image → food identification → macros in ~1s
+- **Graceful error handling:** Non-parseable vision responses return empty items instead of 502
+- **iOS flow:** Camera → CoreML hints → cloud scan (if needed) → review/edit → log to food diary
+- New files: `FoodClassificationService.swift`, `FoodScannerView.swift`, `FoodScanModels.swift`, `food_scan_service.py`
+- Endpoint: `POST /api/v1/nutrition/food/scan`
+
+### Logo & App Icon Updates
+- Asset catalog swap: light mode → dark logo variant, dark mode → bright logo variant
+- In-app logo size: 240/280pt → 320pt (OnboardingView + AuthView)
+- App icon glyph: scaled from 26% to 57% canvas width (Pillow LANCZOS)
+
 ### Security Hardening & Runtime Robustness
 
 Full security and robustness pass across backend and iOS. 15 issues addressed across 5 batches (~25 files modified, 8 new files).
