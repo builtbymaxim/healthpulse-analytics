@@ -1,14 +1,14 @@
 """Nutrition and calorie tracking API endpoints."""
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user, CurrentUser
 from app.services.nutrition_service import get_nutrition_service
-from app.services.nutrition_calculator import get_nutrition_calculator
+from app.services.nutrition_calculator import get_nutrition_calculator, DailyTargets
 from app.services.food_scan_service import get_food_scan_service
 from app.models.nutrition import (
     PhysicalProfileUpdate,
@@ -494,3 +494,165 @@ async def get_weekly_nutrition_summary(
         })
 
     return summaries
+
+
+# Readiness-Adjusted Targets
+
+@router.get("/readiness-targets")
+async def get_readiness_targets(
+    target_date: date | None = Query(None, alias="date", description="Date to get targets for"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get recovery-adjusted nutrition targets with deficit status.
+
+    Combines cycling-aware daily targets with readiness/recovery data to
+    produce adjusted macro targets, plus a live deficit radar showing
+    current consumption vs adjusted targets.
+    """
+    from app.database import get_supabase_client
+    from app.services.dashboard_service import get_dashboard_service
+
+    service = get_nutrition_service()
+    calculator = get_nutrition_calculator()
+    supabase = get_supabase_client()
+    target = target_date or date.today()
+
+    # 1. Get cycling-aware base targets
+    try:
+        base_result = await service.get_daily_targets(
+            user_id=current_user.id,
+            target_date=target,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    base_targets = DailyTargets(
+        calories=base_result["calories"],
+        protein_g=base_result["protein_g"],
+        carbs_g=base_result["carbs_g"],
+        fat_g=base_result["fat_g"],
+        is_training_day=base_result["is_training_day"],
+        protein_pct=base_result["protein_pct"],
+        carbs_pct=base_result["carbs_pct"],
+        fat_pct=base_result["fat_pct"],
+    )
+
+    # 2. Get recovery/readiness data
+    readiness_score = 70.0  # default
+    sleep_deficit_hours = 0.0
+    try:
+        dashboard = get_dashboard_service()
+        recovery = await dashboard._get_enhanced_recovery(current_user.id)
+        readiness_score = recovery.score
+        sleep_deficit_hours = recovery.sleep_deficit_hours or 0.0
+    except Exception:
+        logger.warning("Could not fetch recovery data for readiness targets", exc_info=True)
+
+    # 3. Get last 7 days of workouts for training load + yesterday's workout type
+    training_load_7d = 0.0
+    yesterday_workout_type = None
+    try:
+        week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+        workouts_result = (
+            supabase.table("workouts")
+            .select("training_load, workout_type, planned_workout_name, start_time")
+            .eq("user_id", str(current_user.id))
+            .gte("start_time", week_ago)
+            .order("start_time", desc=True)
+            .execute()
+        )
+        workouts = workouts_result.data or []
+        training_load_7d = sum(float(w.get("training_load") or 0) for w in workouts)
+
+        # Find yesterday's workout type
+        yesterday = (target - timedelta(days=1)).isoformat()
+        today_str = target.isoformat()
+        for w in workouts:
+            st = w.get("start_time", "")
+            if st >= yesterday and st < today_str:
+                yesterday_workout_type = (
+                    w.get("planned_workout_name") or w.get("workout_type")
+                )
+                break
+    except Exception:
+        logger.warning("Could not fetch workout data for readiness targets", exc_info=True)
+
+    # 4. Calculate recovery-adjusted targets
+    adjusted = calculator.recovery_adjusted_targets(
+        base_targets=base_targets,
+        readiness_score=readiness_score,
+        sleep_deficit_hours=sleep_deficit_hours,
+        training_load_7d=training_load_7d,
+        is_training_day=base_targets.is_training_day,
+        yesterday_workout_type=yesterday_workout_type,
+    )
+
+    # 5. Get nutrition summary for deficit calculation
+    summary = await service.get_daily_nutrition_summary(
+        user_id=current_user.id,
+        target_date=target,
+    )
+    calories_consumed = summary["total_calories"]
+    protein_consumed = summary["total_protein_g"]
+
+    calories_remaining = adjusted.calories - calories_consumed
+    protein_remaining = adjusted.protein_g - protein_consumed
+
+    # Urgency logic based on time of day
+    now_hour = datetime.now().hour
+    cal_pct_remaining = (calories_remaining / adjusted.calories * 100) if adjusted.calories > 0 else 0
+
+    if cal_pct_remaining <= 30 or now_hour < 12:
+        urgency = "on_track"
+    elif cal_pct_remaining > 50 and now_hour >= 18:
+        urgency = "critical"
+    elif cal_pct_remaining > 30 and now_hour >= 12:
+        urgency = "behind"
+    else:
+        urgency = "on_track"
+
+    # Build deficit message
+    if urgency == "on_track":
+        message = "You're on track with your nutrition today."
+    elif protein_remaining > 20:
+        message = f"You need {protein_remaining:.0f}g more protein for recovery."
+    else:
+        message = f"You have {calories_remaining:.0f} kcal remaining today."
+
+    return {
+        "date": target.isoformat(),
+        "readiness_score": round(readiness_score, 1),
+        "is_training_day": base_targets.is_training_day,
+        "base": {
+            "calories": base_targets.calories,
+            "protein_g": base_targets.protein_g,
+            "carbs_g": base_targets.carbs_g,
+            "fat_g": base_targets.fat_g,
+            "is_training_day": base_targets.is_training_day,
+        },
+        "adjusted": {
+            "calories": adjusted.calories,
+            "protein_g": adjusted.protein_g,
+            "carbs_g": adjusted.carbs_g,
+            "fat_g": adjusted.fat_g,
+            "is_training_day": base_targets.is_training_day,
+        },
+        "adjustments": [
+            {
+                "factor": a.factor,
+                "adjustment": a.adjustment,
+                "explanation": a.explanation,
+            }
+            for a in adjusted.adjustments
+        ],
+        "deficit": {
+            "calories_consumed": round(calories_consumed, 1),
+            "calories_target": adjusted.calories,
+            "calories_remaining": round(calories_remaining, 1),
+            "protein_consumed_g": round(protein_consumed, 1),
+            "protein_target_g": adjusted.protein_g,
+            "protein_remaining_g": round(protein_remaining, 1),
+            "urgency": urgency,
+            "message": message,
+        },
+    }

@@ -127,6 +127,25 @@ async def get_suggestions(
     return service.get_suggested_recipes(user_id=current_user.id, meal_type=meal_type)
 
 
+@router.get("/suggestions/deficit-fix", response_model=list[RecipeListItem])
+async def get_deficit_fix_suggestions(
+    deficit_kcal: float = Query(ge=50, description="Remaining calorie deficit"),
+    deficit_protein_g: float = Query(0, ge=0, description="Remaining protein deficit in grams"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get recipe suggestions to close a calorie/protein deficit.
+
+    Returns protein-dense recipes within the deficit calorie range,
+    filtered by user dietary preferences and allergies.
+    """
+    service = get_meal_plan_service()
+    return service.get_deficit_fix_recipes(
+        user_id=current_user.id,
+        deficit_kcal=deficit_kcal,
+        deficit_protein_g=deficit_protein_g,
+    )
+
+
 @router.get("/food-search", response_model=list[BarcodeProductResponse])
 async def search_food(
     query: str = Query(min_length=2, max_length=100),

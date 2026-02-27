@@ -648,29 +648,24 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 
 ---
 
-### Phase 12 — Metabolic Readiness Synthesis (AI Food Scanner 2.0)
+### Phase 12B — Metabolic Readiness Synthesis (Core)
 
-**Milestone:** Elevate the shipped AI Food Scanner (Phase 12 base) into an intelligent nutrition
-co-pilot that connects food intake directly to physiological recovery deficits in real time.
+**Milestone:** Make nutrition actionable by linking daily macro targets to recovery/readiness data, with a live deficit radar and one-tap recipe fix flow.
 
-> **Note:** The hybrid CoreML + cloud vision scanning pipeline, USDA macro lookup, and review UI
-> were completed in the original Phase 12 build. This phase layers the intelligence tier on top.
+**Completed (Core):**
+- **Recovery-adjusted targets:** `recovery_adjusted_targets()` in `nutrition_calculator.py` — protein/carb/calorie shifts based on readiness score, sleep deficit, 7-day training load, and yesterday's workout type
+- **Readiness targets endpoint:** `GET /nutrition/readiness-targets` — combines cycling-aware base targets with recovery adjustments and live deficit status (urgency: on_track/behind/critical based on time of day)
+- **Deficit-fix recipes endpoint:** `GET /meal-plans/suggestions/deficit-fix?deficit_kcal=X&deficit_protein_g=Y` — protein-dense recipes filtered by dietary preferences/allergies within calorie range
+- **iOS models:** `ReadinessTargetsResponse`, `DailyTargetsDetail`, `AdjustmentReason`, `DeficitStatus` in Models.swift
+- **iOS API:** `getReadinessTargets()` and `getDeficitFixRecipes()` in APIService.swift
+- **DeficitRadarCard:** Dashboard card showing recovery-adjusted calorie/protein progress, adjustment badges, urgency indicator, and "Fix My Deficit" CTA button
+- **DeficitFixView:** Sheet with recipe suggestions showing deficit coverage percentages per recipe
+- **TodayView integration:** DeficitRadarCard replaces NutritionProgressCard when readiness data is available (graceful fallback to existing card on failure)
 
-- **Recovery-linked macro targets:** Daily protein/carb/fat targets shift dynamically based on
-  that morning's readiness score, sleep debt, and yesterday's training load (heavy leg day →
-  +20g protein target; high sleep debt → +15% carb target for cortisol management)
-- **Post-workout synthesis window:** Smart notification within 30 minutes of workout completion
-  — "You have a 45-minute anabolic window. You need 42g protein. Tap to log a quick meal."
-- **Deficit radar:** Nutrition card on dashboard shows real-time gap between current intake and
-  *recovery-adjusted* targets (not just static goals) with color-coded urgency
-- **"Fix My Deficit" flow:** One tap from deficit indicator → filtered recipe suggestions from
-  the library that close the current protein/carb gap in one meal
-- **Scan intelligence upgrade:** AI scan review screen adds a recovery context banner —
-  "Good choice: this meal covers 68% of your remaining protein target for recovery"
-- **Backend:** `nutrition_calculator.py` gains `recovery_adjusted_targets()` function;
-  new `/nutrition/readiness-targets` endpoint; scan endpoint returns recovery context annotation
-- **New iOS:** `MetabolicReadinessService.swift`; deficit radar component in `TodayView` and
-  `NutritionView`; synthesis window notification type in `NotificationService`
+**Deferred to Phase 12C:**
+- Post-workout synthesis window notification (30-min anabolic window alert)
+- Scan intelligence upgrade (recovery context banner on AI scan review screen)
+- NutritionView deficit radar integration (currently only in TodayView)
 
 ---
 

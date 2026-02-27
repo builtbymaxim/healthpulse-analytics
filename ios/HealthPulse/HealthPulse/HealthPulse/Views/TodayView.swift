@@ -177,6 +177,12 @@ struct TodayView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $viewModel.showDeficitFix) {
+                if let targets = viewModel.readinessTargets {
+                    DeficitFixView(deficit: targets.deficit)
+                        .presentationDetents([.large])
+                }
+            }
         }
     }
 
@@ -204,22 +210,33 @@ struct TodayView: View {
                 .padding(.horizontal)
         }
 
-        // Today's Nutrition Progress
-        NutritionProgressCard(
-            calories: viewModel.todayCalories,
-            calorieGoal: viewModel.calorieGoal,
-            protein: viewModel.todayProtein,
-            proteinGoal: viewModel.proteinGoal,
-            carbs: viewModel.todayCarbs,
-            carbsGoal: viewModel.carbsGoal,
-            fat: viewModel.todayFat,
-            fatGoal: viewModel.fatGoal
-        )
-        .onTapGesture {
-            tabRouter.navigateTo(.nutrition)
-            HapticsManager.shared.light()
+        // Today's Nutrition Progress — Deficit Radar if readiness data available
+        if let targets = viewModel.readinessTargets {
+            DeficitRadarCard(targets: targets) {
+                viewModel.showDeficitFix = true
+            }
+            .onTapGesture {
+                tabRouter.navigateTo(.nutrition)
+                HapticsManager.shared.light()
+            }
+            .padding(.horizontal)
+        } else {
+            NutritionProgressCard(
+                calories: viewModel.todayCalories,
+                calorieGoal: viewModel.calorieGoal,
+                protein: viewModel.todayProtein,
+                proteinGoal: viewModel.proteinGoal,
+                carbs: viewModel.todayCarbs,
+                carbsGoal: viewModel.carbsGoal,
+                fat: viewModel.todayFat,
+                fatGoal: viewModel.fatGoal
+            )
+            .onTapGesture {
+                tabRouter.navigateTo(.nutrition)
+                HapticsManager.shared.light()
+            }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
 
         // Weekly Summary
         if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
@@ -1099,6 +1116,10 @@ class TodayViewModel: ObservableObject {
     @Published var recommendations: [SmartRecommendation] = []
     @Published var weeklySummary: WeeklySummary?
 
+    // Metabolic readiness
+    @Published var readinessTargets: ReadinessTargetsResponse?
+    @Published var showDeficitFix = false
+
     // Narrative dashboard data
     @Published var commitments: [CommitmentSlot] = []
     @Published var cardPriorityOrder: [PrioritizedCard] = []
@@ -1259,6 +1280,14 @@ class TodayViewModel: ObservableObject {
             hasLoggedMeal = summary.totalCalories > 0
         } catch {
             print("Failed to load nutrition: \(error)")
+        }
+
+        // Load readiness targets (graceful fallback — if it fails, NutritionProgressCard still shows)
+        do {
+            readinessTargets = try await APIService.shared.getReadinessTargets()
+        } catch {
+            print("Readiness targets unavailable: \(error)")
+            readinessTargets = nil
         }
     }
 

@@ -897,6 +897,144 @@ struct DashboardCardRouter: View {
     .padding()
 }
 
+// MARK: - Deficit Radar Card (Phase 12B)
+
+struct DeficitRadarCard: View {
+    let targets: ReadinessTargetsResponse
+    let onFixDeficit: () -> Void
+
+    private var urgencyColor: Color {
+        switch targets.deficit.urgency {
+        case "critical": return .red
+        case "behind": return .orange
+        default: return .green
+        }
+    }
+
+    private var calorieProgress: Double {
+        guard targets.deficit.caloriesTarget > 0 else { return 0 }
+        return min(targets.deficit.caloriesConsumed / targets.deficit.caloriesTarget, 1.0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Recovery Fuel")
+                        .font(.headline)
+                    HStack(spacing: 6) {
+                        Image(systemName: targets.isTrainingDay ? "flame.fill" : "leaf.fill")
+                            .foregroundStyle(targets.isTrainingDay ? .orange : .green)
+                        Text(targets.isTrainingDay ? "Training Day" : "Rest Day")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // Readiness badge
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 8)
+                        .frame(width: 60, height: 60)
+
+                    Circle()
+                        .trim(from: 0, to: targets.readinessScore / 100)
+                        .stroke(urgencyColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 60, height: 60)
+                        .rotationEffect(.degrees(-90))
+
+                    Text("\(Int(targets.readinessScore))")
+                        .font(.system(size: 18, weight: .bold))
+                        .contentTransition(.numericText())
+                }
+            }
+
+            // Adjustment badges
+            if !targets.adjustments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(targets.adjustments) { adj in
+                            Text(adj.adjustment)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(urgencyColor.opacity(0.15))
+                                .foregroundStyle(urgencyColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            // Calorie progress
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Calories")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Text("\(Int(targets.deficit.caloriesConsumed)) / \(Int(targets.deficit.caloriesTarget)) kcal")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                ProgressView(value: calorieProgress)
+                    .tint(urgencyColor)
+
+                // Protein remaining
+                HStack {
+                    Text("Protein")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Text("\(Int(targets.deficit.proteinConsumedG)) / \(Int(targets.deficit.proteinTargetG)) g")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                ProgressView(value: targets.deficit.proteinTargetG > 0
+                    ? min(targets.deficit.proteinConsumedG / targets.deficit.proteinTargetG, 1.0)
+                    : 0
+                )
+                    .tint(.blue)
+            }
+
+            // Urgency message
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(urgencyColor)
+                    .frame(width: 8, height: 8)
+                Text(targets.deficit.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Fix My Deficit CTA
+            if targets.deficit.urgency != "on_track" && targets.deficit.caloriesRemaining > 100 {
+                Button(action: onFixDeficit) {
+                    HStack {
+                        Image(systemName: "fork.knife")
+                        Text("Fix My Deficit")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(urgencyColor.opacity(0.15))
+                    .foregroundStyle(urgencyColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+    }
+}
+
 #Preview("Weekly Summary Card") {
     WeeklySummaryCard(summary: WeeklySummary(
         workoutsCompleted: 3,

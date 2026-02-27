@@ -1006,6 +1006,69 @@ struct NarrativeDashboardResponse: Codable {
     }
 }
 
+// MARK: - Metabolic Readiness (Phase 12B)
+
+struct DailyTargetsDetail: Codable {
+    let calories: Double
+    let proteinG: Double
+    let carbsG: Double
+    let fatG: Double
+    let isTrainingDay: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case calories
+        case proteinG = "protein_g"
+        case carbsG = "carbs_g"
+        case fatG = "fat_g"
+        case isTrainingDay = "is_training_day"
+    }
+}
+
+struct AdjustmentReason: Codable, Identifiable {
+    var id: String { factor }
+    let factor: String
+    let adjustment: String
+    let explanation: String
+}
+
+struct DeficitStatus: Codable {
+    let caloriesConsumed: Double
+    let caloriesTarget: Double
+    let caloriesRemaining: Double
+    let proteinConsumedG: Double
+    let proteinTargetG: Double
+    let proteinRemainingG: Double
+    let urgency: String
+    let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case caloriesConsumed = "calories_consumed"
+        case caloriesTarget = "calories_target"
+        case caloriesRemaining = "calories_remaining"
+        case proteinConsumedG = "protein_consumed_g"
+        case proteinTargetG = "protein_target_g"
+        case proteinRemainingG = "protein_remaining_g"
+        case urgency, message
+    }
+}
+
+struct ReadinessTargetsResponse: Codable {
+    let date: String
+    let readinessScore: Double
+    let isTrainingDay: Bool
+    let base: DailyTargetsDetail
+    let adjusted: DailyTargetsDetail
+    let adjustments: [AdjustmentReason]
+    let deficit: DeficitStatus
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case readinessScore = "readiness_score"
+        case isTrainingDay = "is_training_day"
+        case base, adjusted, adjustments, deficit
+    }
+}
+
 // Helper for decoding dynamic JSON values
 struct AnyCodable: Codable {
     let value: Any

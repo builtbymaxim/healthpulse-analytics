@@ -989,6 +989,22 @@ class APIService {
         return try await request(endpoint: endpoint)
     }
 
+    func getReadinessTargets(date: Date? = nil) async throws -> ReadinessTargetsResponse {
+        var endpoint = "/nutrition/readiness-targets"
+        if let date {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            endpoint += "?date=\(formatter.string(from: date))"
+        }
+        return try await request(endpoint: endpoint)
+    }
+
+    func getDeficitFixRecipes(deficitKcal: Double, deficitProteinG: Double) async throws -> [Recipe] {
+        try await request(
+            endpoint: "/meal-plans/suggestions/deficit-fix?deficit_kcal=\(Int(deficitKcal))&deficit_protein_g=\(Int(deficitProteinG))"
+        )
+    }
+
     func lookupBarcode(_ barcode: String) async throws -> BarcodeProduct {
         try await request(endpoint: "/meal-plans/barcode/\(barcode)")
     }

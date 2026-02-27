@@ -727,6 +727,78 @@ class MealPlanService:
             self.supabase.table("user_weekly_plan_items").insert(new_items).execute()
         return self.get_weekly_plan(user_id, UUID(new_plan["id"]))
 
+    def get_deficit_fix_recipes(
+        self,
+        user_id: UUID,
+        deficit_kcal: float,
+        deficit_protein_g: float,
+    ) -> list[dict]:
+        """Get recipes that help close a calorie/protein deficit.
+
+        Prioritizes protein-dense recipes within the calorie deficit range,
+        filtered by user dietary preferences and allergies.
+
+        Args:
+            user_id: User's UUID
+            deficit_kcal: Remaining calorie deficit to fill
+            deficit_protein_g: Remaining protein deficit in grams
+
+        Returns:
+            List of recipe dicts sorted by protein density
+        """
+        # Get user dietary preferences
+        profile_result = (
+            self.supabase.table("profiles")
+            .select("settings")
+            .eq("id", str(user_id))
+            .maybe_single()
+            .execute()
+        )
+        settings = (profile_result.data or {}).get("settings") or {}
+        dietary_pattern = settings.get("dietary_pattern")
+        allergies = settings.get("allergies") or []
+
+        # Query recipes within calorie range
+        cal_min = max(deficit_kcal * 0.3, 50)
+        cal_max = deficit_kcal * 1.2
+
+        query = self.supabase.table("recipes").select(
+            "id, name, category, description, calories_per_serving, protein_g_per_serving, "
+            "carbs_g_per_serving, fat_g_per_serving, fiber_g_per_serving, tags, goal_types, "
+            "prep_time_min, cook_time_min"
+        ).gte("calories_per_serving", cal_min).lte("calories_per_serving", cal_max)
+
+        # Apply dietary pattern filter
+        if dietary_pattern and dietary_pattern != "omnivore":
+            tag_map = {
+                "vegan": "vegan",
+                "vegetarian": "vegetarian",
+                "pescatarian": "pescatarian",
+                "keto": "keto",
+            }
+            if dietary_pattern in tag_map:
+                query = query.contains("tags", [tag_map[dietary_pattern]])
+
+        result = query.order("protein_g_per_serving", desc=True).limit(50).execute()
+        recipes = result.data or []
+
+        # Filter out allergens
+        if allergies:
+            allergen_tag_map = {"gluten": "gluten_free", "dairy": "dairy_free"}
+            for allergy in allergies:
+                free_tag = allergen_tag_map.get(allergy)
+                if free_tag:
+                    recipes = [r for r in recipes if free_tag in (r.get("tags") or [])]
+
+        # Boost recipes that meaningfully cover the protein deficit
+        if deficit_protein_g > 0:
+            protein_threshold = deficit_protein_g * 0.3
+            high_protein = [r for r in recipes if (r.get("protein_g_per_serving") or 0) >= protein_threshold]
+            low_protein = [r for r in recipes if r not in high_protein]
+            recipes = high_protein + low_protein
+
+        return recipes[:10]
+
 
 _service: MealPlanService | None = None
 

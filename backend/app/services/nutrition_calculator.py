@@ -125,6 +125,24 @@ class GoalTimelineValidation:
 
 
 @dataclass
+class AdjustmentReason:
+    """A single recovery-based adjustment to nutrition targets."""
+    factor: str        # "sleep_deficit", "heavy_training", "low_readiness", "high_readiness"
+    adjustment: str    # "+20g protein", "+15% carbs"
+    explanation: str   # Human-readable reason
+
+
+@dataclass
+class AdjustedTargets:
+    """Recovery-adjusted daily nutrition targets."""
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    adjustments: list[AdjustmentReason]
+
+
+@dataclass
 class NutritionScoreBreakdown:
     """Breakdown of nutrition score components."""
     overall_score: float
@@ -614,6 +632,104 @@ class NutritionCalculator:
             return 60 - ((deviation - 0.20) * 100)
         else:
             return max(0, 30 - ((deviation - 0.50) * 60))
+
+    def recovery_adjusted_targets(
+        self,
+        base_targets: DailyTargets,
+        readiness_score: float,
+        sleep_deficit_hours: float,
+        training_load_7d: float,
+        is_training_day: bool,
+        yesterday_workout_type: str | None = None,
+    ) -> AdjustedTargets:
+        """Adjust daily nutrition targets based on recovery and training context.
+
+        All shifts are additive to the cycling-aware DailyTargets.
+
+        Args:
+            base_targets: Cycling-aware daily targets
+            readiness_score: Recovery readiness score (0-100)
+            sleep_deficit_hours: Accumulated sleep deficit in hours
+            training_load_7d: Total training load over last 7 days
+            is_training_day: Whether today is a training day
+            yesterday_workout_type: Type of yesterday's workout (e.g. "legs", "back")
+
+        Returns:
+            AdjustedTargets with recovery-based adjustments
+        """
+        calories = base_targets.calories
+        protein_g = base_targets.protein_g
+        carbs_g = base_targets.carbs_g
+        fat_g = base_targets.fat_g
+        adjustments: list[AdjustmentReason] = []
+
+        # Protein shift: heavy training week or yesterday was legs/back
+        heavy_week = training_load_7d > 400
+        leg_back_day = yesterday_workout_type and yesterday_workout_type.lower() in (
+            "legs", "back", "leg", "pull", "lower", "lower body"
+        )
+        if heavy_week or leg_back_day:
+            protein_g += 20
+            reason = (
+                f"Training load of {training_load_7d:.0f} this week"
+                if heavy_week
+                else f"Yesterday's {yesterday_workout_type} session"
+            )
+            adjustments.append(AdjustmentReason(
+                factor="heavy_training" if heavy_week else "leg_back_recovery",
+                adjustment="+20g protein",
+                explanation=f"{reason} increases muscle protein synthesis demand.",
+            ))
+
+        # Carb shift: sleep deficit
+        if sleep_deficit_hours > 1.5:
+            carb_boost = carbs_g * 0.15
+            carbs_g += carb_boost
+            calories += carb_boost * 4  # 4 kcal per gram of carbs
+            adjustments.append(AdjustmentReason(
+                factor="sleep_deficit",
+                adjustment="+15% carbs",
+                explanation=f"Sleep deficit of {sleep_deficit_hours:.1f}h raises cortisol — extra carbs help manage it.",
+            ))
+
+        # Carb shift: low readiness
+        if readiness_score < 40:
+            carb_boost = carbs_g * 0.10
+            carbs_g += carb_boost
+            calories += carb_boost * 4
+            adjustments.append(AdjustmentReason(
+                factor="low_readiness",
+                adjustment="+10% carbs",
+                explanation=f"Readiness score of {readiness_score:.0f} — extra carbs support energy recovery.",
+            ))
+
+        # Calorie shift: low readiness → recovery surplus
+        if readiness_score < 40:
+            cal_boost = base_targets.calories * 0.05
+            calories += cal_boost
+            adjustments.append(AdjustmentReason(
+                factor="recovery_surplus",
+                adjustment="+5% calories",
+                explanation="Low readiness — small caloric surplus aids recovery.",
+            ))
+
+        # Calorie shift: high readiness + training day → fuel performance
+        if readiness_score > 80 and is_training_day:
+            cal_boost = base_targets.calories * 0.03
+            calories += cal_boost
+            adjustments.append(AdjustmentReason(
+                factor="high_readiness",
+                adjustment="+3% calories",
+                explanation="High readiness on a training day — extra fuel for performance.",
+            ))
+
+        return AdjustedTargets(
+            calories=round(calories, 1),
+            protein_g=round(protein_g, 1),
+            carbs_g=round(carbs_g, 1),
+            fat_g=round(fat_g, 1),
+            adjustments=adjustments,
+        )
 
     def get_activity_calories_from_workouts(
         self,
