@@ -980,17 +980,18 @@ class DashboardService:
         start_date = today - timedelta(days=days - 1)
 
         # Single query: get all food entries in the date range
+        tomorrow = today + timedelta(days=1)
         result = (
             self.supabase.table("food_entries")
-            .select("entry_date")
+            .select("logged_at")
             .eq("user_id", str(user_id))
-            .gte("entry_date", start_date.isoformat())
-            .lte("entry_date", today.isoformat())
+            .gte("logged_at", start_date.isoformat() + "T00:00:00")
+            .lt("logged_at", tomorrow.isoformat() + "T00:00:00")
             .execute()
         )
 
-        # Count distinct dates with entries
-        dates_with_entries = len({row["entry_date"] for row in (result.data or [])})
+        # Count distinct dates with entries (extract date from timestamp)
+        dates_with_entries = len({row["logged_at"][:10] for row in (result.data or [])})
         return (dates_with_entries / days) * 100 if days > 0 else 0
 
     async def _get_todays_planned_workout(self, user_id: UUID) -> str | None:
@@ -1032,12 +1033,14 @@ class DashboardService:
         today_str = date.today().isoformat()
 
         # 1. Log workout (if today is a workout day)
+        tomorrow_str = (date.today() + timedelta(days=1)).isoformat()
         if today_workout:
             workout_result = (
                 self.supabase.table("workout_sessions")
                 .select("id")
                 .eq("user_id", str(user_id))
-                .eq("date", today_str)
+                .gte("started_at", today_str + "T00:00:00")
+                .lt("started_at", tomorrow_str + "T00:00:00")
                 .limit(1)
                 .execute()
             )
@@ -1056,7 +1059,8 @@ class DashboardService:
             self.supabase.table("food_entries")
             .select("id")
             .eq("user_id", str(user_id))
-            .eq("entry_date", today_str)
+            .gte("logged_at", today_str + "T00:00:00")
+            .lt("logged_at", tomorrow_str + "T00:00:00")
             .limit(1)
             .execute()
         )

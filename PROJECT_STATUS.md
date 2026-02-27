@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-26
+> Last updated: 2026-02-27
 
 ## Overview
 
@@ -449,6 +449,23 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - **iOS flow:** Camera → CoreML hints → cloud scan (if needed) → review/edit → log to food diary
 - New files: `FoodClassificationService.swift`, `FoodScannerView.swift`, `FoodScanModels.swift`, `food_scan_service.py`
 - Endpoint: `POST /api/v1/nutrition/food/scan`
+
+### Dashboard Column Bug Fix
+- Fixed `workout_sessions.date` → `started_at` (timestamptz range filter) in `_build_daily_actions`
+- Fixed `food_entries.entry_date` → `logged_at` (timestamptz range filter) in `_get_nutrition_adherence` and `_build_daily_actions`
+- Both columns were referenced by non-existent names causing PostgREST `42703` errors on the narrative dashboard
+
+### Supabase Performance & Security Hardening
+Single database migration addressing all Supabase advisor lint warnings:
+
+| Category | Count | Fix |
+|----------|-------|-----|
+| RLS `auth.uid()` re-evaluation | 40 policies | Replaced `auth.uid()` with `(select auth.uid())` — prevents per-row function call overhead |
+| Duplicate permissive policies | 2 | Dropped redundant SELECT on `daily_scores` (covered by ALL) and `recipes` (duplicate authenticated read) |
+| Unindexed foreign keys | 7 | Added indexes on `exercise_progress.exercise_id`, `food_entries.user_id`, `invite_codes.created_by`, `personal_records.workout_set_id`, `user_training_plans.template_id`, `workout_sessions.plan_id`, `workouts.plan_id` |
+| Mutable function search_path | 3 | Recreated `set_updated_at`, `handle_new_user`, `update_updated_at` with `SET search_path = ''` |
+
+Post-migration advisor results: 0 WARN-level performance issues, 0 WARN-level security issues (except leaked password protection which requires dashboard toggle).
 
 ### Logo & App Icon Updates
 - Asset catalog swap: light mode → dark logo variant, dark mode → bright logo variant
