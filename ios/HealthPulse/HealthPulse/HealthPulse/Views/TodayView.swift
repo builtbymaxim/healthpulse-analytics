@@ -20,130 +20,11 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    // 1. Greeting — always visible at top
-                    Text(viewModel.personalizedGreeting)
-                        .font(.title2.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-
-                    // 2. Readiness Header (narrative mode)
-                    if !viewModel.readinessNarrative.isEmpty {
-                        ReadinessHeaderView(
-                            readinessScore: viewModel.readinessScore,
-                            greetingContext: viewModel.greetingContext,
-                            narrative: viewModel.readinessNarrative
-                        )
-                        .padding(.horizontal)
-                    }
-
-                    // 3. Commitment Strip (NOW / NEXT / TONIGHT) — tappable
-                    if !viewModel.commitments.isEmpty {
-                        CommitmentStripView(commitments: viewModel.commitments) { route in
-                            navigateToRoute(route)
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // 4. Daily Actions — for ALL users
-                    if viewModel.isNewUser {
-                        // New users: onboarding checklist
-                        WelcomeChecklistCard(
-                            displayName: nil, // greeting is now standalone above
-                            hasLoggedWorkout: viewModel.hasLoggedWorkout,
-                            hasLoggedMeal: viewModel.hasLoggedMeal,
-                            hasLoggedSleep: viewModel.hasLoggedSleep,
-                            hasSetupTrainingPlan: viewModel.hasSetupTrainingPlan,
-                            onWorkoutTap: { tabRouter.navigateTo(.workout) },
-                            onMealTap: { tabRouter.navigateTo(.nutrition) },
-                            onSleepTap: { tabRouter.navigateTo(.sleep) },
-                            onTrainingPlanTap: { showTrainingPlanSetup = true }
-                        )
-                        .padding(.horizontal)
-                    } else if !viewModel.dailyActions.isEmpty {
-                        // Established users: daily actions from backend
-                        DailyActionsCard(actions: viewModel.dailyActions) { route in
-                            navigateToRoute(route)
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // 5. Dynamic Card Stack (narrative mode) or static fallback
-                    if !viewModel.cardPriorityOrder.isEmpty {
-                        ForEach(viewModel.cardPriorityOrder) { card in
-                            DashboardCardRouter(cardType: card.cardType, viewModel: viewModel)
-                                .padding(.horizontal)
-                        }
-
-                        // Filtered recommendations (no duplication with commitments)
-                        if !viewModel.isNewUser && !viewModel.filteredRecommendations.isEmpty {
-                            SmartRecommendationsSection(recommendations: viewModel.filteredRecommendations)
-                                .padding(.horizontal)
-                        }
-                    } else {
-                        staticCardStack
-                    }
-
-                    // 6. Quick Stats Row (always last)
-                    HStack(spacing: 12) {
-                        QuickStatCard(
-                            icon: "figure.walk",
-                            value: "\(healthKitService.todaySteps.formatted())",
-                            label: "Steps",
-                            color: .green
-                        )
-
-                        if let sleep = healthKitService.lastSleepHours {
-                            QuickStatCard(
-                                icon: "moon.zzz.fill",
-                                value: String(format: "%.1fh", sleep),
-                                label: "Sleep",
-                                color: .purple
-                            )
-                            .onTapGesture {
-                                tabRouter.navigateTo(.sleep)
-                                HapticsManager.shared.light()
-                            }
-                        }
-
-                        if let hr = healthKitService.restingHeartRate {
-                            QuickStatCard(
-                                icon: "heart.fill",
-                                value: "\(Int(hr))",
-                                label: "RHR",
-                                color: .red
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // Fallback: Compact Recovery & Readiness
-                    if !viewModel.isNewUser && viewModel.enhancedRecovery == nil && viewModel.readinessNarrative.isEmpty {
-                        HStack(spacing: 12) {
-                            CompactScoreCard(
-                                title: "Recovery",
-                                score: viewModel.recoveryScore,
-                                status: viewModel.recoveryStatus,
-                                color: statusColor(viewModel.recoveryStatus)
-                            )
-
-                            CompactScoreCard(
-                                title: "Readiness",
-                                score: viewModel.readinessScore,
-                                status: viewModel.recommendedIntensity,
-                                color: .blue
-                            )
-                            .onTapGesture {
-                                tabRouter.navigateTo(.workout)
-                                HapticsManager.shared.light()
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    Spacer(minLength: 20)
+                if viewModel.isLoading {
+                    DashboardSkeletonView()
+                } else {
+                    dashboardContent
                 }
-                .padding(.top)
             }
             .background(ThemedBackground())
             .navigationBarTitleDisplayMode(.inline)
@@ -186,130 +67,234 @@ struct TodayView: View {
         }
     }
 
-    // Static card layout used when narrative endpoint is unavailable
     @ViewBuilder
-    private var staticCardStack: some View {
-        // Today's Workout Card
-        if let todaysWorkout = viewModel.todaysWorkout {
-            TodayWorkoutCard(
-                workout: todaysWorkout,
-                onTap: {
-                    if todaysWorkout.isRestDay {
+    private var dashboardContent: some View {
+        VStack(spacing: 20) {
+            // 1. Greeting — always visible
+            Text(viewModel.personalizedGreeting)
+                .font(.title2.bold())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            // 2. Readiness Header (narrative-enhanced)
+            if !viewModel.readinessNarrative.isEmpty {
+                ReadinessHeaderView(
+                    readinessScore: viewModel.readinessScore,
+                    greetingContext: viewModel.greetingContext,
+                    narrative: viewModel.readinessNarrative
+                )
+                .padding(.horizontal)
+            }
+
+            // 3. Commitment Strip (NOW / NEXT / TONIGHT)
+            if !viewModel.commitments.isEmpty {
+                CommitmentStripView(commitments: viewModel.commitments) { route in
+                    navigateToRoute(route)
+                }
+                .padding(.horizontal)
+            }
+
+            // 4. Daily Actions
+            if viewModel.isNewUser {
+                WelcomeChecklistCard(
+                    displayName: nil,
+                    hasLoggedWorkout: viewModel.hasLoggedWorkout,
+                    hasLoggedMeal: viewModel.hasLoggedMeal,
+                    hasLoggedSleep: viewModel.hasLoggedSleep,
+                    hasSetupTrainingPlan: viewModel.hasSetupTrainingPlan,
+                    onWorkoutTap: { tabRouter.navigateTo(.workout) },
+                    onMealTap: { tabRouter.navigateTo(.nutrition) },
+                    onSleepTap: { tabRouter.navigateTo(.sleep) },
+                    onTrainingPlanTap: { showTrainingPlanSetup = true }
+                )
+                .padding(.horizontal)
+            } else if !viewModel.dailyActions.isEmpty {
+                DailyActionsCard(actions: viewModel.dailyActions) { route in
+                    navigateToRoute(route)
+                }
+                .padding(.horizontal)
+            }
+
+            // 5. Today's Workout
+            if let todaysWorkout = viewModel.todaysWorkout {
+                TodayWorkoutCard(
+                    workout: todaysWorkout,
+                    onTap: {
+                        if todaysWorkout.isRestDay {
+                            tabRouter.navigateTo(.workout)
+                        } else {
+                            showWorkoutExecution = true
+                        }
+                    }
+                )
+                .padding(.horizontal)
+            }
+
+            // 6. Nutrition — Deficit Radar or Progress Card
+            if let targets = viewModel.readinessTargets {
+                DeficitRadarCard(targets: targets) {
+                    viewModel.showDeficitFix = true
+                }
+                .onTapGesture {
+                    tabRouter.navigateTo(.nutrition)
+                    HapticsManager.shared.light()
+                }
+                .padding(.horizontal)
+            } else {
+                NutritionProgressCard(
+                    calories: viewModel.todayCalories,
+                    calorieGoal: viewModel.calorieGoal,
+                    protein: viewModel.todayProtein,
+                    proteinGoal: viewModel.proteinGoal,
+                    carbs: viewModel.todayCarbs,
+                    carbsGoal: viewModel.carbsGoal,
+                    fat: viewModel.todayFat,
+                    fatGoal: viewModel.fatGoal
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.nutrition)
+                    HapticsManager.shared.light()
+                }
+                .padding(.horizontal)
+            }
+
+            // 7. Social Rank
+            if let socialRank = viewModel.socialRankEntry {
+                NavigationLink {
+                    SocialView()
+                } label: {
+                    SocialRankCard(
+                        rank: socialRank.rank,
+                        streakValue: Int(socialRank.value),
+                        activePartners: viewModel.activePartnersCount
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+            }
+
+            // 8. Last Workout
+            if let lastWorkout = viewModel.lastWorkout {
+                LastWorkoutCard(
+                    workout: lastWorkout,
+                    improvement: viewModel.lastWorkoutImprovement
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.workout)
+                    HapticsManager.shared.light()
+                }
+                .padding(.horizontal)
+            }
+
+            // 9. Sleep Pattern
+            if viewModel.hasSleepData {
+                SleepPatternCard(
+                    avgHours: viewModel.avgSleepHours,
+                    consistencyScore: viewModel.sleepConsistencyScore,
+                    trend: viewModel.sleepTrend
+                )
+                .onTapGesture {
+                    tabRouter.navigateTo(.sleep)
+                    HapticsManager.shared.light()
+                }
+                .padding(.horizontal)
+            }
+
+            // 10. Recovery
+            if !viewModel.isNewUser, let recovery = viewModel.enhancedRecovery {
+                CausalRecoveryCard(
+                    recovery: recovery,
+                    annotation: viewModel.causalAnnotation(for: "recovery")
+                )
+                .padding(.horizontal)
+            } else if !viewModel.isNewUser && viewModel.readinessNarrative.isEmpty {
+                // Fallback: compact scores when no narrative data
+                HStack(spacing: 12) {
+                    CompactScoreCard(
+                        title: "Recovery",
+                        score: viewModel.recoveryScore,
+                        status: viewModel.recoveryStatus,
+                        color: statusColor(viewModel.recoveryStatus)
+                    )
+                    CompactScoreCard(
+                        title: "Readiness",
+                        score: viewModel.readinessScore,
+                        status: viewModel.recommendedIntensity,
+                        color: .blue
+                    )
+                    .onTapGesture {
                         tabRouter.navigateTo(.workout)
-                    } else {
-                        showWorkoutExecution = true
+                        HapticsManager.shared.light()
                     }
                 }
-            )
-            .padding(.horizontal)
-        }
-
-        // Smart Recommendations (filtered to avoid duplication with commitments)
-        if !viewModel.isNewUser && !viewModel.filteredRecommendations.isEmpty {
-            SmartRecommendationsSection(recommendations: viewModel.filteredRecommendations)
                 .padding(.horizontal)
-        }
-
-        // Today's Nutrition Progress — Deficit Radar if readiness data available
-        if let targets = viewModel.readinessTargets {
-            DeficitRadarCard(targets: targets) {
-                viewModel.showDeficitFix = true
             }
-            .onTapGesture {
-                tabRouter.navigateTo(.nutrition)
-                HapticsManager.shared.light()
-            }
-            .padding(.horizontal)
-        } else {
-            NutritionProgressCard(
-                calories: viewModel.todayCalories,
-                calorieGoal: viewModel.calorieGoal,
-                protein: viewModel.todayProtein,
-                proteinGoal: viewModel.proteinGoal,
-                carbs: viewModel.todayCarbs,
-                carbsGoal: viewModel.carbsGoal,
-                fat: viewModel.todayFat,
-                fatGoal: viewModel.fatGoal
-            )
-            .onTapGesture {
-                tabRouter.navigateTo(.nutrition)
-                HapticsManager.shared.light()
-            }
-            .padding(.horizontal)
-        }
 
-        // Weekly Summary
-        if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
-            WeeklySummaryCard(summary: summary)
-                .padding(.horizontal)
-        }
-
-        // Last Workout Performance
-        if let lastWorkout = viewModel.lastWorkout {
-            LastWorkoutCard(
-                workout: lastWorkout,
-                improvement: viewModel.lastWorkoutImprovement
-            )
-            .onTapGesture {
-                tabRouter.navigateTo(.workout)
-                HapticsManager.shared.light()
+            // 11. Progress
+            if !viewModel.isNewUser, let progress = viewModel.progressSummary {
+                ProgressDashboardSection(progress: progress)
+                    .padding(.horizontal)
             }
-            .padding(.horizontal)
-        }
 
-        // Social Rank (only when opted in and data available)
-        if let socialRank = viewModel.socialRankEntry {
-            NavigationLink {
-                SocialView()
-            } label: {
-                SocialRankCard(
-                    rank: socialRank.rank,
-                    streakValue: Int(socialRank.value),
-                    activePartners: viewModel.activePartnersCount
+            // 12. Weekly Summary
+            if !viewModel.isNewUser, let summary = viewModel.weeklySummary {
+                WeeklySummaryCard(summary: summary)
+                    .padding(.horizontal)
+            }
+
+            // 13. Recommendations
+            if !viewModel.isNewUser && !viewModel.filteredRecommendations.isEmpty {
+                SmartRecommendationsSection(recommendations: viewModel.filteredRecommendations)
+                    .padding(.horizontal)
+            }
+
+            // 14. Nutrition Adherence
+            if viewModel.hasNutritionHistory {
+                NutritionAdherenceCard(
+                    weeklyData: viewModel.weeklyNutritionData,
+                    adherenceScore: viewModel.weeklyAdherenceScore
                 )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-        }
-
-        // Nutrition Adherence
-        if viewModel.hasNutritionHistory {
-            NutritionAdherenceCard(
-                weeklyData: viewModel.weeklyNutritionData,
-                adherenceScore: viewModel.weeklyAdherenceScore
-            )
-            .onTapGesture {
-                tabRouter.navigateTo(.nutrition)
-                HapticsManager.shared.light()
-            }
-            .padding(.horizontal)
-        }
-
-        // Sleep Pattern
-        if viewModel.hasSleepData {
-            SleepPatternCard(
-                avgHours: viewModel.avgSleepHours,
-                consistencyScore: viewModel.sleepConsistencyScore,
-                trend: viewModel.sleepTrend
-            )
-            .onTapGesture {
-                tabRouter.navigateTo(.sleep)
-                HapticsManager.shared.light()
-            }
-            .padding(.horizontal)
-        }
-
-        // Enhanced Recovery
-        if !viewModel.isNewUser, let recovery = viewModel.enhancedRecovery {
-            EnhancedRecoveryCard(recovery: recovery)
+                .onTapGesture {
+                    tabRouter.navigateTo(.nutrition)
+                    HapticsManager.shared.light()
+                }
                 .padding(.horizontal)
-        }
+            }
 
-        // Progress Section
-        if !viewModel.isNewUser, let progress = viewModel.progressSummary {
-            ProgressDashboardSection(progress: progress)
-                .padding(.horizontal)
+            // 15. Quick Stats Row
+            HStack(spacing: 12) {
+                QuickStatCard(
+                    icon: "figure.walk",
+                    value: "\(healthKitService.todaySteps.formatted())",
+                    label: "Steps",
+                    color: .green
+                )
+                if let sleep = healthKitService.lastSleepHours {
+                    QuickStatCard(
+                        icon: "moon.zzz.fill",
+                        value: String(format: "%.1fh", sleep),
+                        label: "Sleep",
+                        color: .purple
+                    )
+                    .onTapGesture {
+                        tabRouter.navigateTo(.sleep)
+                        HapticsManager.shared.light()
+                    }
+                }
+                if let hr = healthKitService.restingHeartRate {
+                    QuickStatCard(
+                        icon: "heart.fill",
+                        value: "\(Int(hr))",
+                        label: "RHR",
+                        color: .red
+                    )
+                }
+            }
+            .padding(.horizontal)
+
+            Spacer(minLength: 20)
         }
+        .padding(.top)
     }
 
     private func navigateToRoute(_ route: String?) {
@@ -1057,6 +1042,64 @@ struct WorkoutSummary {
     let calories: Double?
 }
 
+// MARK: - Dashboard Skeleton
+
+private struct DashboardSkeletonView: View {
+    @State private var shimmer = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Greeting placeholder
+            SkeletonRect(width: 200, height: 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            // Readiness header placeholder
+            SkeletonRect(height: 80)
+                .padding(.horizontal)
+
+            // Commitment strip placeholder
+            HStack(spacing: 12) {
+                SkeletonRect(height: 64)
+                SkeletonRect(height: 64)
+                SkeletonRect(height: 64)
+            }
+            .padding(.horizontal)
+
+            // Workout card placeholder
+            SkeletonRect(height: 100)
+                .padding(.horizontal)
+
+            // Nutrition card placeholder
+            SkeletonRect(height: 140)
+                .padding(.horizontal)
+
+            // Last workout placeholder
+            SkeletonRect(height: 90)
+                .padding(.horizontal)
+
+            // Sleep placeholder
+            SkeletonRect(height: 80)
+                .padding(.horizontal)
+        }
+        .padding(.top)
+        .onAppear { shimmer = true }
+        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: shimmer)
+        .opacity(shimmer ? 0.6 : 0.3)
+    }
+}
+
+private struct SkeletonRect: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 60
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .fill(AppTheme.surface2)
+            .frame(width: width, height: height)
+    }
+}
+
 // MARK: - View Model
 
 @MainActor
@@ -1162,7 +1205,11 @@ class TodayViewModel: ObservableObject {
 
     @Published var isLoading = false
 
+    private var isLoadInProgress = false
+
     func loadData() async {
+        guard !isLoadInProgress else { return }
+        isLoadInProgress = true
         isLoading = true
 
         // Load user profile first to determine if new user
@@ -1185,9 +1232,17 @@ class TodayViewModel: ObservableObject {
         }
 
         isLoading = false
+        isLoadInProgress = false
     }
 
     private func loadDashboardData() async {
+        // Reset narrative-only fields to prevent stale data on fallback
+        commitments = []
+        dailyActions = []
+        readinessNarrative = ""
+        greetingContext = ""
+        causalAnnotations = []
+
         // Try narrative endpoint first, fall back to legacy dashboard
         do {
             let narrative = try await APIService.shared.getNarrativeDashboard()
@@ -1359,23 +1414,21 @@ class TodayViewModel: ObservableObject {
     private func loadSleepPatterns() async {
         do {
             let history = try await APIService.shared.getSleepHistory(days: 7)
-
-            // Check if there's any sleep data
-            hasSleepData = !history.isEmpty
             hasLoggedSleep = !history.isEmpty
 
-            guard hasSleepData else {
+            guard !history.isEmpty else {
                 avgSleepHours = 0
                 sleepConsistencyScore = 0
                 sleepTrend = .stable
+                hasSleepData = false
                 return
             }
 
             let analytics = try await APIService.shared.getSleepAnalytics(days: 7)
+
+            // Batch all sleep state at once — hasSleepData last to prevent 0.0h flash
             avgSleepHours = analytics.avgDurationHours
             sleepConsistencyScore = Int(analytics.consistencyScore)
-
-            // Determine trend based on recent data
             if analytics.avgDurationHours > 7.5 {
                 sleepTrend = .up
             } else if analytics.avgDurationHours < 6.5 {
@@ -1383,6 +1436,7 @@ class TodayViewModel: ObservableObject {
             } else {
                 sleepTrend = .stable
             }
+            hasSleepData = true
         } catch {
             print("Failed to load sleep patterns: \(error)")
             hasSleepData = false

@@ -104,21 +104,23 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Unit preferences (metric/imperial)
 
 ### Dashboard (TodayView)
+- **Fixed card order** — single consistent layout (no dynamic reordering between loads)
+- **Skeleton loading** — shimmer placeholders shown while data loads, then full reveal (no card pop-in)
 - Readiness header with score ring, greeting context ("Push Day" / "Recovery Day"), and narrative text
 - "Now / Next / Tonight" commitment strip with load modifier badges
-- Welcome checklist for new users
-- Dynamic card ordering based on readiness score (high → workout first; low → recovery first)
+- Welcome checklist for new users / daily actions for established users
 - Today's planned workout card
-- Nutrition progress (calorie ring + macro bars)
-- Smart recommendations (personalized based on data)
-- Weekly summary (workouts, sleep, nutrition adherence)
+- Nutrition progress (deficit radar when readiness data available, otherwise calorie ring + macro bars)
+- Social rank card (when opted in) — shows leaderboard rank + active partners, pushes to SocialView
+- Last workout performance card
+- Sleep pattern card
 - Causal recovery card with inline annotation ("mainly because sleep was 5h 40m")
 - Progress section (key lifts, PRs, muscle balance)
-- Last workout performance card
-- Social rank card (when opted in) — shows leaderboard rank + active partners, pushes to SocialView
+- Weekly summary (workouts, sleep, nutrition adherence)
+- Smart recommendations (personalized, filtered to avoid duplication with commitments)
 - Nutrition adherence chart (7-day)
 - Quick stats (steps, sleep, resting HR)
-- Graceful fallback to static card order when narrative endpoint unavailable
+- Double-load prevention and stale state reset on refresh
 
 ### Workouts
 - Running workout with GPS tracking, live pace, background execution
@@ -442,6 +444,14 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Added SocialRankCard on dashboard (visible when social opted in): shows workout streak rank + active partners count
 - Tapping SocialRankCard pushes SocialView via NavigationStack (single back arrow, no double-navigation confusion)
 - Social hidden entirely from dashboard when opted out
+
+### Dashboard Consistency Overhaul
+- **Single fixed card order**: Removed dual layout paths (narrative-driven dynamic reorder vs static fallback) — one consistent layout regardless of which backend endpoint responds
+- **Skeleton loading**: `DashboardSkeletonView` with shimmer animation shown while data loads, then full reveal — eliminates progressive card pop-in
+- **Stale state reset**: Narrative-only fields (`commitments`, `dailyActions`, `readinessNarrative`, `greetingContext`, `causalAnnotations`) cleared at the top of each dashboard reload to prevent stale data on fallback
+- **Sleep flash fix**: `hasSleepData` now set AFTER both history and analytics resolve — prevents 0.0h flash
+- **Double-load guard**: `isLoadInProgress` flag prevents concurrent `loadData()` calls from `.task` + workout completion callback
+- **Removed `DashboardCardRouter`**: No longer needed — fixed layout renders cards directly in TodayView
 
 ### Phase 12 — AI Food Scanner (Hybrid CoreML + Cloud Vision)
 - **On-device classification:** CoreML Food-101 model for instant local classification
