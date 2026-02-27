@@ -7,7 +7,7 @@ and nutrition_service into a single composite response to reduce API calls.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -633,7 +633,7 @@ class DashboardService:
         # Get recent PRs
         prs = await self.exercise_service.get_personal_records(user_id)
         recent_prs = []
-        cutoff = datetime.now() - timedelta(days=30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         for pr in prs[:5]:  # Top 5 recent
             if pr.achieved_at >= cutoff:
                 recent_prs.append({
@@ -1081,7 +1081,7 @@ class DashboardService:
             .select("id")
             .eq("user_id", str(user_id))
             .eq("metric_type", "weight")
-            .gte("recorded_at", week_start)
+            .gte("timestamp", week_start)
             .limit(1)
             .execute()
         )
