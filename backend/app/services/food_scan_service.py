@@ -198,12 +198,18 @@ class FoodScanService:
         settings = get_settings()
         provider_name = settings.vision_provider.lower()
 
-        if provider_name == "openai":
+        if provider_name == "openai" and settings.openai_api_key:
             self.provider = OpenAIVisionProvider(settings.openai_api_key)
-        elif provider_name == "claude":
+        elif provider_name == "claude" and settings.anthropic_api_key:
             self.provider = ClaudeVisionProvider(settings.anthropic_api_key)
-        else:
+        elif provider_name == "gemini" and settings.gemini_api_key:
             self.provider = GeminiVisionProvider(settings.gemini_api_key)
+        else:
+            logger.warning(
+                "Food scan provider '%s' not configured (API key missing) — scan unavailable",
+                provider_name,
+            )
+            self.provider = None
 
         self.provider_name = provider_name
 
@@ -219,6 +225,13 @@ class FoodScanService:
         Returns:
             Dict with items, processing_time_ms, and provider
         """
+        if self.provider is None:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=503,
+                detail="Food scan service not configured — vision API key missing",
+            )
+
         start = time.monotonic()
         try:
             result = await self.provider.analyze_food_image(image_base64, hints)

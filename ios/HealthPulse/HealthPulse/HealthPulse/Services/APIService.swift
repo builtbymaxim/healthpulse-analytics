@@ -128,11 +128,14 @@ class APIService {
     /// Attempt to refresh the access token using the stored refresh token.
     /// Returns true if refresh succeeded, false if it failed (should logout).
     private func refreshAccessToken() async -> Bool {
-        guard let currentRefreshToken = refreshToken else { return false }
+        guard refreshToken != nil else { return false }
 
-        // Use the coordinator to serialize concurrent refresh attempts
+        // Use the coordinator to serialize concurrent refresh attempts.
+        // Read refreshToken INSIDE the closure so queued callers pick up the
+        // updated token after the first refresh succeeds.
         return await refreshCoordinator.refresh { [weak self] in
-            guard let self = self else { return false }
+            guard let self = self,
+                  let currentRefreshToken = self.refreshToken else { return false }
 
             guard let url = URL(string: "\(self.baseURL)/auth/refresh") else { return false }
 

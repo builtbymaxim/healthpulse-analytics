@@ -463,6 +463,16 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - **Recovery Fuel info sheet:** Info button on DeficitRadarCard opens sheet explaining how fuel score is calculated, macro breakdown, base vs adjusted targets, and adjustment reasons
 - **Light mode app icon:** Added white/green waveform icon for light mode; dark mode keeps existing dark/green icon
 
+### Token Refresh Race Condition Fix
+- **Root cause:** `checkStoredSession()` called `scheduleTokenRefresh()` AND spawned an immediate refresh Task — both could fire with the same stale token, causing "Invalid Refresh Token: Already Used" errors
+- **Fix 1:** Moved refresh token capture inside `TokenRefreshCoordinator` closure so queued callers read the **updated** token after the first refresh succeeds
+- **Fix 2:** Removed premature `scheduleTokenRefresh()` from session restore — now schedules only after successful refresh
+- **Fix 3:** Foreground resume cancels any pending scheduled refresh before triggering a new one
+
+### Food Scan API Key Validation
+- **Root cause:** `GEMINI_API_KEY` env var empty on Railway — URL generated as `?key=` causing 403 Forbidden
+- **Fix:** `FoodScanService.__init__()` validates API key is non-empty; returns 503 "not configured" instead of leaking a 403 from Google
+
 ### Phase 12 — AI Food Scanner (Hybrid CoreML + Cloud Vision)
 - **On-device classification:** CoreML Food-101 model for instant local classification
 - **Cloud vision fallback:** When CoreML confidence < 70%, falls back to Gemini 2.5 Flash Lite

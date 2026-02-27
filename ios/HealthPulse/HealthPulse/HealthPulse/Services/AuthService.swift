@@ -72,6 +72,8 @@ class AuthService: ObservableObject {
             Task { @MainActor in
                 guard self.isAuthenticated,
                       KeychainService.load(key: "refresh_token") != nil else { return }
+                // Cancel any pending scheduled refresh to avoid double-fire
+                self.refreshTask?.cancel()
                 let success = await APIService.shared.refreshAccessTokenPublic()
                 if success {
                     self.scheduleTokenRefresh()
@@ -116,10 +118,12 @@ class AuthService: ObservableObject {
             // Set from cache immediately to prevent flash
             isAuthenticated = true
             isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
-            scheduleTokenRefresh()
             Task {
-                // Refresh token to ensure it's valid
-                _ = await APIService.shared.refreshAccessTokenPublic()
+                // Refresh token to ensure it's valid, then schedule proactive refresh
+                let success = await APIService.shared.refreshAccessTokenPublic()
+                if success {
+                    scheduleTokenRefresh()
+                }
                 await loadProfile()
                 isRestoringSession = false
             }
