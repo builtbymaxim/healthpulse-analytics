@@ -105,16 +105,17 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 
 ### Dashboard (TodayView)
 - **Fixed card order** — single consistent layout (no dynamic reordering between loads)
-- **Skeleton loading** — shimmer placeholders shown while data loads, then full reveal (no card pop-in)
+- **Stale-while-revalidate loading** — skeleton on first launch only; subsequent visits show cached data while refreshing silently
 - Readiness header with score ring, greeting context ("Push Day" / "Recovery Day"), and narrative text
-- "Now / Next / Tonight" commitment strip with load modifier badges
+- "Now / Next / Tonight" commitment strip with equal-height cards and load modifier badges
 - Welcome checklist for new users / daily actions for established users
 - Today's planned workout card
 - Nutrition progress (deficit radar when readiness data available, otherwise calorie ring + macro bars)
 - Social rank card (when opted in) — shows leaderboard rank + active partners, pushes to SocialView
 - Last workout performance card
 - Sleep pattern card
-- Causal recovery card with inline annotation ("mainly because sleep was 5h 40m")
+- Causal recovery card with inline annotation ("mainly because sleep was 5h 40m") — tap for detailed score breakdown
+- Recovery Fuel card with info button — tap for detailed fuel score explanation
 - Progress section (key lifts, PRs, muscle balance)
 - Weekly summary (workouts, sleep, nutrition adherence)
 - Smart recommendations (personalized, filtered to avoid duplication with commitments)
@@ -452,6 +453,15 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - **Sleep flash fix**: `hasSleepData` now set AFTER both history and analytics resolve — prevents 0.0h flash
 - **Double-load guard**: `isLoadInProgress` flag prevents concurrent `loadData()` calls from `.task` + workout completion callback
 - **Removed `DashboardCardRouter`**: No longer needed — fixed layout renders cards directly in TodayView
+
+### Dashboard Polish & Light Mode Icon
+- **Emoji removal:** Stripped all emojis from 3 files (dashboard PR title, calendar meal events, RPE tip) — no emojis anywhere in the app
+- **Stale-while-revalidate loading:** Skeleton only on first launch; subsequent dashboard visits show existing data while refreshing silently in the background
+- **Equal commitment cards:** NOW/NEXT/TONIGHT cards now have identical height (reserved space for load modifier badge)
+- **"Log your weight" route fix:** Now correctly navigates to Profile tab (was a dead end)
+- **Recovery detail sheet:** Tapping recovery card opens info sheet with factor breakdown (sleep, training load, HRV), score bars, sleep deficit warning, and recommendation
+- **Recovery Fuel info sheet:** Info button on DeficitRadarCard opens sheet explaining how fuel score is calculated, macro breakdown, base vs adjusted targets, and adjustment reasons
+- **Light mode app icon:** Added white/green waveform icon for light mode; dark mode keeps existing dark/green icon
 
 ### Phase 12 — AI Food Scanner (Hybrid CoreML + Cloud Vision)
 - **On-device classification:** CoreML Food-101 model for instant local classification

@@ -289,12 +289,6 @@ class CalendarSyncService: ObservableObject {
         "snack": (15, 30, 15)
     ]
 
-    private static let mealEmoji: [String: String] = [
-        "breakfast": "🌅",
-        "lunch": "☀️",
-        "dinner": "🌙",
-        "snack": "🥕"
-    ]
 
     /// Sync a weekly meal plan to the HealthPulse calendar
     func syncMealPlan(_ plan: WeeklyMealPlan) {
@@ -311,8 +305,6 @@ class CalendarSyncService: ObservableObject {
             guard let date = cal.date(byAdding: .day, value: dayOffset, to: weekStart) else { continue }
 
             let timing = Self.mealTimes[item.mealType] ?? (12, 0, 30)
-            let emoji = Self.mealEmoji[item.mealType] ?? "🍽️"
-
             var startComponents = cal.dateComponents([.year, .month, .day], from: date)
             startComponents.hour = timing.hour
             startComponents.minute = timing.minute
@@ -320,7 +312,7 @@ class CalendarSyncService: ObservableObject {
 
             let event = EKEvent(eventStore: eventStore)
             event.calendar = calendar
-            event.title = "\(emoji) \(item.recipe?.name ?? "Meal")"
+            event.title = item.recipe?.name ?? "Meal"
             event.startDate = startDate
             event.endDate = cal.date(byAdding: .minute, value: timing.duration, to: startDate)
 

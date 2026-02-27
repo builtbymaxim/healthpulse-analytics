@@ -64,6 +64,18 @@ struct TodayView: View {
                         .presentationDetents([.large])
                 }
             }
+            .sheet(isPresented: $viewModel.showRecoveryDetail) {
+                if let recovery = viewModel.enhancedRecovery {
+                    RecoveryDetailSheet(recovery: recovery)
+                        .presentationDetents([.large])
+                }
+            }
+            .sheet(isPresented: $viewModel.showRecoveryFuelInfo) {
+                if let targets = viewModel.readinessTargets {
+                    RecoveryFuelInfoSheet(targets: targets)
+                        .presentationDetents([.large])
+                }
+            }
         }
     }
 
@@ -132,12 +144,11 @@ struct TodayView: View {
 
             // 6. Nutrition — Deficit Radar or Progress Card
             if let targets = viewModel.readinessTargets {
-                DeficitRadarCard(targets: targets) {
-                    viewModel.showDeficitFix = true
-                }
-                .onTapGesture {
-                    tabRouter.navigateTo(.nutrition)
+                DeficitRadarCard(targets: targets, onInfo: {
+                    viewModel.showRecoveryFuelInfo = true
                     HapticsManager.shared.light()
+                }) {
+                    viewModel.showDeficitFix = true
                 }
                 .padding(.horizontal)
             } else {
@@ -206,6 +217,10 @@ struct TodayView: View {
                     recovery: recovery,
                     annotation: viewModel.causalAnnotation(for: "recovery")
                 )
+                .onTapGesture {
+                    viewModel.showRecoveryDetail = true
+                    HapticsManager.shared.light()
+                }
                 .padding(.horizontal)
             } else if !viewModel.isNewUser && viewModel.readinessNarrative.isEmpty {
                 // Fallback: compact scores when no narrative data
@@ -307,6 +322,8 @@ struct TodayView: View {
             tabRouter.navigateTo(.nutrition)
         case "sleep":
             tabRouter.navigateTo(.sleep)
+        case "profile":
+            tabRouter.navigateTo(.profile)
         default:
             break
         }
@@ -1204,13 +1221,16 @@ class TodayViewModel: ObservableObject {
     }
 
     @Published var isLoading = false
+    @Published var showRecoveryDetail = false
+    @Published var showRecoveryFuelInfo = false
 
     private var isLoadInProgress = false
+    private var hasLoadedOnce = false
 
     func loadData() async {
         guard !isLoadInProgress else { return }
         isLoadInProgress = true
-        isLoading = true
+        if !hasLoadedOnce { isLoading = true }
 
         // Load user profile first to determine if new user
         await loadUserProfile()
@@ -1232,6 +1252,7 @@ class TodayViewModel: ObservableObject {
         }
 
         isLoading = false
+        hasLoadedOnce = true
         isLoadInProgress = false
     }
 

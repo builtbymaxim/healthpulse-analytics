@@ -542,7 +542,7 @@ struct CommitmentCard: View {
             HapticsManager.shared.light()
             onTap()
         } label: {
-            VStack(spacing: 8) {
+            VStack(alignment: .center, spacing: 8) {
                 // Slot label badge
                 Text(slot.slotLabel)
                     .font(.system(size: 9, weight: .bold))
@@ -577,12 +577,15 @@ struct CommitmentCard: View {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.8)
 
-                // Load modifier badge
+                // Load modifier badge — always reserve space
                 if let modifier = slot.loadModifier {
                     LoadModifierBadge(modifier: modifier)
+                } else {
+                    Color.clear
+                        .frame(height: 20)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, 12)
             .padding(.horizontal, 6)
             .background(AppTheme.surface2)
@@ -806,6 +809,7 @@ struct CausalRecoveryCard: View {
 
 struct DeficitRadarCard: View {
     let targets: ReadinessTargetsResponse
+    var onInfo: (() -> Void)?
     let onFixDeficit: () -> Void
 
     private var urgencyColor: Color {
@@ -826,8 +830,17 @@ struct DeficitRadarCard: View {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Recovery Fuel")
-                        .font(.headline)
+                    HStack(spacing: 6) {
+                        Text("Recovery Fuel")
+                            .font(.headline)
+                        if let onInfo {
+                            Button(action: onInfo) {
+                                Image(systemName: "info.circle")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     HStack(spacing: 6) {
                         Image(systemName: targets.isTrainingDay ? "flame.fill" : "leaf.fill")
                             .foregroundStyle(targets.isTrainingDay ? .orange : .green)
@@ -937,6 +950,358 @@ struct DeficitRadarCard: View {
         .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .cardShadow()
+    }
+}
+
+// MARK: - Recovery Detail Sheet
+
+struct RecoveryDetailSheet: View {
+    let recovery: EnhancedRecoveryResponse
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header with score ring
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Your Recovery Score")
+                                .font(.title2.bold())
+                            Text(recovery.status.capitalized)
+                                .font(.subheadline)
+                                .foregroundStyle(recovery.statusColor)
+                        }
+
+                        Spacer()
+
+                        ZStack {
+                            Circle()
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 10)
+                                .frame(width: 80, height: 80)
+
+                            Circle()
+                                .trim(from: 0, to: recovery.score / 100)
+                                .stroke(recovery.statusColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                                .frame(width: 80, height: 80)
+                                .rotationEffect(.degrees(-90))
+
+                            Text("\(Int(recovery.score))%")
+                                .font(.system(size: 22, weight: .bold))
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    Divider()
+
+                    // How is this calculated?
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("How is this calculated?")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        Text("Your recovery score combines sleep quality, training load, and heart rate variability (HRV) to estimate how ready your body is for the next session.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+
+                        // Factor breakdown
+                        ForEach(recovery.factors) { factor in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: factor.icon)
+                                        .font(.title3)
+                                        .foregroundStyle(factor.impactColor)
+                                        .frame(width: 28)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(factor.displayName)
+                                            .font(.subheadline.bold())
+                                        Text("Value: \(String(format: "%.1f", factor.value)) — Score: \(Int(factor.score))/100")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Text(factor.impact.capitalized)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(factor.impactColor)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(factor.impactColor.opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+
+                                // Score bar
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(Color.gray.opacity(0.15))
+                                            .frame(height: 6)
+
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(factor.impactColor)
+                                            .frame(width: geo.size.width * min(factor.score / 100, 1.0), height: 6)
+                                    }
+                                }
+                                .frame(height: 6)
+
+                                // Recommendation
+                                if let recommendation = factor.recommendation {
+                                    Text(recommendation)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.leading, 38)
+                                }
+                            }
+                            .padding()
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal)
+                        }
+                    }
+
+                    // Sleep deficit warning
+                    if let deficit = recovery.sleepDeficitHours, deficit > 0.5 {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sleep Deficit")
+                                    .font(.subheadline.bold())
+                                Text("You have a \(String(format: "%.1f", deficit))h sleep deficit. Prioritize rest to improve recovery.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(.orange.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal)
+                    }
+
+                    // Estimated full recovery
+                    if let hours = recovery.estimatedFullRecoveryHours {
+                        HStack(spacing: 10) {
+                            Image(systemName: "clock.fill")
+                                .foregroundStyle(.blue)
+                            Text("Estimated full recovery in ~\(hours) hours")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal)
+                    }
+
+                    // Primary recommendation
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recommendation")
+                            .font(.headline)
+                        Text(recovery.primaryRecommendation)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.primary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal)
+
+                    Spacer(minLength: 20)
+                }
+                .padding(.top)
+            }
+            .background(ThemedBackground())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Recovery Fuel Info Sheet
+
+struct RecoveryFuelInfoSheet: View {
+    let targets: ReadinessTargetsResponse
+    @Environment(\.dismiss) private var dismiss
+
+    private var fuelScore: Double {
+        guard targets.deficit.caloriesTarget > 0 else { return 0 }
+        let calPct = targets.deficit.caloriesConsumed / targets.deficit.caloriesTarget
+        let proPct = targets.deficit.proteinTargetG > 0
+            ? targets.deficit.proteinConsumedG / targets.deficit.proteinTargetG
+            : 1.0
+        return min((calPct + proPct) / 2.0 * 100, 100)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recovery Fuel Score")
+                                .font(.title2.bold())
+                            HStack(spacing: 6) {
+                                Image(systemName: targets.isTrainingDay ? "flame.fill" : "leaf.fill")
+                                    .foregroundStyle(targets.isTrainingDay ? .orange : .green)
+                                Text(targets.isTrainingDay ? "Training Day" : "Rest Day")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Text("\(Int(fuelScore))%")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(fuelScore >= 80 ? .green : fuelScore >= 50 ? .orange : .red)
+                    }
+                    .padding(.horizontal)
+
+                    Divider()
+
+                    // How is this calculated?
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("How is this calculated?")
+                            .font(.headline)
+
+                        Text("Your Recovery Fuel score measures how well today's nutrition covers your recovery-adjusted targets. It averages your calorie and protein progress toward daily goals that shift based on your readiness, sleep quality, and training load.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal)
+
+                    // Macro breakdown
+                    VStack(spacing: 12) {
+                        macroRow(
+                            label: "Calories",
+                            consumed: targets.deficit.caloriesConsumed,
+                            target: targets.deficit.caloriesTarget,
+                            unit: "kcal",
+                            color: .orange
+                        )
+                        macroRow(
+                            label: "Protein",
+                            consumed: targets.deficit.proteinConsumedG,
+                            target: targets.deficit.proteinTargetG,
+                            unit: "g",
+                            color: .blue
+                        )
+
+                        // Base vs adjusted comparison
+                        if targets.adjusted.calories != targets.base.calories {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .foregroundStyle(.secondary)
+                                Text("Base: \(Int(targets.base.calories)) kcal / \(Int(targets.base.proteinG))g protein")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text("Adjusted: \(Int(targets.adjusted.calories)) kcal / \(Int(targets.adjusted.proteinG))g")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding()
+                            .background(AppTheme.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .padding(.horizontal)
+                        }
+                    }
+
+                    // Adjustment reasons
+                    if !targets.adjustments.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Why targets differ today")
+                                .font(.headline)
+                                .padding(.horizontal)
+
+                            ForEach(targets.adjustments) { adj in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "arrow.up.right.circle.fill")
+                                        .foregroundStyle(AppTheme.primary)
+                                        .frame(width: 24)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(adj.adjustment)
+                                            .font(.subheadline.bold())
+                                        Text(adj.explanation)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding()
+                                .background(AppTheme.surface2)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+
+                    // Urgency status
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(targets.deficit.urgency == "critical" ? .red :
+                                  targets.deficit.urgency == "behind" ? .orange : .green)
+                            .frame(width: 10, height: 10)
+                        Text(targets.deficit.message)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal)
+
+                    Spacer(minLength: 20)
+                }
+                .padding(.top)
+            }
+            .background(ThemedBackground())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func macroRow(label: String, consumed: Double, target: Double, unit: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(label)
+                    .font(.subheadline.bold())
+                Spacer()
+                Text("\(Int(consumed)) / \(Int(target)) \(unit)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("(\(target > 0 ? Int(consumed / target * 100) : 0)%)")
+                    .font(.caption.bold())
+                    .foregroundStyle(color)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.gray.opacity(0.15))
+                        .frame(height: 8)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geo.size.width * min(target > 0 ? consumed / target : 0, 1.0), height: 8)
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding()
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal)
     }
 }
 

@@ -1144,7 +1144,7 @@ struct RPEInfoSheet: View {
                     .background(AppTheme.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                    Text("💡 Tip: Most working sets should be RPE 7-9. Leave RPE 10 for PR attempts.")
+                    Text("Tip: Most working sets should be RPE 7-9. Leave RPE 10 for PR attempts.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.top, 8)

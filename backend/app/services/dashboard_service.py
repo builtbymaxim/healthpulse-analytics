@@ -814,7 +814,7 @@ class DashboardService:
                 id=f"pr_{priority}",
                 category="workout",
                 priority=100,  # Low priority (celebration, not actionable)
-                title="New PR! 🎉",
+                title="New PR!",
                 message=f"You hit a new {pr['record_type']} on {pr['exercise_name']}!",
                 action_route=None,
             ))
