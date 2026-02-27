@@ -90,8 +90,6 @@ struct MainTabView: View {
                     .tag(AppTab.workout)
                 SleepView()
                     .tag(AppTab.sleep)
-                SocialView()
-                    .tag(AppTab.social)
                 ProfileView()
                     .tag(AppTab.profile)
             }

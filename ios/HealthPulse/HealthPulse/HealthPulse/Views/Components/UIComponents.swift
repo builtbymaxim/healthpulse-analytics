@@ -728,7 +728,6 @@ struct CustomTabBar: View {
         (.nutrition, "fork.knife", "Nutrition"),
         (.workout, "figure.run", "Workout"),
         (.sleep, "moon.zzz.fill", "Sleep"),
-        (.social, "person.2.fill", "Social"),
         (.profile, "person.fill", "Profile"),
     ]
 

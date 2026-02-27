@@ -13,8 +13,7 @@ enum AppTab: Int, CaseIterable {
     case nutrition = 1
     case workout = 2
     case sleep = 3
-    case social = 4
-    case profile = 5
+    case profile = 4
 }
 
 @MainActor

@@ -244,17 +244,6 @@ struct TodayView: View {
                 .padding(.horizontal)
         }
 
-        // Workout Streak
-        WorkoutStreakCard(
-            streakDays: viewModel.workoutStreak,
-            lastWorkoutDate: viewModel.lastWorkoutDate
-        )
-        .onTapGesture {
-            tabRouter.navigateTo(.workout)
-            HapticsManager.shared.light()
-        }
-        .padding(.horizontal)
-
         // Last Workout Performance
         if let lastWorkout = viewModel.lastWorkout {
             LastWorkoutCard(
@@ -265,6 +254,21 @@ struct TodayView: View {
                 tabRouter.navigateTo(.workout)
                 HapticsManager.shared.light()
             }
+            .padding(.horizontal)
+        }
+
+        // Social Rank (only when opted in and data available)
+        if let socialRank = viewModel.socialRankEntry {
+            NavigationLink {
+                SocialView()
+            } label: {
+                SocialRankCard(
+                    rank: socialRank.rank,
+                    streakValue: Int(socialRank.value),
+                    activePartners: viewModel.activePartnersCount
+                )
+            }
+            .buttonStyle(.plain)
             .padding(.horizontal)
         }
 
@@ -318,8 +322,6 @@ struct TodayView: View {
             tabRouter.navigateTo(.nutrition)
         case "sleep":
             tabRouter.navigateTo(.sleep)
-        case "social":
-            tabRouter.navigateTo(.social)
         default:
             break
         }
@@ -720,41 +722,37 @@ struct MacroBar: View {
     }
 }
 
-// MARK: - Workout Streak Card
+// MARK: - Social Rank Card
 
-struct WorkoutStreakCard: View {
-    let streakDays: Int
-    let lastWorkoutDate: Date?
+struct SocialRankCard: View {
+    let rank: Int
+    let streakValue: Int
+    let activePartners: Int
 
     var body: some View {
         HStack(spacing: 16) {
-            // Flame icon
             ZStack {
                 Circle()
-                    .fill(streakDays > 0 ? Color.orange.opacity(0.15) : Color.gray.opacity(0.1))
+                    .fill(AppTheme.primary.opacity(0.15))
                     .frame(width: 56, height: 56)
 
-                Image(systemName: streakDays > 0 ? "flame.fill" : "flame")
-                    .font(.title)
-                    .foregroundStyle(streakDays > 0 ? .orange : .gray)
+                Text("#\(rank)")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(AppTheme.primary)
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                if streakDays > 0 {
-                    Text("\(streakDays) Day Streak")
-                        .font(.headline)
+                Text("Social")
+                    .font(.headline)
 
-                    Text("Keep it going!")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Start Your Streak")
-                        .font(.headline)
-
-                    Text("Log a workout today")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Label("\(streakValue)d streak", systemImage: "flame.fill")
+                    if activePartners > 0 {
+                        Label("\(activePartners) partner\(activePartners == 1 ? "" : "s")", systemImage: "person.2.fill")
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -1120,6 +1118,11 @@ class TodayViewModel: ObservableObject {
     @Published var readinessTargets: ReadinessTargetsResponse?
     @Published var showDeficitFix = false
 
+    // Social (dashboard card)
+    @Published var socialRankEntry: LeaderboardEntry?
+    @Published var activePartnersCount: Int = 0
+    private var socialOptIn: Bool = false
+
     // Narrative dashboard data
     @Published var commitments: [CommitmentSlot] = []
     @Published var cardPriorityOrder: [PrioritizedCard] = []
@@ -1174,9 +1177,11 @@ class TodayViewModel: ObservableObject {
 
         _ = await (workoutTask, nutritionTask, weeklyNutritionTask, workoutsTask, sleepTask)
 
-        // Only load predictions/dashboard if not a new user (needs data)
+        // Load dashboard + social in parallel (both depend on profile)
         if !isNewUser {
-            await loadDashboardData()
+            async let dashboardTask: () = loadDashboardData()
+            async let socialTask: () = loadSocialData()
+            _ = await (dashboardTask, socialTask)
         }
 
         isLoading = false
@@ -1235,12 +1240,26 @@ class TodayViewModel: ObservableObject {
             let daysSinceCreation = calendar.dateComponents([.day], from: user.createdAt, to: Date()).day ?? 0
 
             displayName = user.displayName
+            socialOptIn = user.settings?.socialOptIn ?? false
             // User is "new" if account is < 7 days old
             isNewUser = daysSinceCreation < 7
         } catch {
             print("Failed to load user profile: \(error)")
             // Default to showing new user experience
             isNewUser = true
+        }
+    }
+
+    private func loadSocialData() async {
+        guard socialOptIn else { return }
+        do {
+            async let leaderboardTask = APIService.shared.getLeaderboard(category: "workout_streaks")
+            async let partnersTask = APIService.shared.getPartners()
+            let (leaderboard, partners) = try await (leaderboardTask, partnersTask)
+            socialRankEntry = leaderboard.first { $0.isCurrentUser }
+            activePartnersCount = partners.filter { $0.status == "active" }.count
+        } catch {
+            // Social card simply won't show
         }
     }
 

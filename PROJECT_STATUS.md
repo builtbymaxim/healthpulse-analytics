@@ -114,7 +114,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - Weekly summary (workouts, sleep, nutrition adherence)
 - Causal recovery card with inline annotation ("mainly because sleep was 5h 40m")
 - Progress section (key lifts, PRs, muscle balance)
-- Workout streak + last workout
+- Last workout performance card
+- Social rank card (when opted in) — shows leaderboard rank + active partners, pushes to SocialView
 - Nutrition adherence chart (7-day)
 - Quick stats (steps, sleep, resting HR)
 - Graceful fallback to static card order when narrative endpoint unavailable
@@ -240,7 +241,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `SleepView` | Sleep tracking + analytics |
 | `InsightsView` | AI insights + correlations |
 | `TrendsView` | Historical trend charts |
-| `SocialView` | Social tab (partners, invites, leaderboards) |
+| `SocialView` | Social features (partners, invites, leaderboards) — pushed from dashboard |
 | `RecipeLibraryView` | Recipe browsing, filtering, detail + quick-add |
 | `MealPlanBrowseView` | Meal plan templates, detail + shopping list |
 | `BarcodeScannerView` | Camera barcode scan + Open Food Facts lookup |
@@ -355,7 +356,7 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 - Partnership terms: both users agree on challenge type + duration before connecting
 - Challenge types: General, Strength, Consistency, Weight Loss
 - Duration options: 4 weeks, 8 weeks, 3 months, 6 months, ongoing
-- Social tab (5th tab): conditional display — only visible when user opts in
+- Social view: accessed via dashboard rank card (no dedicated tab)
 - Social opt-in during onboarding (step 11) + toggle in Profile settings
 - 4 Leaderboard categories among active partners:
   - Exercise PRs (per exercise, ranked by 1RM)
@@ -435,9 +436,12 @@ Audited the entire codebase across backend APIs, iOS services, and iOS views. Fo
 | Silent backend exceptions: added `logger.warning/exception` in predictions, nutrition, dashboard, meal plan services | MEDIUM Quality |
 | OAuth buttons → "Coming Soon" labels for Strava/Garmin/Oura/Whoop | LOW UX |
 
-### Social Tab Navigation Fix
-- Social OFF: Dashboard, Nutrition, Workout, Sleep, Profile (5 tabs)
-- Social ON: Dashboard, Nutrition, Workout, Sleep, Social, Profile (6 tabs)
+### Social Tab → Dashboard Card Consolidation
+- Removed Social from tab bar — now 5 tabs: Dashboard, Nutrition, Workout, Sleep, Profile
+- Removed WorkoutStreakCard from dashboard (redundant with Last Workout card)
+- Added SocialRankCard on dashboard (visible when social opted in): shows workout streak rank + active partners count
+- Tapping SocialRankCard pushes SocialView via NavigationStack (single back arrow, no double-navigation confusion)
+- Social hidden entirely from dashboard when opted out
 
 ### Phase 12 — AI Food Scanner (Hybrid CoreML + Cloud Vision)
 - **On-device classification:** CoreML Food-101 model for instant local classification

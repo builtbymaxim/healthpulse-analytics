@@ -834,15 +834,6 @@ struct DashboardCardRouter: View {
                     HapticsManager.shared.light()
                 }
             }
-        case "streak":
-            WorkoutStreakCard(
-                streakDays: viewModel.workoutStreak,
-                lastWorkoutDate: viewModel.lastWorkoutDate
-            )
-            .onTapGesture {
-                tabRouter.navigateTo(.workout)
-                HapticsManager.shared.light()
-            }
         case "progress":
             if let progress = viewModel.progressSummary {
                 ProgressDashboardSection(progress: progress)
