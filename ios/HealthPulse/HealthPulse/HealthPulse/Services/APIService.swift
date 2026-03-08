@@ -902,6 +902,18 @@ class APIService {
         return try await request(endpoint: "/training-plans/suggestions", method: "POST", body: body)
     }
 
+    // MARK: - Weight Tracking
+
+    func getWeightSummary(days: Int = 30) async throws -> WeightSummaryResponse {
+        try await request(endpoint: "/metrics/weight-summary?days=\(days)")
+    }
+
+    // MARK: - Review
+
+    func getReview(period: String) async throws -> ReviewResponse {
+        try await request(endpoint: "/predictions/review?period=\(period)")
+    }
+
     // MARK: - Social
 
     func createInviteCode() async throws -> InviteCode {

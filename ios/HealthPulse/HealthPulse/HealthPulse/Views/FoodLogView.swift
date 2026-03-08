@@ -29,6 +29,7 @@ struct FoodLogView: View {
 
     @State private var isSaving = false
     @State private var error: String?
+    @State private var showSaveError = false
 
     // Food search
     @State private var searchQuery = ""
@@ -308,14 +309,6 @@ struct FoodLogView: View {
                     }
                     .padding(.horizontal)
 
-                    // Error message
-                    if let error = error {
-                        Text(error)
-                            .foregroundStyle(.red)
-                            .font(.caption)
-                            .padding(.horizontal)
-                    }
-
                     // Save Button
                     Button {
                         Task { await saveEntry() }
@@ -357,6 +350,11 @@ struct FoodLogView: View {
                     dismiss()
                 })
             }
+            .alert("Could not save", isPresented: $showSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(error ?? "An unknown error occurred. Please try again.")
+            }
         }
     }
 
@@ -372,6 +370,7 @@ struct FoodLogView: View {
             await MainActor.run {
                 searchResults = []
                 isSearching = false
+                ToastManager.shared.error("Search failed. Check your connection.")
             }
         }
     }
@@ -451,6 +450,7 @@ struct FoodLogView: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+            self.showSaveError = true
             HapticsManager.shared.error()
         }
 

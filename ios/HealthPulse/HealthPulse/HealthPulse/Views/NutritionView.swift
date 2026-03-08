@@ -30,6 +30,13 @@ struct NutritionView: View {
                             .frame(maxWidth: .infinity, minHeight: 200)
                     } else if let error = error {
                         ErrorView(message: error, retryAction: loadData)
+                    } else if summary == nil {
+                        EmptyStateView(
+                            icon: "fork.knife",
+                            title: "No Nutrition Data",
+                            message: "Log your first meal to start tracking your daily nutrition.",
+                            actionTitle: "Log Food"
+                        ) { showingFoodLog = true }
                     } else if let summary = summary {
                         // Calorie Progress Ring
                         CalorieProgressCard(summary: summary, animationTrigger: animationTrigger)
@@ -133,6 +140,7 @@ struct NutritionView: View {
                         await loadData()
                         animationTrigger.toggle()
                         HapticsManager.shared.success()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 }
             }
@@ -141,6 +149,7 @@ struct NutritionView: View {
                     Task {
                         await loadData()
                         animationTrigger.toggle()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 })
             }
@@ -149,6 +158,7 @@ struct NutritionView: View {
                     Task {
                         await loadData()
                         animationTrigger.toggle()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 })
             }
@@ -160,6 +170,7 @@ struct NutritionView: View {
                     Task {
                         await loadData()
                         animationTrigger.toggle()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 })
             }
@@ -168,6 +179,7 @@ struct NutritionView: View {
                     Task {
                         await loadData()
                         animationTrigger.toggle()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 })
             }
@@ -177,6 +189,7 @@ struct NutritionView: View {
                         await loadData()
                         animationTrigger.toggle()
                         HapticsManager.shared.success()
+                        NotificationCenter.default.post(name: .foodLogged, object: nil)
                     }
                 }
             }

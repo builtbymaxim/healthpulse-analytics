@@ -380,6 +380,7 @@ struct Correlation: Codable {
 struct TodayWorkoutResponse: Codable {
     let hasPlan: Bool
     let isRestDay: Bool
+    let isCompleted: Bool?
     let workoutName: String?
     let workoutFocus: String?
     let exercises: [PlannedExercise]?
@@ -391,6 +392,7 @@ struct TodayWorkoutResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case hasPlan = "has_plan"
         case isRestDay = "is_rest_day"
+        case isCompleted = "is_completed"
         case workoutName = "workout_name"
         case workoutFocus = "workout_focus"
         case exercises
@@ -667,6 +669,72 @@ struct ProgressPoint: Codable, Identifiable {
     }
 }
 
+// MARK: - Weight Tracking
+
+struct WeightEntry: Codable, Identifiable {
+    var id: String { date }
+    let date: String
+    let value: Double
+}
+
+struct WeightSummaryResponse: Codable {
+    let entries: [WeightEntry]
+    let current: Double?
+    let goal: Double?
+    let trendDirection: String?
+    let weeklyAvg: Double?
+    let changeFromStart: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case entries, current, goal
+        case trendDirection = "trend_direction"
+        case weeklyAvg = "weekly_avg"
+        case changeFromStart = "change_from_start"
+    }
+}
+
+// MARK: - Review
+
+struct ReviewResponse: Codable {
+    let period: String
+    let startDate: String
+    let endDate: String
+    let workoutsCompleted: Int
+    let workoutsPlanned: Int
+    let totalVolume: Double
+    let volumeChangePct: Double
+    let prs: [[String: AnyCodable]]
+    let nutritionAdherencePct: Double
+    let avgCalories: Double
+    let avgProtein: Double
+    let avgSleepHours: Double
+    let sleepConsistency: Double
+    let weightStart: Double?
+    let weightEnd: Double?
+    let weightChange: Double?
+    let highlights: [String]
+    let overallScore: Double
+
+    enum CodingKeys: String, CodingKey {
+        case period, prs, highlights
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case workoutsCompleted = "workouts_completed"
+        case workoutsPlanned = "workouts_planned"
+        case totalVolume = "total_volume"
+        case volumeChangePct = "volume_change_pct"
+        case nutritionAdherencePct = "nutrition_adherence_pct"
+        case avgCalories = "avg_calories"
+        case avgProtein = "avg_protein"
+        case avgSleepHours = "avg_sleep_hours"
+        case sleepConsistency = "sleep_consistency"
+        case weightStart = "weight_start"
+        case weightEnd = "weight_end"
+        case weightChange = "weight_change"
+        case overallScore = "overall_score"
+    }
+}
+
 // MARK: - Smart Dashboard
 
 struct DashboardResponse: Codable {
@@ -937,13 +1005,14 @@ struct CommitmentSlot: Codable, Identifiable {
 struct DailyAction: Codable, Identifiable {
     let id: String
     let title: String
+    let prompt: String?
     let icon: String
     let actionRoute: String
     let isCompleted: Bool
     let priority: Int
 
     enum CodingKeys: String, CodingKey {
-        case id, title, icon, priority
+        case id, title, prompt, icon, priority
         case actionRoute = "action_route"
         case isCompleted = "is_completed"
     }

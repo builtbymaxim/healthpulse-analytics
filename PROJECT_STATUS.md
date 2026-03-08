@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-02-27
+> Last updated: 2026-03-01
 
 ## Overview
 
@@ -703,6 +703,66 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 
 ---
 
+### Dashboard Overhaul (7-Issue Fix)
+
+**Milestone:** Comprehensive dashboard redesign addressing performance, consistency, interactivity, and missing views. Reduced load times, eliminated card flickering, added animated action cards, and introduced three new views.
+
+#### Performance Optimization
+- **Backend query batching:** Reduced health_metrics queries from 5→1 in `get_recovery_prediction()` and 4→1 in `get_readiness_prediction()` via new `_get_latest_metrics_batch()` method
+- **Training plan query deduplication:** `_get_active_plan_schedule()` with per-request cache replaces duplicate queries from `_get_planned_workouts_count()` and `_get_todays_planned_workout()`
+- **Parallel dashboard sections:** 4 independent sections in `get_dashboard()` now run via `asyncio.gather()` with `return_exceptions=True`
+- **Cache-Control headers:** Narrative dashboard endpoint returns `Cache-Control: private, max-age=120, stale-while-revalidate=300`
+- **iOS parallel loading:** `loadUserProfile()` moved into first parallel group alongside workout/nutrition/sleep loads
+
+#### Dashboard Consistency Fixes
+- **Eliminated card flickering:** Removed data reset at top of `loadDashboardData()` — old values stay visible during load; narrative fields only cleared on actual legacy fallback
+- **Smooth card transitions:** `withAnimation(MotionTokens.entrance)` around state updates; `.transition(.opacity.combined(with: .move(edge: .top)))` on ReadinessHeader and CommitmentStrip
+- **Stale-while-revalidate:** Dashboard keeps existing data on total network failure rather than showing blank cards
+
+#### Cross-Tab Data Sync
+- **NotificationCenter signals:** `.foodLogged`, `.workoutCompleted`, `.weightLogged`, `.metricLogged` posted from NutritionView, WorkoutTabView, LogView
+- **Targeted reload:** TodayViewModel subscribes to these notifications and triggers section-specific reloads (not full `loadData()`)
+- **Automatic dashboard refresh:** Logging food/completing workouts/weighing in other tabs automatically updates the dashboard
+
+#### Animated Action Cards (Issue 3)
+- **Backend:** Enhanced `_build_daily_actions()` with individual meal tracking (breakfast, lunch, snack, dinner), motivational prompts, time-aware priority sequencing
+- **iOS:** New `ActionCardCarousel.swift` — shows one action at a time with asymmetric slide transitions, progress dots, and "All caught up!" completion card
+- **Workout completion detection:** `TodayWorkoutResponse.isCompleted` field + backend query; Today's Workout card auto-hides when completed
+
+#### New Views
+- **PRDetailView** (`Views/PRDetailView.swift`): Line chart (Charts framework) showing exercise weight progression over 30/60/90 days, PR milestones with PointMark annotations, stats summary. Accessible by tapping key lift cards in ProgressDashboardSection.
+- **WeightTrackingView** (`Views/WeightTrackingView.swift`): Quick-log section, line chart with goal weight RuleMark, trend analysis (7/30/90 day selector). New backend endpoint `GET /metrics/weight-summary`.
+- **ReviewView** (`Views/ReviewView.swift`): Weekly/monthly review with GlassCards for workouts, PRs, nutrition, sleep, weight, and overall score (ProgressRing). New backend endpoint `GET /predictions/review?period=weekly|monthly`.
+
+#### Navigation Enhancements
+- **TabRouter extensions:** `showWeightTracking`, `showWeeklyReview`, `showMonthlyReview` published vars with `openX()` methods
+- **Parameterized route support:** `navigateToRoute()` handles routes like `"nutrition?meal=breakfast"`, `"weight"`, `"weekly_review"`, `"monthly_review"`
+- **Horizontal scroll fix:** Added `.frame(maxWidth: .infinity)` to 3 unconstrained `ScrollView(.horizontal)` instances in DashboardComponents.swift
+
+#### TodayView Refactoring
+- **TodayView.swift:** 1624 → 375 lines (view + navigation helpers only)
+- **Extracted files:**
+  - `ViewModels/TodayViewModel.swift` (478 lines) — all data loading, state management, cross-tab listeners
+  - `DashboardCards/WelcomeChecklistCard.swift` (145 lines) — onboarding checklist
+  - `DashboardCards/TodayWorkoutCard.swift` (141 lines) — today's planned workout
+  - `DashboardCards/NutritionCards.swift` (194 lines) — nutrition progress + weekly adherence
+  - `DashboardCards/DashboardSkeletonView.swift` (64 lines) — shimmer loading skeleton
+  - `DashboardCards/StatCards.swift` (268 lines) — social rank, last workout, sleep, quick stats, compact scores
+
+#### New API Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/metrics/weight-summary?days=30` | Weight entries + trend + goal + weekly avg |
+| GET | `/predictions/review?period=weekly` | Comprehensive weekly/monthly review data |
+
+#### Bug Fixes
+- Horizontal scroll bug on dashboard (3 unconstrained ScrollViews)
+- Card flickering on pull-to-refresh (data reset before reload)
+- Workout completion not detected in daily actions
+- Stale dashboard data after logging in other tabs
+
+---
+
 ### Phase 13 — Experiment Tracks & Silent Correlation Feed
 
 **Milestone:** Transform the existing correlation engine from a passive insight display into a
@@ -878,8 +938,11 @@ healthpulse-analytics/
 ├── ios/
 │   └── HealthPulse/HealthPulse/HealthPulse/
 │       ├── HealthPulseApp.swift  # App entry point
-│       ├── Views/               # All SwiftUI views (24 files)
-│       ├── Services/            # API, Auth, HealthKit, Keychain, etc.
+│       ├── Views/               # All SwiftUI views (30+ files)
+│       │   ├── DashboardCards/  # Extracted dashboard card components
+│       │   └── Components/      # Reusable UI components (AppTheme, GlassCard, etc.)
+│       ├── ViewModels/          # TodayViewModel (extracted from TodayView)
+│       ├── Services/            # API, Auth, HealthKit, Keychain, TabRouter, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities
 ├── docs/

@@ -19,62 +19,46 @@ class PredictionService:
         self.predictor = get_predictor()
         self.supabase = get_supabase_client()
 
+    def _get_latest_metrics_batch(self, user_id: UUID, metric_types: list[str], since: str | None = None) -> dict[str, dict]:
+        """Fetch latest value for multiple metric types in one query.
+
+        Returns dict keyed by metric_type with the latest row for each.
+        """
+        query = (
+            self.supabase.table("health_metrics")
+            .select("*")
+            .eq("user_id", str(user_id))
+            .in_("metric_type", metric_types)
+            .order("timestamp", desc=True)
+        )
+        if since:
+            query = query.gte("timestamp", since)
+        result = query.limit(len(metric_types) * 3).execute()  # fetch enough rows
+
+        # Keep only the latest per metric_type
+        latest: dict[str, dict] = {}
+        for row in result.data or []:
+            mt = row["metric_type"]
+            if mt not in latest:
+                latest[mt] = row
+        return latest
+
     async def get_recovery_prediction(self, user_id: UUID) -> RecoveryResult:
         """Get recovery score for a user based on their recent data."""
         logger.debug("Generating recovery prediction for user %s", user_id)
-        # Fetch recent metrics
         today = date.today()
         week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
 
-        # Get latest sleep data
-        sleep_data = (
-            self.supabase.table("health_metrics")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep_duration")
-            .gte("timestamp", week_ago.isoformat())
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
+        # Batch fetch all health metrics — use 30-day window so users who
+        # haven't logged recently still get their most recent data
+        metrics = self._get_latest_metrics_batch(
+            user_id,
+            ["sleep_duration", "hrv", "resting_hr", "stress", "sleep_quality"],
+            since=month_ago.isoformat(),
         )
 
-        # Get latest HRV data
-        hrv_data = (
-            self.supabase.table("health_metrics")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "hrv")
-            .gte("timestamp", week_ago.isoformat())
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-
-        # Get latest resting HR
-        rhr_data = (
-            self.supabase.table("health_metrics")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "resting_hr")
-            .gte("timestamp", week_ago.isoformat())
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-
-        # Get latest stress level
-        stress_data = (
-            self.supabase.table("health_metrics")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "stress")
-            .gte("timestamp", week_ago.isoformat())
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-
-        # Calculate 7-day training load from workouts
+        # Calculate 7-day training load from workouts (keep 7-day window for load)
         workouts = (
             self.supabase.table("workouts")
             .select("training_load")
@@ -94,37 +78,13 @@ class PredictionService:
             .execute()
         )
 
-        # Extract values with defaults
-        sleep_hours = 7.0
-        sleep_quality = 70.0
-        hrv = None
-        resting_hr = None
-        stress_level = 5.0
-
-        if sleep_data.data:
-            sleep_hours = sleep_data.data[0].get("value", 7.0)
-
-        # Get sleep quality separately
-        sleep_quality_data = (
-            self.supabase.table("health_metrics")
-            .select("value")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep_quality")
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if sleep_quality_data.data:
-            sleep_quality = sleep_quality_data.data[0].get("value", 70.0)
-
-        if hrv_data.data:
-            hrv = hrv_data.data[0].get("value")
-
-        if rhr_data.data:
-            resting_hr = rhr_data.data[0].get("value")
-
-        if stress_data.data:
-            stress_level = stress_data.data[0].get("value", 5.0)
+        # Extract values — optional metrics default to None so the model
+        # skips them rather than using fake data for missing entries
+        sleep_hours = metrics.get("sleep_duration", {}).get("value", 7.0)
+        sleep_quality = metrics.get("sleep_quality", {}).get("value")  # None if missing
+        hrv = metrics.get("hrv", {}).get("value") if "hrv" in metrics else None
+        resting_hr = metrics.get("resting_hr", {}).get("value") if "resting_hr" in metrics else None
+        stress_level = metrics.get("stress", {}).get("value")  # None if missing
 
         # Get baselines from profile settings or use defaults
         hrv_baseline = 50.0
@@ -151,30 +111,15 @@ class PredictionService:
         # First get recovery score
         recovery = await self.get_recovery_prediction(user_id)
 
-        # Get latest sleep quality
-        sleep_data = (
-            self.supabase.table("health_metrics")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep_duration")
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
+        # Batch fetch readiness-specific metrics in ONE query (was 4 separate)
+        metrics = self._get_latest_metrics_batch(
+            user_id,
+            ["sleep_quality", "energy_level", "soreness"],
         )
 
-        sleep_quality = 70.0
-        # Get sleep quality as separate metric
-        sleep_quality_data = (
-            self.supabase.table("health_metrics")
-            .select("value")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "sleep_quality")
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if sleep_quality_data.data:
-            sleep_quality = sleep_quality_data.data[0].get("value", 70.0)
+        sleep_quality = metrics.get("sleep_quality", {}).get("value")   # None if missing
+        energy_level = metrics.get("energy_level", {}).get("value")     # None if missing
+        muscle_soreness = metrics.get("soreness", {}).get("value")      # None if missing
 
         # Find days since last hard workout
         hard_workouts = (
@@ -191,30 +136,6 @@ class PredictionService:
         if hard_workouts.data:
             last_hard = datetime.fromisoformat(hard_workouts.data[0]["start_time"].replace("Z", "+00:00"))
             days_since_hard = (datetime.now(last_hard.tzinfo) - last_hard).days
-
-        # Get energy and soreness from daily scores or metrics
-        energy_data = (
-            self.supabase.table("health_metrics")
-            .select("value")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "energy_level")
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-
-        soreness_data = (
-            self.supabase.table("health_metrics")
-            .select("value")
-            .eq("user_id", str(user_id))
-            .eq("metric_type", "soreness")
-            .order("timestamp", desc=True)
-            .limit(1)
-            .execute()
-        )
-
-        energy_level = energy_data.data[0]["value"] if energy_data.data else 7.0
-        muscle_soreness = soreness_data.data[0]["value"] if soreness_data.data else 3.0
 
         return self.predictor.calculate_readiness_score(
             recovery_score=recovery["score"],

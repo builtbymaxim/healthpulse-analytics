@@ -479,6 +479,11 @@ struct MetricLogView: View {
                     isSubmitting = false
                     showSuccess = true
                     HapticsManager.shared.success()
+                    if metricType == .weight {
+                        NotificationCenter.default.post(name: .weightLogged, object: nil)
+                    } else {
+                        NotificationCenter.default.post(name: .metricLogged, object: nil)
+                    }
                 }
             } catch {
                 await MainActor.run {

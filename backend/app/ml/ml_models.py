@@ -78,11 +78,11 @@ class FitnessPredictor:
     def calculate_recovery_score(
         self,
         sleep_hours: float = 7.0,
-        sleep_quality: float = 70.0,
+        sleep_quality: float | None = None,
         hrv: float | None = None,
         resting_hr: float | None = None,
         training_load_7d: float = 0.0,
-        stress_level: float = 5.0,
+        stress_level: float | None = None,
         hrv_baseline: float = 50.0,
         rhr_baseline: float = 60.0,
     ) -> RecoveryResult:
@@ -122,8 +122,8 @@ class FitnessPredictor:
             weighted_score += sleep_hrs_score * self.RECOVERY_WEIGHTS["sleep_hours"]
             weights_used += self.RECOVERY_WEIGHTS["sleep_hours"]
 
-        # Sleep quality component
-        if sleep_quality > 0:
+        # Sleep quality component (skip if no data — don't assume 70)
+        if sleep_quality is not None and sleep_quality > 0:
             factors["sleep_quality"] = {
                 "value": sleep_quality,
                 "score": sleep_quality,
@@ -176,15 +176,16 @@ class FitnessPredictor:
             weighted_score += load_score * self.RECOVERY_WEIGHTS["training_load_7d"]
             weights_used += self.RECOVERY_WEIGHTS["training_load_7d"]
 
-        # Stress component (lower is better)
-        stress_score = max(0, (10 - stress_level) / 10 * 100)
-        factors["stress"] = {
-            "value": stress_level,
-            "score": stress_score,
-            "impact": "positive" if stress_level <= 4 else "negative"
-        }
-        weighted_score += stress_score * self.RECOVERY_WEIGHTS["stress"]
-        weights_used += self.RECOVERY_WEIGHTS["stress"]
+        # Stress component (skip if no data — don't assume moderate stress)
+        if stress_level is not None:
+            stress_score = max(0, (10 - stress_level) / 10 * 100)
+            factors["stress"] = {
+                "value": stress_level,
+                "score": stress_score,
+                "impact": "positive" if stress_level <= 4 else "negative"
+            }
+            weighted_score += stress_score * self.RECOVERY_WEIGHTS["stress"]
+            weights_used += self.RECOVERY_WEIGHTS["stress"]
 
         # Calculate final score
         if weights_used > 0:
@@ -260,10 +261,10 @@ class FitnessPredictor:
     def calculate_readiness_score(
         self,
         recovery_score: float = 70.0,
-        sleep_quality: float = 70.0,
+        sleep_quality: float | None = None,
         days_since_hard_workout: int = 2,
-        energy_level: float = 7.0,
-        muscle_soreness: float = 3.0,
+        energy_level: float | None = None,
+        muscle_soreness: float | None = None,
     ) -> ReadinessResult:
         """Calculate training readiness score (0-100).
 
@@ -278,22 +279,29 @@ class FitnessPredictor:
             ReadinessResult with score, confidence, intensity recommendation, factors
         """
         factors = {}
+        weights_used = 0.0
+        weighted_score = 0.0
 
-        # Recovery score component
+        # Recovery score component (always present)
         factors["recovery"] = {
             "value": recovery_score,
             "score": recovery_score,
             "impact": "positive" if recovery_score > 70 else "negative"
         }
+        weighted_score += recovery_score * self.READINESS_WEIGHTS["recovery_score"]
+        weights_used += self.READINESS_WEIGHTS["recovery_score"]
 
-        # Sleep quality component
-        factors["sleep"] = {
-            "value": sleep_quality,
-            "score": sleep_quality,
-            "impact": "positive" if sleep_quality > 70 else "negative"
-        }
+        # Sleep quality component (skip if no data)
+        if sleep_quality is not None:
+            factors["sleep"] = {
+                "value": sleep_quality,
+                "score": sleep_quality,
+                "impact": "positive" if sleep_quality > 70 else "negative"
+            }
+            weighted_score += sleep_quality * self.READINESS_WEIGHTS["sleep_quality"]
+            weights_used += self.READINESS_WEIGHTS["sleep_quality"]
 
-        # Days since hard workout (sweet spot: 1-3 days)
+        # Days since hard workout (sweet spot: 1-3 days — always computed)
         if days_since_hard_workout == 0:
             rest_score = 40  # Just trained hard
         elif 1 <= days_since_hard_workout <= 3:
@@ -308,31 +316,33 @@ class FitnessPredictor:
             "score": rest_score,
             "impact": "positive" if 1 <= days_since_hard_workout <= 3 else "neutral"
         }
+        weighted_score += rest_score * self.READINESS_WEIGHTS["days_since_hard_workout"]
+        weights_used += self.READINESS_WEIGHTS["days_since_hard_workout"]
 
-        # Energy level (scale 1-10 -> 0-100)
-        energy_score = (energy_level / 10) * 100
-        factors["energy"] = {
-            "value": energy_level,
-            "score": energy_score,
-            "impact": "positive" if energy_level >= 7 else "negative"
-        }
+        # Energy level (skip if no data)
+        if energy_level is not None:
+            energy_score = (energy_level / 10) * 100
+            factors["energy"] = {
+                "value": energy_level,
+                "score": energy_score,
+                "impact": "positive" if energy_level >= 7 else "negative"
+            }
+            weighted_score += energy_score * self.READINESS_WEIGHTS["energy_level"]
+            weights_used += self.READINESS_WEIGHTS["energy_level"]
 
-        # Muscle soreness (lower is better)
-        soreness_score = ((10 - muscle_soreness) / 10) * 100
-        factors["soreness"] = {
-            "value": muscle_soreness,
-            "score": soreness_score,
-            "impact": "positive" if muscle_soreness <= 4 else "negative"
-        }
+        # Muscle soreness (skip if no data)
+        if muscle_soreness is not None:
+            soreness_score = ((10 - muscle_soreness) / 10) * 100
+            factors["soreness"] = {
+                "value": muscle_soreness,
+                "score": soreness_score,
+                "impact": "positive" if muscle_soreness <= 4 else "negative"
+            }
+            weighted_score += soreness_score * self.READINESS_WEIGHTS["muscle_soreness"]
+            weights_used += self.READINESS_WEIGHTS["muscle_soreness"]
 
         # Calculate weighted score
-        score = (
-            factors["recovery"]["score"] * self.READINESS_WEIGHTS["recovery_score"] +
-            factors["sleep"]["score"] * self.READINESS_WEIGHTS["sleep_quality"] +
-            factors["rest_days"]["score"] * self.READINESS_WEIGHTS["days_since_hard_workout"] +
-            factors["energy"]["score"] * self.READINESS_WEIGHTS["energy_level"] +
-            factors["soreness"]["score"] * self.READINESS_WEIGHTS["muscle_soreness"]
-        )
+        score = weighted_score / weights_used if weights_used > 0 else 50.0
 
         # Determine recommended intensity
         if score >= 80:

@@ -6,6 +6,7 @@ and nutrition_service into a single composite response to reduce API calls.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, date, timedelta, timezone
 from uuid import UUID
@@ -133,10 +134,11 @@ class PrioritizedCard(BaseModel):
 
 class DailyAction(BaseModel):
     """A daily action item for the dashboard checklist."""
-    id: str                    # e.g. "log_workout", "track_meals"
+    id: str                    # e.g. "log_workout", "log_breakfast"
     title: str
+    prompt: str = ""           # motivational prompt for card carousel
     icon: str                  # SF Symbol name
-    action_route: str          # tab to navigate to
+    action_route: str          # tab/route to navigate to
     is_completed: bool
     priority: int
 
@@ -174,42 +176,53 @@ class DashboardService:
         self.nutrition_service = get_nutrition_service()
 
     async def get_dashboard(self, user_id: UUID) -> DashboardResponse:
-        """Get comprehensive dashboard data in a single call."""
-        # Each section is wrapped in try/except so partial failures
-        # don't crash the entire dashboard.
+        """Get comprehensive dashboard data in a single call.
 
-        try:
-            enhanced_recovery = await self._get_enhanced_recovery(user_id)
-        except Exception as e:
-            logger.warning("Dashboard: enhanced_recovery failed: %s", e)
+        Runs all four independent sections in parallel for performance.
+        Each section has its own fallback so partial failures don't crash
+        the entire dashboard.
+        """
+        results = await asyncio.gather(
+            self._get_enhanced_recovery(user_id),
+            self.prediction_service.get_readiness_prediction(user_id),
+            self._get_progress_summary(user_id),
+            self._get_weekly_summary(user_id),
+            return_exceptions=True,
+        )
+
+        # Unpack with per-section fallbacks
+        if isinstance(results[0], BaseException):
+            logger.warning("Dashboard: enhanced_recovery failed: %s", results[0])
             enhanced_recovery = EnhancedRecoveryResponse(
                 score=50, status="unknown", factors=[],
                 primary_recommendation="Unable to calculate recovery right now.",
             )
+        else:
+            enhanced_recovery = results[0]
 
-        try:
-            readiness = await self.prediction_service.get_readiness_prediction(user_id)
-        except Exception as e:
-            logger.warning("Dashboard: readiness failed: %s", e)
+        if isinstance(results[1], BaseException):
+            logger.warning("Dashboard: readiness failed: %s", results[1])
             readiness = {"score": 50, "recommended_intensity": "moderate"}
+        else:
+            readiness = results[1]
 
-        try:
-            progress = await self._get_progress_summary(user_id)
-        except Exception as e:
-            logger.warning("Dashboard: progress failed: %s", e)
+        if isinstance(results[2], BaseException):
+            logger.warning("Dashboard: progress failed: %s", results[2])
             progress = ProgressSummary(
                 key_lifts=[], total_volume_week=0, volume_trend_pct=0,
                 recent_prs=[], muscle_balance=[],
             )
+        else:
+            progress = results[2]
 
-        try:
-            weekly = await self._get_weekly_summary(user_id)
-        except Exception as e:
-            logger.warning("Dashboard: weekly_summary failed: %s", e)
+        if isinstance(results[3], BaseException):
+            logger.warning("Dashboard: weekly_summary failed: %s", results[3])
             weekly = WeeklySummary(
                 workouts_completed=0, workouts_planned=0, avg_sleep_score=0,
                 nutrition_adherence_pct=0, highlights=[],
             )
+        else:
+            weekly = results[3]
 
         recommendations = self._generate_recommendations(
             enhanced_recovery, readiness, progress, weekly
@@ -227,6 +240,8 @@ class DashboardService:
     async def get_narrative_dashboard(self, user_id: UUID) -> NarrativeDashboardResponse:
         """Get dashboard data with causal narrative and commitment slots."""
         logger.info("Building narrative dashboard for user %s", user_id)
+        # Clear per-request caches
+        self._plan_schedule_cache = {}
 
         # 1. Get base dashboard data (reuses existing logic)
         base = await self.get_dashboard(user_id)
@@ -956,8 +971,14 @@ class DashboardService:
 
         return lifts[:4]
 
-    async def _get_planned_workouts_count(self, user_id: UUID) -> int:
-        """Get number of planned workouts this week from active training plan."""
+    async def _get_active_plan_schedule(self, user_id: UUID) -> dict:
+        """Get the active training plan schedule (single query, reused for count + today's workout)."""
+        if not hasattr(self, "_plan_schedule_cache"):
+            self._plan_schedule_cache = {}
+        cache_key = str(user_id)
+        if cache_key in self._plan_schedule_cache:
+            return self._plan_schedule_cache[cache_key]
+
         result = (
             self.supabase.table("user_training_plans")
             .select("schedule")
@@ -966,12 +987,13 @@ class DashboardService:
             .limit(1)
             .execute()
         )
+        schedule = result.data[0].get("schedule", {}) if result.data else {}
+        self._plan_schedule_cache[cache_key] = schedule
+        return schedule
 
-        if not result.data:
-            return 0
-
-        schedule = result.data[0].get("schedule", {})
-        # Count non-null workout days
+    async def _get_planned_workouts_count(self, user_id: UUID) -> int:
+        """Get number of planned workouts this week from active training plan."""
+        schedule = await self._get_active_plan_schedule(user_id)
         return sum(1 for v in schedule.values() if v is not None)
 
     async def _get_nutrition_adherence(self, user_id: UUID, days: int) -> float:
@@ -996,19 +1018,9 @@ class DashboardService:
 
     async def _get_todays_planned_workout(self, user_id: UUID) -> str | None:
         """Get today's workout name from the active training plan, or None for rest day."""
-        result = (
-            self.supabase.table("user_training_plans")
-            .select("schedule")
-            .eq("user_id", str(user_id))
-            .eq("is_active", True)
-            .limit(1)
-            .execute()
-        )
-
-        if not result.data:
+        schedule = await self._get_active_plan_schedule(user_id)
+        if not schedule:
             return None
-
-        schedule = result.data[0].get("schedule", {})
         # ISO weekday: 1=Mon ... 7=Sun
         iso_weekday = date.today().isoweekday()
         day_key = str(iso_weekday)
@@ -1028,53 +1040,36 @@ class DashboardService:
     async def _build_daily_actions(
         self, user_id: UUID, today_workout: str | None,
     ) -> list[DailyAction]:
-        """Build daily action items based on what the user has/hasn't done today."""
+        """Build daily action items with motivational prompts and time-aware sequencing."""
         actions: list[DailyAction] = []
         today_str = date.today().isoformat()
-
-        # 1. Log workout (if today is a workout day)
         tomorrow_str = (date.today() + timedelta(days=1)).isoformat()
-        if today_workout:
-            workout_result = (
-                self.supabase.table("workout_sessions")
-                .select("id")
-                .eq("user_id", str(user_id))
-                .gte("started_at", today_str + "T00:00:00")
-                .lt("started_at", tomorrow_str + "T00:00:00")
-                .limit(1)
-                .execute()
-            )
-            has_workout = bool(workout_result.data)
-            actions.append(DailyAction(
-                id="log_workout",
-                title=f"Complete {today_workout}",
-                icon="dumbbell.fill",
-                action_route="workout",
-                is_completed=has_workout,
-                priority=1,
-            ))
+        hour = datetime.now(timezone.utc).hour  # UTC, adjust if needed
 
-        # 2. Track meals
+        # Fetch today's food entries (one query for all meal checks)
         food_result = (
             self.supabase.table("food_entries")
-            .select("id")
+            .select("meal_type")
             .eq("user_id", str(user_id))
             .gte("logged_at", today_str + "T00:00:00")
             .lt("logged_at", tomorrow_str + "T00:00:00")
+            .execute()
+        )
+        logged_meals = {row["meal_type"] for row in (food_result.data or [])}
+
+        # Fetch today's workout sessions (one query)
+        workout_result = (
+            self.supabase.table("workout_sessions")
+            .select("id")
+            .eq("user_id", str(user_id))
+            .gte("started_at", today_str + "T00:00:00")
+            .lt("started_at", tomorrow_str + "T00:00:00")
             .limit(1)
             .execute()
         )
-        has_meals = bool(food_result.data)
-        actions.append(DailyAction(
-            id="track_meals",
-            title="Track your meals",
-            icon="fork.knife",
-            action_route="nutrition",
-            is_completed=has_meals,
-            priority=2,
-        ))
+        has_workout = bool(workout_result.data)
 
-        # 3. Weigh in (check if weight logged this week)
+        # Fetch weight this week (one query)
         week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
         weight_result = (
             self.supabase.table("health_metrics")
@@ -1086,28 +1081,98 @@ class DashboardService:
             .execute()
         )
         has_weight = bool(weight_result.data)
+
+        # Build individual meal actions
+        actions.append(DailyAction(
+            id="log_breakfast",
+            title="Log breakfast",
+            prompt="What did the champ start the day with?",
+            icon="sunrise.fill",
+            action_route="nutrition?meal=breakfast",
+            is_completed="breakfast" in logged_meals,
+            priority=10,
+        ))
+
+        # Workout action (if training day)
+        if today_workout:
+            actions.append(DailyAction(
+                id="log_workout",
+                title=f"Complete {today_workout}",
+                prompt="Time to crush it — today's session is waiting",
+                icon="dumbbell.fill",
+                action_route="workout",
+                is_completed=has_workout,
+                priority=20,
+            ))
+
+        actions.append(DailyAction(
+            id="log_lunch",
+            title="Log lunch",
+            prompt="Fuel up — what's on the plate?",
+            icon="sun.max.fill",
+            action_route="nutrition?meal=lunch",
+            is_completed="lunch" in logged_meals,
+            priority=30,
+        ))
+
+        actions.append(DailyAction(
+            id="log_snack",
+            title="Log snacks",
+            prompt="Smart snack time — keep those macros on track",
+            icon="leaf.fill",
+            action_route="nutrition?meal=snack",
+            is_completed="snack" in logged_meals,
+            priority=40,
+        ))
+
+        actions.append(DailyAction(
+            id="log_dinner",
+            title="Log dinner",
+            prompt="Last big meal — finish strong",
+            icon="moon.stars.fill",
+            action_route="nutrition?meal=dinner",
+            is_completed="dinner" in logged_meals,
+            priority=50,
+        ))
+
+        # Weight check
         actions.append(DailyAction(
             id="weigh_in",
             title="Log your weight",
+            prompt="Quick check-in — step on the scale",
             icon="scalemass.fill",
-            action_route="profile",
+            action_route="weight",
             is_completed=has_weight,
-            priority=3,
+            priority=60,
         ))
 
-        # 4. Weekly review prompt (Sunday or Monday)
+        # Weekly review prompt (Sunday or Monday)
         weekday = date.today().weekday()  # 0=Mon, 6=Sun
         if weekday in (0, 6):
             actions.append(DailyAction(
                 id="weekly_review",
                 title="Check your weekly review",
+                prompt="See how you crushed it this week",
                 icon="chart.bar.doc.horizontal",
-                action_route="workout",
-                is_completed=False,  # No tracking for this yet
-                priority=4,
+                action_route="weekly_review",
+                is_completed=False,
+                priority=70,
             ))
 
-        # Sort by priority
+        # Time-aware priority adjustment: bump currently-relevant actions to top
+        for action in actions:
+            if action.is_completed:
+                continue
+            if hour < 10 and action.id == "log_breakfast":
+                action.priority = 1
+            elif 10 <= hour < 14 and action.id in ("log_lunch", "log_workout"):
+                action.priority = 2 if action.id == "log_lunch" else 3
+            elif 14 <= hour < 18 and action.id in ("log_snack", "log_workout"):
+                action.priority = 2 if action.id == "log_snack" else 3
+            elif hour >= 18 and action.id in ("log_dinner", "weigh_in"):
+                action.priority = 1 if action.id == "log_dinner" else 2
+
+        # Sort: incomplete first (by priority), then completed
         actions.sort(key=lambda a: (a.is_completed, a.priority))
         return actions
 

@@ -1,5 +1,9 @@
 """HealthPulse API - Main FastAPI application."""
 
+import logging
+import sys
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -13,6 +17,25 @@ from app.api import account, auth, health, metrics, nutrition, predictions, user
 
 settings = get_settings()
 setup_logging(debug=settings.debug)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Validate required secrets on startup; crash fast if missing."""
+    missing = [
+        name for name, value in [
+            ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
+            ("JWT_SECRET", settings.jwt_secret),
+        ]
+        if not value
+    ]
+    if missing:
+        logger.critical("Missing required environment variables: %s", ", ".join(missing))
+        sys.exit(1)
+    logger.info("Startup checks passed.")
+    yield
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -21,6 +44,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     redirect_slashes=False,  # Prevent 307 redirects that lose auth headers
+    lifespan=lifespan,
 )
 
 # Rate limiting

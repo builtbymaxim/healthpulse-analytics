@@ -3,7 +3,10 @@
 from uuid import UUID, uuid4
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# ~3.75MB raw image → ~5MB base64 string
+_MAX_IMAGE_BASE64_LEN = 5 * 1024 * 1024
 
 
 class FoodScanRequest(BaseModel):
@@ -12,6 +15,13 @@ class FoodScanRequest(BaseModel):
     classification_hints: list[str] = Field(
         default=[], description="On-device CoreML classification labels"
     )
+
+    @field_validator("image_base64")
+    @classmethod
+    def check_image_size(cls, v: str) -> str:
+        if len(v) > _MAX_IMAGE_BASE64_LEN:
+            raise ValueError("Image too large. Maximum upload size is ~3.75MB.")
+        return v
 
 
 class ScannedFoodItem(BaseModel):

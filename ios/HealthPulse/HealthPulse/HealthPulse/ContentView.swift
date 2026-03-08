@@ -54,6 +54,9 @@ struct ContentView: View {
         .onChange(of: authService.isAuthenticated) { _, authenticated in
             if authenticated {
                 showGreeting = true
+                Task { await TodayViewModel.shared.loadData() }
+            } else {
+                TodayViewModel.shared.resetForLogout()
             }
         }
         .overlay(alignment: .top) {

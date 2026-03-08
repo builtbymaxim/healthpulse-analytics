@@ -53,6 +53,7 @@ class TodayWorkoutResponse(BaseModel):
     """Today's planned workout."""
     has_plan: bool
     is_rest_day: bool
+    is_completed: bool = False
     workout_name: str | None = None
     workout_focus: str | None = None
     exercises: list[dict] | None = None
@@ -111,11 +112,25 @@ async def get_todays_workout(
 
     plan_id = plan.get("id")
 
+    # Check if workout was already completed today
+    tomorrow = today + timedelta(days=1)
+    completion_result = (
+        supabase.table("workout_sessions")
+        .select("id")
+        .eq("user_id", str(current_user.id))
+        .gte("started_at", today.isoformat() + "T00:00:00")
+        .lt("started_at", tomorrow.isoformat() + "T00:00:00")
+        .limit(1)
+        .execute()
+    )
+    is_completed = bool(completion_result.data)
+
     if not workout_name:
         # Rest day
         return TodayWorkoutResponse(
             has_plan=True,
             is_rest_day=True,
+            is_completed=is_completed,
             day_of_week=day_of_week,
             plan_name=plan.get("name"),
             plan_id=plan_id,
@@ -132,6 +147,7 @@ async def get_todays_workout(
     return TodayWorkoutResponse(
         has_plan=True,
         is_rest_day=False,
+        is_completed=is_completed,
         workout_name=workout_name,
         workout_focus=workout_details.get("focus") if workout_details else None,
         exercises=workout_details.get("exercises") if workout_details else None,

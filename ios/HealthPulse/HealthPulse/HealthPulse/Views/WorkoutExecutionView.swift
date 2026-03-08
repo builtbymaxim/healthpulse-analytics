@@ -768,8 +768,9 @@ class WorkoutExecutionViewModel: ObservableObject {
     func startTimer() {
         isTimerRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.elapsedTime = Date().timeIntervalSince(self?.startTime ?? Date())
+            guard let self else { return }
+            Task { @MainActor [self] in
+                self.elapsedTime = Date().timeIntervalSince(self.startTime)
             }
         }
     }
@@ -1344,6 +1345,7 @@ struct AddExerciseSheet: View {
     let mockWorkout = TodayWorkoutResponse(
         hasPlan: true,
         isRestDay: false,
+        isCompleted: false,
         workoutName: "Upper Body A",
         workoutFocus: "Chest Focus",
         exercises: [

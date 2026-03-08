@@ -22,6 +22,7 @@ struct WorkoutTabView: View {
     @State private var hasActivePlan = false
     @State private var selectedWorkout: Workout?
     @State private var isLoadingDetail = false
+    @State private var loadError: String?
 
     var body: some View {
         NavigationStack {
@@ -92,23 +93,19 @@ struct WorkoutTabView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderLabel(text: "Recent Workouts")
 
-                        if unifiedWorkouts.isEmpty {
-                            // Empty state
-                            VStack(spacing: 12) {
-                                Image(systemName: "figure.run.circle")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(.secondary)
-
-                                Text("No workouts yet")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                Text("Start your first workout above!")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
+                        if let err = loadError {
+                            EmptyStateView(
+                                icon: "exclamationmark.triangle",
+                                title: "Could Not Load Workouts",
+                                message: err,
+                                actionTitle: "Retry"
+                            ) { loadError = nil; loadRecentWorkouts() }
+                        } else if unifiedWorkouts.isEmpty {
+                            EmptyStateView(
+                                icon: "figure.run.circle",
+                                title: "No Workouts Yet",
+                                message: "Start your first workout using the Quick Start options above."
+                            )
                         } else {
                             ForEach(unifiedWorkouts.prefix(8)) { entry in
                                 Button {
@@ -151,6 +148,7 @@ struct WorkoutTabView: View {
                         Task {
                             await loadTodaysWorkout()
                             loadRecentWorkouts()
+                            NotificationCenter.default.post(name: .workoutCompleted, object: nil)
                         }
                     }
                 }
@@ -177,25 +175,24 @@ struct WorkoutTabView: View {
                         await MainActor.run {
                             loadRecentWorkouts()
                         }
+                        NotificationCenter.default.post(name: .workoutCompleted, object: nil)
                     }
                 }
             }
             .sheet(isPresented: $showRunningSheet) {
                 RunningWorkoutView { workout in
                     ToastManager.shared.success("Run logged!")
-                    // Optimistically add to local state immediately
                     recentWorkouts.insert(workout, at: 0)
-                    // Then sync with API in background
                     loadRecentWorkouts()
+                    NotificationCenter.default.post(name: .workoutCompleted, object: nil)
                 }
             }
             .sheet(isPresented: $showGeneralWorkout) {
                 GeneralWorkoutSheet(initialType: selectedWorkoutType) { workout in
                     ToastManager.shared.success("Workout logged!")
-                    // Optimistically add to local state immediately
                     recentWorkouts.insert(workout, at: 0)
-                    // Then sync with API in background
                     loadRecentWorkouts()
+                    NotificationCenter.default.post(name: .workoutCompleted, object: nil)
                 }
             }
             .task {
@@ -238,6 +235,7 @@ struct WorkoutTabView: View {
                 unifiedWorkouts = try await unified
             } catch {
                 print("Failed to load workouts: \(error)")
+                loadError = "Failed to load workouts. Check your connection."
             }
         }
     }
@@ -308,15 +306,16 @@ struct TodayPlanWorkoutCard: View {
                 }
             } else {
                 // Workout day
+                let completed = workout.isCompleted == true
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 16) {
                         ZStack {
                             Circle()
-                                .fill(AppTheme.primary.opacity(0.15))
+                                .fill(completed ? Color.green.opacity(0.15) : AppTheme.primary.opacity(0.15))
                                 .frame(width: 60, height: 60)
-                            Image(systemName: "dumbbell.fill")
+                            Image(systemName: completed ? "checkmark" : "dumbbell.fill")
                                 .font(.title2)
-                                .foregroundStyle(AppTheme.primary)
+                                .foregroundStyle(completed ? .green : AppTheme.primary)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text(workout.workoutName ?? "Workout")
@@ -341,7 +340,7 @@ struct TodayPlanWorkoutCard: View {
                             ForEach(exercises.prefix(3)) { exercise in
                                 HStack {
                                     Circle()
-                                        .fill(AppTheme.primary.opacity(0.5))
+                                        .fill(completed ? Color.green.opacity(0.5) : AppTheme.primary.opacity(0.5))
                                         .frame(width: 6, height: 6)
                                     Text(exercise.name)
                                         .font(.caption)
@@ -362,20 +361,33 @@ struct TodayPlanWorkoutCard: View {
                         }
                     }
 
-                    // Start button
-                    Button {
-                        onStartWorkout()
-                    } label: {
+                    // Start / Completed button
+                    if completed {
                         HStack {
-                            Image(systemName: "play.fill")
-                            Text("Start Workout")
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Completed")
                         }
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(AppTheme.primary)
-                        .foregroundStyle(.white)
+                        .background(Color.green.opacity(0.15))
+                        .foregroundStyle(.green)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        Button {
+                            onStartWorkout()
+                        } label: {
+                            HStack {
+                                Image(systemName: "play.fill")
+                                Text("Start Workout")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.primary)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                 }
             }

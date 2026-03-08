@@ -148,10 +148,17 @@ struct ProgressDashboardSection: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(progress.keyLifts) { lift in
-                            KeyLiftCard(lift: lift)
+                            NavigationLink {
+                                PRDetailView(exerciseName: lift.exerciseName)
+                            } label: {
+                                KeyLiftCard(lift: lift)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 1)
                 }
+                .frame(maxWidth: .infinity)
             }
 
             // Volume summary
@@ -297,7 +304,9 @@ struct SmartRecommendationsSection: View {
                         RecommendationCard(recommendation: rec)
                     }
                 }
+                .padding(.horizontal, 1)
             }
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -884,7 +893,9 @@ struct DeficitRadarCard: View {
                                 .clipShape(Capsule())
                         }
                     }
+                    .padding(.horizontal, 1)
                 }
+                .frame(maxWidth: .infinity)
             }
 
             Divider()

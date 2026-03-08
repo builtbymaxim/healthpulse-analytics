@@ -10,6 +10,8 @@
 		94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
+		AA000001000000000000AA04 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000AA02 /* FirebaseCrashlytics */; };
+		AA000001000000000000AA05 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000AA03 /* FirebaseAnalytics */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +85,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000001000000000000AA04 /* FirebaseCrashlytics in Frameworks */,
+				AA000001000000000000AA05 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -134,6 +138,7 @@
 				944B823D2F04187B005ABFD3 /* Frameworks */,
 				944B823E2F04187B005ABFD3 /* Resources */,
 				94F5E00A2F06A000005ABCFA /* Embed App Extensions */,
+				AA000001000000000000AA06 /* Upload dSYMs to Crashlytics */,
 			);
 			buildRules = (
 			);
@@ -145,6 +150,8 @@
 			);
 			name = HealthPulse;
 			packageProductDependencies = (
+				AA000001000000000000AA02 /* FirebaseCrashlytics */,
+				AA000001000000000000AA03 /* FirebaseAnalytics */,
 			);
 			productName = HealthPulse;
 			productReference = 944B82402F04187B005ABFD3 /* HealthPulse.app */;
@@ -199,6 +206,9 @@
 			);
 			mainGroup = 944B82372F04187B005ABFD3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA000001000000000000AA01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 944B82412F04187B005ABFD3 /* Products */;
 			projectDirPath = "";
@@ -226,6 +236,33 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA000001000000000000AA06 /* Upload dSYMs to Crashlytics */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			name = "Upload dSYMs to Crashlytics";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist\" ]; then\n  \"${BUILD_DIR%Build/*}SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\nelse\n  echo \"warning: GoogleService-Info.plist not found u2014 skipping dSYM upload. Add the file from Firebase Console to enable crash symbolication.\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		944B823C2F04187B005ABFD3 /* Sources */ = {
@@ -386,6 +423,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HealthPulse/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthPulse uses calendar access to sync your workout schedule and health reminders.";
@@ -426,6 +464,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HealthPulse/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthPulse uses calendar access to sync your workout schedule and health reminders.";
@@ -545,6 +584,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000001000000000000AA01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001000000000000AA02 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000AA01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
+		};
+		AA000001000000000000AA03 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000AA01 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 944B82382F04187B005ABFD3 /* Project object */;
 }

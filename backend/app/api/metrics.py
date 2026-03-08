@@ -312,3 +312,91 @@ async def delete_metric(
         raise HTTPException(status_code=404, detail="Metric not found")
 
     return {"message": "Metric deleted successfully"}
+
+
+class WeightEntry(BaseModel):
+    date: str
+    value: float
+
+
+class WeightSummaryResponse(BaseModel):
+    entries: list[WeightEntry]
+    current: float | None = None
+    goal: float | None = None
+    trend_direction: str = "stable"  # "losing", "gaining", "stable"
+    weekly_avg: float | None = None
+    change_from_start: float | None = None
+
+
+@router.get("/weight-summary", response_model=WeightSummaryResponse)
+async def get_weight_summary(
+    days: int = Query(default=30, ge=7, le=365),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get weight history summary with trend analysis."""
+    from datetime import timedelta
+
+    supabase = get_supabase_client()
+    start_date = (date.today() - timedelta(days=days)).isoformat()
+
+    result = (
+        supabase.table("health_metrics")
+        .select("value, timestamp")
+        .eq("user_id", str(current_user.id))
+        .eq("metric_type", "weight")
+        .gte("timestamp", start_date)
+        .order("timestamp", desc=False)
+        .execute()
+    )
+
+    entries = [
+        WeightEntry(date=row["timestamp"][:10], value=row["value"])
+        for row in (result.data or [])
+    ]
+
+    if not entries:
+        return WeightSummaryResponse(entries=[])
+
+    current = entries[-1].value
+    first_val = entries[0].value
+    change = current - first_val
+
+    # Trend direction
+    if len(entries) >= 3:
+        recent_avg = sum(e.value for e in entries[-3:]) / 3
+        older_avg = sum(e.value for e in entries[:3]) / min(3, len(entries))
+        if recent_avg < older_avg - 0.3:
+            trend = "losing"
+        elif recent_avg > older_avg + 0.3:
+            trend = "gaining"
+        else:
+            trend = "stable"
+    else:
+        trend = "stable"
+
+    # Weekly average (last 7 entries or last 7 days)
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    week_entries = [e for e in entries if e.date >= week_ago]
+    weekly_avg = sum(e.value for e in week_entries) / len(week_entries) if week_entries else None
+
+    # Try to get weight goal from profile settings
+    goal = None
+    profile_result = (
+        supabase.table("profiles")
+        .select("settings")
+        .eq("id", str(current_user.id))
+        .limit(1)
+        .execute()
+    )
+    if profile_result.data:
+        settings = profile_result.data[0].get("settings") or {}
+        goal = settings.get("target_weight")
+
+    return WeightSummaryResponse(
+        entries=entries,
+        current=current,
+        goal=goal,
+        trend_direction=trend,
+        weekly_avg=round(weekly_avg, 1) if weekly_avg else None,
+        change_from_start=round(change, 1),
+    )

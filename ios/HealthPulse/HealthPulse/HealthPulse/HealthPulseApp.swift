@@ -6,9 +6,15 @@
 //
 
 import SwiftUI
+import FirebaseCore
+import FirebaseCrashlytics
 
 @main
 struct HealthPulseApp: App {
+
+    init() {
+        FirebaseApp.configure()
+    }
     @StateObject private var authService = AuthService.shared
     @StateObject private var healthKitService = HealthKitService.shared
     @StateObject private var notificationService = NotificationService.shared
