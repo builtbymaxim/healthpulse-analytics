@@ -26,10 +26,20 @@ struct TrainingPlanView: View {
                                 plan: activePlan,
                                 onChangePlan: { viewModel.showTemplates = true },
                                 onDeactivate: { viewModel.deactivatePlan() },
-                                onEdit: { viewModel.showEditSchedule = true }
+                                onEdit: {
+                                    viewModel.planToEdit = activePlan
+                                    viewModel.showCustomBuilder = true
+                                },
+                                onCreateNew: {
+                                    viewModel.planToEdit = nil
+                                    viewModel.showCustomBuilder = true
+                                }
                             )
                         } else {
-                            NoPlanCard(onSelectPlan: { viewModel.showTemplates = true })
+                            NoPlanCard(
+                            onSelectPlan: { viewModel.showTemplates = true },
+                            onCreateCustom: { viewModel.showCustomBuilder = true }
+                        )
                         }
 
                         // Weekly Schedule with exercise detail
@@ -61,6 +71,12 @@ struct TrainingPlanView: View {
             }
             .sheet(isPresented: $viewModel.showTemplates) {
                 TemplateSelectionView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showCustomBuilder) {
+                CustomPlanBuilderView(prefillPlanId: viewModel.planToEdit?.id) {
+                    viewModel.planToEdit = nil
+                    Task { await viewModel.loadData() }
+                }
             }
             .sheet(isPresented: $viewModel.showEditSchedule) {
                 if let plan = viewModel.activePlan {
@@ -100,6 +116,7 @@ struct ActivePlanCard: View {
     let onChangePlan: () -> Void
     let onDeactivate: () -> Void
     let onEdit: () -> Void
+    let onCreateNew: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -128,6 +145,7 @@ struct ActivePlanCard: View {
                 }
 
                 Menu {
+                    Button("Create New Custom Plan") { onCreateNew() }
                     Button("Change Plan", action: onChangePlan)
                     Button("Deactivate", role: .destructive, action: onDeactivate)
                 } label: {
@@ -161,6 +179,7 @@ struct ActivePlanCard: View {
 
 struct NoPlanCard: View {
     let onSelectPlan: () -> Void
+    let onCreateCustom: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -181,12 +200,25 @@ struct NoPlanCard: View {
                 onSelectPlan()
                 HapticsManager.shared.medium()
             } label: {
-                Label("Browse Plans", systemImage: "plus.circle.fill")
+                Label("Browse Plans", systemImage: "list.bullet")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(AppTheme.primary)
                     .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            Button {
+                onCreateCustom()
+                HapticsManager.shared.medium()
+            } label: {
+                Label("Build Custom Plan", systemImage: "plus.circle.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.primary.opacity(0.12))
+                    .foregroundStyle(AppTheme.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
@@ -501,6 +533,28 @@ struct TemplateSelectionView: View {
                                     }
                                 )
                             }
+
+                            Button {
+                                viewModel.planToEdit = nil
+                                viewModel.showCustomBuilder = true
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "pencil.and.ruler")
+                                    Text("Build from Scratch")
+                                }
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(AppTheme.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppTheme.primary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(AppTheme.primary.opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                            .padding(.top, 8)
                         }
                         .padding()
                     }
@@ -980,6 +1034,8 @@ class TrainingPlanViewModel: ObservableObject {
     @Published var showTemplates = false
     @Published var showEditSchedule = false
     @Published var showDeactivateConfirmation = false
+    @Published var showCustomBuilder = false
+    @Published var planToEdit: TrainingPlanSummary? = nil
     @Published var error: String?
 
     func loadData() async {

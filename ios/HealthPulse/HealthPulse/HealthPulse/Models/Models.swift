@@ -525,6 +525,53 @@ struct UpdatePlanResponse: Codable {
     let success: Bool
 }
 
+// MARK: - Custom Plan Builder
+
+struct CustomPlanExercisePayload: Codable {
+    let id: String          // UUID string from Exercise.id
+    let name: String
+    let sets: Int
+    let reps: String?
+    let notes: String?
+}
+
+struct CustomPlanDayPayload: Codable {
+    let dayOfWeek: Int      // ISO: 1=Mon … 7=Sun
+    let workoutName: String
+    let focus: String?
+    let exercises: [CustomPlanExercisePayload]
+
+    enum CodingKeys: String, CodingKey {
+        case dayOfWeek = "day_of_week"
+        case workoutName = "workout_name"
+        case focus, exercises
+    }
+}
+
+struct CreateCustomPlanRequest: Codable {
+    let planName: String
+    let days: [CustomPlanDayPayload]
+
+    enum CodingKeys: String, CodingKey {
+        case planName = "plan_name"
+        case days
+    }
+}
+
+struct CreateCustomPlanResponse: Codable {
+    let success: Bool
+    let planId: UUID
+    let name: String
+    let daysPerWeek: Int
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case planId = "plan_id"
+        case name
+        case daysPerWeek = "days_per_week"
+    }
+}
+
 struct WorkoutSessionRequest: Codable {
     let planId: UUID?
     let plannedWorkoutName: String?

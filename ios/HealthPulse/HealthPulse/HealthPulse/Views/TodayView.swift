@@ -19,7 +19,7 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(.vertical) {
                 if viewModel.isLoading {
                     DashboardSkeletonView()
                 } else if let err = viewModel.loadError, viewModel.enhancedRecovery == nil {

@@ -902,6 +902,14 @@ class APIService {
         return try await request(endpoint: "/training-plans/suggestions", method: "POST", body: body)
     }
 
+    func createCustomPlan(_ request: CreateCustomPlanRequest) async throws -> CreateCustomPlanResponse {
+        try await self.request(endpoint: "/training-plans/custom", method: "POST", body: request)
+    }
+
+    func getTrainingPlanDetail(_ id: UUID) async throws -> TrainingPlanSummary {
+        try await self.request(endpoint: "/training-plans/\(id.uuidString)")
+    }
+
     // MARK: - Weight Tracking
 
     func getWeightSummary(days: Int = 30) async throws -> WeightSummaryResponse {

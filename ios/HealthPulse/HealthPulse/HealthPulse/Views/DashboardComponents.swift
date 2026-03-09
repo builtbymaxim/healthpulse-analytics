@@ -537,6 +537,7 @@ struct CommitmentStripView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

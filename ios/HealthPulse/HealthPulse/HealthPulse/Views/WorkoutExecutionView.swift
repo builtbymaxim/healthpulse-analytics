@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import ActivityKit
 
 struct WorkoutExecutionView: View {
     let workout: TodayWorkoutResponse
@@ -730,6 +731,7 @@ class WorkoutExecutionViewModel: ObservableObject {
     private let planId: UUID?
     private var timer: Timer?
     private let startTime = Date()
+    private var strengthActivity: Activity<StrengthWorkoutAttributes>?
 
     init(workout: TodayWorkoutResponse, planId: UUID?) {
         self.workout = workout
@@ -767,6 +769,7 @@ class WorkoutExecutionViewModel: ObservableObject {
 
     func startTimer() {
         isTimerRunning = true
+        startLiveActivity()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [self] in
@@ -779,11 +782,13 @@ class WorkoutExecutionViewModel: ObservableObject {
         isTimerRunning = false
         timer?.invalidate()
         timer = nil
+        endLiveActivity()
     }
 
     func addSet(to exerciseIndex: Int) {
         guard exerciseIndex < exerciseLogs.count else { return }
         exerciseLogs[exerciseIndex].sets.append(SetLogEntry())
+        updateLiveActivity()
     }
 
     func deleteSet(from exerciseIndex: Int, setIndex: Int) {
@@ -803,6 +808,7 @@ class WorkoutExecutionViewModel: ObservableObject {
             isCompleted: false
         )
         exerciseLogs.append(newExercise)
+        updateLiveActivity()
     }
 
     func fetchSuggestions() async {
@@ -830,6 +836,52 @@ class WorkoutExecutionViewModel: ObservableObject {
             }
         } catch {
             print("Failed to fetch suggestions: \(error)")
+        }
+    }
+
+    // MARK: - Live Activity
+
+    private var liveActivityState: StrengthWorkoutAttributes.ContentState {
+        let activeExercise = exerciseLogs.first { !$0.isCompleted } ?? exerciseLogs.first
+        let name = activeExercise?.name ?? (workout.workoutName ?? "Workout")
+        let completedSets = activeExercise?.sets.filter { $0.completedAt != nil }.count ?? 0
+        let totalSets = max(activeExercise?.sets.count ?? 1, 1)
+        return StrengthWorkoutAttributes.ContentState(
+            timerDate: startTime,
+            currentExerciseName: name,
+            currentSetNumber: min(completedSets + 1, totalSets),
+            totalSets: totalSets
+        )
+    }
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attributes = StrengthWorkoutAttributes(workoutName: workout.workoutName ?? "Workout")
+        do {
+            strengthActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: liveActivityState, staleDate: nil),
+                pushType: nil
+            )
+        } catch {
+            // Live Activities unavailable (simulator or not supported)
+        }
+    }
+
+    private func updateLiveActivity() {
+        guard let activity = strengthActivity else { return }
+        let state = liveActivityState
+        Task { [activity] in
+            await activity.update(.init(state: state, staleDate: nil))
+        }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = strengthActivity else { return }
+        strengthActivity = nil
+        let finalState = liveActivityState
+        Task { [activity] in
+            await activity.end(.init(state: finalState, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10)))
         }
     }
 

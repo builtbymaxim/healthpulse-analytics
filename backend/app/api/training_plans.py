@@ -48,6 +48,29 @@ class UpdatePlanRequest(BaseModel):
     customizations: Optional[dict] = None  # Exercise swaps, modifications
 
 
+class CustomPlanExercise(BaseModel):
+    """An exercise in a custom training plan day."""
+    id: str                        # UUID from GET /exercises
+    name: str
+    sets: int = 3
+    reps: Optional[str] = None     # "8-10", "5", "12"
+    notes: Optional[str] = None
+
+
+class CustomPlanDay(BaseModel):
+    """A single training day in a custom plan."""
+    day_of_week: int               # ISO: 1=Mon … 7=Sun
+    workout_name: str
+    focus: Optional[str] = None
+    exercises: list[CustomPlanExercise]
+
+
+class CreateCustomPlanRequest(BaseModel):
+    """Request to create a custom training plan from scratch."""
+    plan_name: str
+    days: list[CustomPlanDay]
+
+
 # Response Models
 class TodayWorkoutResponse(BaseModel):
     """Today's planned workout."""
@@ -108,7 +131,21 @@ async def get_todays_workout(
     schedule = plan.get("schedule", {})
 
     # Check if today is a workout day
-    workout_name = schedule.get(str(day_of_week))
+    # Custom plans store dicts; template plans store workout name strings
+    schedule_entry = schedule.get(str(day_of_week))
+    if isinstance(schedule_entry, dict):
+        # Custom plan — workout definition lives directly in schedule
+        workout_name = schedule_entry.get("name")
+        workout_details = schedule_entry
+    else:
+        workout_name = schedule_entry
+        # Template plan — look up workout by name in template workouts list
+        workout_details = None
+        if template and template.get("workouts"):
+            for workout in template["workouts"]:
+                if workout.get("name") == workout_name:
+                    workout_details = workout
+                    break
 
     plan_id = plan.get("id")
 
@@ -135,14 +172,6 @@ async def get_todays_workout(
             plan_name=plan.get("name"),
             plan_id=plan_id,
         )
-
-    # Find the workout details from the template
-    workout_details = None
-    if template and template.get("workouts"):
-        for workout in template["workouts"]:
-            if workout.get("name") == workout_name:
-                workout_details = workout
-                break
 
     return TodayWorkoutResponse(
         has_plan=True,
@@ -180,12 +209,19 @@ async def get_active_plan(
     plan = result.data[0]
     template = plan.get("plan_templates", {})
 
+    # Normalize schedule: custom plans store dicts; extract the name string for the summary
+    raw_schedule = plan.get("schedule", {})
+    normalized_schedule = {
+        k: v["name"] if isinstance(v, dict) else v
+        for k, v in raw_schedule.items()
+    }
+
     return TrainingPlanSummary(
         id=plan["id"],
         name=plan["name"],
         description=plan.get("description"),
-        days_per_week=template.get("days_per_week", len(plan.get("schedule", {}))),
-        schedule=plan.get("schedule", {}),
+        days_per_week=template.get("days_per_week", len(normalized_schedule)),
+        schedule=normalized_schedule,
         is_active=plan.get("is_active", True),
     )
 
@@ -387,6 +423,65 @@ async def get_exercise_suggestions(
     return suggestions
 
 
+@router.post("/custom")
+async def create_custom_plan(
+    request: CreateCustomPlanRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Create a custom training plan built from scratch (no template)."""
+    supabase = get_supabase_client()
+
+    # Build schedule JSONB — richer dict format for custom plans
+    schedule: dict = {}
+    for day in request.days:
+        estimated_minutes = max(30, len(day.exercises) * 8)  # ~8 min per exercise
+        schedule[str(day.day_of_week)] = {
+            "name": day.workout_name,
+            "focus": day.focus,
+            "exercises": [
+                {
+                    "id": ex.id,       # UUID — same shape as template plan exercises
+                    "name": ex.name,
+                    "sets": ex.sets,
+                    "reps": ex.reps,
+                    "notes": ex.notes,
+                }
+                for ex in day.exercises
+            ],
+            "estimatedMinutes": estimated_minutes,
+        }
+
+    logger.info(
+        "Creating custom training plan for user %s: name=%r days=%s",
+        current_user.id, request.plan_name, list(schedule.keys()),
+    )
+
+    # Deactivate any existing active plans
+    supabase.table("user_training_plans").update(
+        {"is_active": False}
+    ).eq("user_id", str(current_user.id)).eq("is_active", True).execute()
+
+    # Insert — template_id intentionally null
+    result = supabase.table("user_training_plans").insert({
+        "user_id": str(current_user.id),
+        "template_id": None,
+        "name": request.plan_name,
+        "schedule": schedule,
+        "is_active": True,
+    }).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create custom plan")
+
+    plan = result.data[0]
+    return {
+        "success": True,
+        "plan_id": plan["id"],
+        "name": plan["name"],
+        "days_per_week": len(request.days),
+    }
+
+
 # NOTE: /{plan_id} routes MUST come after all specific routes (/sessions, /progress, etc.)
 # to avoid catching path segments like "sessions" as a UUID parameter.
 
@@ -463,7 +558,21 @@ async def get_training_plan_details(
     template = plan.get("plan_templates", {})
 
     # Merge template workouts with any customizations
-    workouts = template.get("workouts", []) if template else []
+    if template:
+        workouts = template.get("workouts", [])
+    else:
+        # Custom plan: reconstruct ordered workouts list from schedule
+        workouts = []
+        for day_str, entry in plan.get("schedule", {}).items():
+            if isinstance(entry, dict):
+                workouts.append({
+                    "day": int(day_str),
+                    "name": entry.get("name"),
+                    "focus": entry.get("focus"),
+                    "exercises": entry.get("exercises", []),
+                    "estimatedMinutes": entry.get("estimatedMinutes", 60),
+                })
+        workouts.sort(key=lambda w: w.get("day", 0))
     customizations = plan.get("customizations", {}) or {}
 
     # Apply any exercise customizations

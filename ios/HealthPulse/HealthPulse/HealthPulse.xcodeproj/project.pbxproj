@@ -12,6 +12,8 @@
 		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		AA000001000000000000AA04 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000AA02 /* FirebaseCrashlytics */; };
 		AA000001000000000000AA05 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000AA03 /* FirebaseAnalytics */; };
+		AA000003000000000000AA01 /* StrengthWorkoutAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */; };
+		AA000003000000000000AA02 /* StrengthWorkoutAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,6 +44,7 @@
 		944B82402F04187B005ABFD3 /* HealthPulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthPulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunningActivityWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningActivityAttributes.swift; sourceTree = "<group>"; };
+		AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthWorkoutAttributes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -123,6 +126,7 @@
 			isa = PBXGroup;
 			children = (
 				94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */,
+				AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -270,6 +274,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */,
+				AA000003000000000000AA01 /* StrengthWorkoutAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -278,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */,
+				AA000003000000000000AA02 /* StrengthWorkoutAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -503,7 +509,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningActivityWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Running Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -532,7 +538,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningActivityWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Running Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

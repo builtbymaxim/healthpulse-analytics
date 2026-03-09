@@ -110,7 +110,7 @@ class TodayViewModel: ObservableObject {
         }
     }
 
-    @Published var isLoading = false
+    @Published var isLoading = true
     @Published var loadError: String?
     @Published var showRecoveryDetail = false
     @Published var showRecoveryFuelInfo = false
