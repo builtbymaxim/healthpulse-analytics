@@ -74,3 +74,4 @@ htmlcov/
 *.tar.gz
 *.zip
 *.xcuserstate
+GoogleService-Info.plist
