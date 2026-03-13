@@ -310,13 +310,19 @@ struct SleepHistoryChart: View {
             Chart(entries) { entry in
                 BarMark(
                     x: .value("Date", String(entry.date.suffix(5))),
-                    y: .value("Hours", entry.durationHours)
+                    y: .value("Hours", entry.durationHours),
+                    width: .fixed(20)
                 )
                 .foregroundStyle(
-                    entry.durationHours >= 7 ? Color.blue : Color.orange
+                    LinearGradient(
+                        colors: [AppTheme.primary, AppTheme.primary.opacity(0.3)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
                 .cornerRadius(4)
             }
+            .clipped()
             .frame(height: 150)
             .chartYAxis {
                 AxisMarks(values: [0, 4, 8, 12]) { value in
@@ -328,12 +334,12 @@ struct SleepHistoryChart: View {
                     }
                 }
             }
-            .chartYScale(domain: 0...12)
+            .chartYScale(domain: 0...max(12.0, (entries.map(\.durationHours).max() ?? 0) + 1.0))
 
             // Target line note
             HStack {
                 Rectangle()
-                    .fill(Color.green.opacity(0.3))
+                    .fill(AppTheme.primary.opacity(0.4))
                     .frame(width: 20, height: 2)
                 Text("7-9h target range")
                     .font(.caption)
@@ -347,10 +353,58 @@ struct SleepHistoryChart: View {
     }
 }
 
+// MARK: - Sleep Metric Type
+
+enum SleepMetricType: String, Identifiable {
+    case avgDuration, avgScore, sleepDebt, consistency
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .avgDuration:  return "Avg Duration"
+        case .avgScore:     return "Avg Score"
+        case .sleepDebt:    return "Sleep Debt"
+        case .consistency:  return "Consistency"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .avgDuration:  return "clock.fill"
+        case .avgScore:     return "star.fill"
+        case .sleepDebt:    return "exclamationmark.triangle.fill"
+        case .consistency:  return "checkmark.seal.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .avgDuration:  return AppTheme.primary
+        case .avgScore:     return .yellow
+        case .sleepDebt:    return .orange
+        case .consistency:  return AppTheme.primary
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .avgDuration:
+            return "The average number of hours you slept per night over the past 30 days. HealthPulse calculates this from your logged or HealthKit-synced sessions. Adults need 7–9 hours for full physical and cognitive recovery — consistent shortfalls suppress immune function and reduce athletic performance."
+        case .avgScore:
+            return "A composite 0–100 score combining duration, self-reported quality, and sleep stage ratios. HealthPulse weights deep and REM sleep more heavily, as these stages drive muscle repair and memory consolidation. A score above 75 indicates restorative sleep."
+        case .sleepDebt:
+            return "The cumulative hours of sleep lost relative to your 8-hour daily target over the past 30 days. Sleep debt compounds: each missed hour raises cortisol levels and reduces next-day HRV. HealthPulse uses this to adjust your recovery score and training recommendations."
+        case .consistency:
+            return "How stable your sleep and wake times are, measured as variance across the past 30 days. Consistent timing anchors your circadian rhythm, which regulates hormones like melatonin and cortisol. Even one hour of daily variance can reduce sleep quality by up to 20%."
+        }
+    }
+}
+
 // MARK: - Sleep Analytics Card
 
 struct SleepAnalyticsCard: View {
     let analytics: SleepAnalytics
+    @State private var selectedMetric: SleepMetricType?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -367,39 +421,54 @@ struct SleepAnalyticsCard: View {
                 GridItem(.flexible()),
                 GridItem(.flexible()),
             ], spacing: 16) {
-                AnalyticTile(
-                    title: "Avg Duration",
-                    value: analytics.formattedAvgDuration,
-                    icon: "clock.fill",
-                    color: .blue
-                )
+                Button { selectedMetric = .avgDuration } label: {
+                    AnalyticTile(
+                        title: "Avg Duration",
+                        value: analytics.formattedAvgDuration,
+                        icon: "clock.fill",
+                        color: AppTheme.primary
+                    )
+                }
+                .buttonStyle(.plain)
 
-                AnalyticTile(
-                    title: "Avg Score",
-                    value: "\(Int(analytics.avgSleepScore))",
-                    icon: "star.fill",
-                    color: .yellow
-                )
+                Button { selectedMetric = .avgScore } label: {
+                    AnalyticTile(
+                        title: "Avg Score",
+                        value: "\(Int(analytics.avgSleepScore))",
+                        icon: "star.fill",
+                        color: .yellow
+                    )
+                }
+                .buttonStyle(.plain)
 
-                AnalyticTile(
-                    title: "Sleep Debt",
-                    value: String(format: "%.1fh", analytics.totalSleepDebtHours),
-                    icon: "exclamationmark.triangle.fill",
-                    color: analytics.totalSleepDebtHours > 10 ? .red : .orange
-                )
+                Button { selectedMetric = .sleepDebt } label: {
+                    AnalyticTile(
+                        title: "Sleep Debt",
+                        value: String(format: "%.1fh", analytics.totalSleepDebtHours),
+                        icon: "exclamationmark.triangle.fill",
+                        color: analytics.totalSleepDebtHours > 10 ? .red : .orange
+                    )
+                }
+                .buttonStyle(.plain)
 
-                AnalyticTile(
-                    title: "Consistency",
-                    value: "\(Int(analytics.consistencyScore))%",
-                    icon: "checkmark.seal.fill",
-                    color: .green
-                )
+                Button { selectedMetric = .consistency } label: {
+                    AnalyticTile(
+                        title: "Consistency",
+                        value: "\(Int(analytics.consistencyScore))%",
+                        icon: "checkmark.seal.fill",
+                        color: AppTheme.primary
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding()
         .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .cardShadow()
+        .sheet(item: $selectedMetric) { metric in
+            SleepMetricDetailSheet(metric: metric)
+        }
     }
 }
 
@@ -426,6 +495,53 @@ struct AnalyticTile: View {
         .padding()
         .background(AppTheme.surface2)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Sleep Metric Detail Sheet
+
+struct SleepMetricDetailSheet: View {
+    let metric: SleepMetricType
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                ThemedBackground()
+                    .ignoresSafeArea()
+
+                VStack(spacing: 32) {
+                    ZStack {
+                        Circle()
+                            .fill(metric.color.opacity(0.15))
+                            .frame(width: 80, height: 80)
+                        Image(systemName: metric.icon)
+                            .font(.system(size: 32))
+                            .foregroundStyle(metric.color)
+                    }
+
+                    Text(metric.explanation)
+                        .font(.body)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.horizontal)
+
+                    Spacer()
+                }
+                .padding(.top, 40)
+            }
+            .navigationTitle(metric.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.ultraThinMaterial)
     }
 }
 

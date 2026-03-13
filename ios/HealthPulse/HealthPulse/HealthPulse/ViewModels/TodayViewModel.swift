@@ -123,23 +123,32 @@ class TodayViewModel: ObservableObject {
         setupCrossTabListeners()
     }
 
+    private func isCancelledError(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
+
     private func setupCrossTabListeners() {
         let nc = NotificationCenter.default
         notificationObservers.append(nc.addObserver(forName: .foodLogged, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.loadNutrition()
-                await self?.loadDashboardData()
+                guard let self, !isLoadInProgress else { return }
+                async let n: () = loadNutrition()
+                async let d: () = loadDashboardData()
+                _ = await (n, d)
             }
         })
         notificationObservers.append(nc.addObserver(forName: .workoutCompleted, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.loadTodaysWorkout()
-                await self?.loadDashboardData()
+                guard let self, !isLoadInProgress else { return }
+                async let w: () = loadTodaysWorkout()
+                async let d: () = loadDashboardData()
+                _ = await (w, d)
             }
         })
         notificationObservers.append(nc.addObserver(forName: .weightLogged, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.loadDashboardData()
+                guard let self, !isLoadInProgress else { return }
+                await loadDashboardData()
             }
         })
     }
@@ -176,6 +185,10 @@ class TodayViewModel: ObservableObject {
     func loadData() async {
         guard !isLoadInProgress else { return }
         isLoadInProgress = true
+        defer {
+            isLoadInProgress = false
+            hasLoadedOnce = true
+        }
         loadError = nil
         if !hasLoadedOnce { isLoading = true }
 
@@ -189,16 +202,16 @@ class TodayViewModel: ObservableObject {
 
         _ = await (profileTask, workoutTask, nutritionTask, weeklyNutritionTask, workoutsTask, sleepTask)
 
-        // Dashboard + social depend on profile result (isNewUser)
-        if !isNewUser {
-            async let dashboardTask: () = loadDashboardData()
-            async let socialTask: () = loadSocialData()
-            _ = await (dashboardTask, socialTask)
-        }
+        // Reveal UI immediately — AI data loads silently behind the scenes
+        withAnimation(MotionTokens.entrance) { isLoading = false }
 
-        isLoading = false
-        hasLoadedOnce = true
-        isLoadInProgress = false
+        // Phase 2 — Slow AI data (narrative dashboard, social, predictions)
+        if !isNewUser {
+            async let dashboardTask:   () = loadDashboardData()
+            async let socialTask:      () = loadSocialData()
+            async let predictionsTask: () = loadPredictions()
+            _ = await (dashboardTask, socialTask, predictionsTask)
+        }
     }
 
     private func loadDashboardData() async {
@@ -228,6 +241,7 @@ class TodayViewModel: ObservableObject {
             }
             return
         } catch {
+            if isCancelledError(error) { return }
             print("Narrative dashboard unavailable, falling back: \(error)")
         }
 
@@ -254,9 +268,14 @@ class TodayViewModel: ObservableObject {
                 causalAnnotations = []
             }
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load dashboard data: \(error)")
             // On total failure, keep existing data — don't reset
             await loadPredictions()
+            // If we have no cached data at all, signal retry UI
+            if enhancedRecovery == nil {
+                loadError = "Couldn't load all dashboard data"
+            }
         }
     }
 
@@ -271,6 +290,7 @@ class TodayViewModel: ObservableObject {
             // User is "new" if account is < 7 days old
             isNewUser = daysSinceCreation < 7
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load user profile: \(error)")
             isNewUser = true
             if displayName == nil {
@@ -306,6 +326,7 @@ class TodayViewModel: ObservableObject {
                 todaysWorkout = nil
             }
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load today's workout: \(error)")
             hasSetupTrainingPlan = false
             todaysWorkout = nil
@@ -327,6 +348,7 @@ class TodayViewModel: ObservableObject {
             // Check if user has logged any food today
             hasLoggedMeal = summary.totalCalories > 0
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load nutrition: \(error)")
         }
 
@@ -334,6 +356,7 @@ class TodayViewModel: ObservableObject {
         do {
             readinessTargets = try await APIService.shared.getReadinessTargets()
         } catch {
+            if isCancelledError(error) { return }
             print("Readiness targets unavailable: \(error)")
             readinessTargets = nil
         }
@@ -378,6 +401,7 @@ class TodayViewModel: ObservableObject {
             weeklyNutritionData = adherenceData
             weeklyAdherenceScore = daysWithData.isEmpty ? 0 : Int((Double(onTargetDays) / Double(daysWithData.count)) * 100)
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load weekly nutrition: \(error)")
             hasNutritionHistory = false
             weeklyNutritionData = []
@@ -412,6 +436,7 @@ class TodayViewModel: ObservableObject {
             }
             hasSleepData = true
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load sleep patterns: \(error)")
             hasSleepData = false
             avgSleepHours = 0
@@ -447,6 +472,7 @@ class TodayViewModel: ObservableObject {
                 }
             }
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load workouts: \(error)")
         }
     }
@@ -464,6 +490,7 @@ class TodayViewModel: ObservableObject {
             readinessScore = read.score
             recommendedIntensity = read.recommendedIntensity
         } catch {
+            if isCancelledError(error) { return }
             print("Failed to load predictions: \(error)")
         }
     }

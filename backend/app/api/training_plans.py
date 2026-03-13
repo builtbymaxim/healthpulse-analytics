@@ -207,7 +207,7 @@ async def get_active_plan(
         return None
 
     plan = result.data[0]
-    template = plan.get("plan_templates", {})
+    template = plan.get("plan_templates") or {}
 
     # Normalize schedule: custom plans store dicts; extract the name string for the summary
     raw_schedule = plan.get("schedule", {})
@@ -555,7 +555,7 @@ async def get_training_plan_details(
         raise HTTPException(status_code=404, detail="Training plan not found")
 
     plan = result.data[0]
-    template = plan.get("plan_templates", {})
+    template = plan.get("plan_templates") or {}
 
     # Merge template workouts with any customizations
     if template:

@@ -18,6 +18,7 @@ struct ProfileView: View {
     @State private var isDeletingAccount = false
     @State private var exportDataURL: URL?
     @State private var showingShareSheet = false
+    @State private var showPrivacyPolicy = false
 
     var body: some View {
         NavigationStack {
@@ -109,8 +110,11 @@ struct ProfileView: View {
 
                 // Support section
                 Section("Support") {
-                    Link(destination: URL(string: "https://github.com/user/healthpulse-analytics/blob/main/docs/privacy-policy.md")!) {
+                    Button {
+                        showPrivacyPolicy = true
+                    } label: {
                         Label("Privacy Policy", systemImage: "hand.raised.fill")
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
 
                     NavigationLink {
@@ -182,6 +186,9 @@ struct ProfileView: View {
                 if let url = exportDataURL {
                     ShareSheet(activityItems: [url])
                 }
+            }
+            .sheet(isPresented: $showPrivacyPolicy) {
+                PrivacyPolicyView()
             }
         }
     }

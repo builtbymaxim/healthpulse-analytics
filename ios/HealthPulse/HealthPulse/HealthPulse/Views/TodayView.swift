@@ -19,24 +19,31 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(.vertical) {
-                if viewModel.isLoading {
-                    DashboardSkeletonView()
-                } else if let err = viewModel.loadError, viewModel.enhancedRecovery == nil {
-                    EmptyStateView(
-                        icon: "wifi.slash",
-                        title: "Couldn't Load Dashboard",
-                        message: err,
-                        actionTitle: "Retry"
-                    ) {
-                        Task { await viewModel.loadData() }
+            ScrollView(.vertical, showsIndicators: false) {
+                Group {
+                    if viewModel.isLoading {
+                        DashboardSkeletonView()
+                            .transition(.opacity)
+                    } else if let err = viewModel.loadError, viewModel.enhancedRecovery == nil {
+                        EmptyStateView(
+                            icon: "wifi.slash",
+                            title: "Couldn't Load Dashboard",
+                            message: err,
+                            actionTitle: "Retry"
+                        ) {
+                            Task { await viewModel.loadData() }
+                        }
+                        .padding(.top, 80)
+                        .transition(.opacity)
+                    } else {
+                        dashboardContent
+                            .transition(.opacity)
                     }
-                    .padding(.top, 80)
-                } else {
-                    dashboardContent
                 }
+                .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
             }
             .background(ThemedBackground())
+            .scrollBounceBehavior(.basedOnSize)
             .navigationBarTitleDisplayMode(.inline)
             .refreshable {
                 await viewModel.refresh()

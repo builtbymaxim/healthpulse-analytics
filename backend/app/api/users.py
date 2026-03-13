@@ -444,7 +444,7 @@ async def complete_onboarding(
         # Create training plan if training preferences were provided
         if profile.training_modality and profile.days_per_week:
             try:
-                # Find a matching plan template
+                # Find a matching plan template — exact match first
                 template_result = (
                     supabase.table("plan_templates")
                     .select("*")
@@ -454,15 +454,37 @@ async def complete_onboarding(
                     .execute()
                 )
 
+                # Fallback: match by modality only, pick closest days_per_week
+                if not template_result.data:
+                    fallback_result = (
+                        supabase.table("plan_templates")
+                        .select("*")
+                        .eq("modality", profile.training_modality)
+                        .order("days_per_week")
+                        .execute()
+                    )
+                    if fallback_result.data:
+                        template_result.data = [min(
+                            fallback_result.data,
+                            key=lambda t: abs(t.get("days_per_week", 0) - profile.days_per_week)
+                        )]
+
                 if template_result.data:
                     template = template_result.data[0]
-                    # Build schedule from preferred days
-                    schedule = {}
                     workouts = template.get("workouts", [])
-                    if profile.preferred_days and workouts:
-                        for i, day in enumerate(sorted(profile.preferred_days)):
-                            if i < len(workouts):
-                                schedule[str(day)] = workouts[i].get("name", f"Workout {i+1}")
+
+                    # Build schedule from preferred days, or generate default days
+                    days = sorted(profile.preferred_days) if profile.preferred_days else list(range(1, profile.days_per_week + 1))
+
+                    schedule = {}
+                    for i, day in enumerate(days):
+                        if i < len(workouts):
+                            schedule[str(day)] = workouts[i].get("name", f"Workout {i+1}")
+
+                    # Ensure schedule is not empty even if workouts list is empty
+                    if not schedule:
+                        for i, day in enumerate(days):
+                            schedule[str(day)] = f"Workout {i+1}"
 
                     training_plan = {
                         "user_id": str(current_user.id),
@@ -474,11 +496,11 @@ async def complete_onboarding(
                         "is_active": True,
                     }
                     supabase.table("user_training_plans").insert(training_plan).execute()
-                    logger.debug("Training plan '%s' created", template["name"])
+                    logger.info("Training plan '%s' activated for user %s during onboarding", template["name"], current_user.id)
                 else:
-                    logger.debug("No matching template found for %s/%s days", profile.training_modality, profile.days_per_week)
+                    logger.warning("No plan template found for modality=%s days=%s", profile.training_modality, profile.days_per_week)
             except Exception as plan_error:
-                logger.warning("Could not create training plan: %s", plan_error)
+                logger.warning("Could not create training plan during onboarding: %s", plan_error)
                 # Don't fail onboarding if plan creation fails
 
         # Re-fetch the updated profile
