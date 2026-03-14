@@ -41,10 +41,15 @@ struct DraftDay: Identifiable {
 
 @MainActor
 class CustomPlanBuilderViewModel: ObservableObject {
-    @Published var planName: String = ""
-    @Published var days: [Int: DraftDay] = [:]      // dayOfWeek -> DraftDay
+    @Published var planName: String
+    @Published var days: [Int: DraftDay]
     @Published var isLoading = false
     @Published var error: String?
+
+    init(planName: String = "", days: [Int: DraftDay] = [:]) {
+        self.planName = planName
+        self.days = days
+    }
 
     var canSave: Bool {
         !planName.trimmingCharacters(in: .whitespaces).isEmpty && !activeDays.isEmpty
@@ -69,6 +74,19 @@ class CustomPlanBuilderViewModel: ObservableObject {
 
     func isDaySelected(_ dayOfWeek: Int) -> Bool {
         days[dayOfWeek] != nil
+    }
+
+    /// Move a day's full workout (name, focus, exercises) to a new day-of-week slot.
+    /// If the target slot already has content it is replaced.
+    func moveDay(from sourceDOW: Int, to targetDOW: Int) {
+        guard let source = days[sourceDOW] else { return }
+        days.removeValue(forKey: sourceDOW)
+        days[targetDOW] = DraftDay(
+            dayOfWeek: targetDOW,
+            workoutName: source.workoutName,
+            focus: source.focus,
+            exercises: source.exercises
+        )
     }
 
     // MARK: - Exercise Management

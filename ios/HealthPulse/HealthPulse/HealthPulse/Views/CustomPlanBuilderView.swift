@@ -13,16 +13,38 @@ private struct DaySheetItem: Identifiable {
 }
 
 struct CustomPlanBuilderView: View {
-    let onSave: () -> Void
+    // Standard mode: save to backend, then call onSave
+    private let onSave: () -> Void
     var prefillPlanId: UUID? = nil
+    // Capture mode: return (planName, days) to caller without API call
+    private let onCapture: ((String, [Int: DraftDay]) -> Void)?
 
-    @StateObject private var viewModel = CustomPlanBuilderViewModel()
+    @StateObject private var viewModel: CustomPlanBuilderViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var editingDayItem: DaySheetItem? = nil
     @State private var errorVisible = false
 
     private let dayNumbers = Array(1...7)
+
+    /// Standard mode — saves plan to backend.
+    init(onSave: @escaping () -> Void, prefillPlanId: UUID? = nil) {
+        self.onSave = onSave
+        self.prefillPlanId = prefillPlanId
+        self.onCapture = nil
+        _viewModel = StateObject(wrappedValue: CustomPlanBuilderViewModel())
+    }
+
+    /// Capture mode — used during onboarding. No API call; passes data back via onCapture.
+    init(onCapture: @escaping (String, [Int: DraftDay]) -> Void,
+         initialPlanName: String = "",
+         initialDays: [Int: DraftDay] = [:]) {
+        self.onCapture = onCapture
+        self.onSave = {}
+        self.prefillPlanId = nil
+        _viewModel = StateObject(wrappedValue:
+            CustomPlanBuilderViewModel(planName: initialPlanName, days: initialDays))
+    }
 
     var body: some View {
         NavigationStack {
@@ -117,6 +139,7 @@ struct CustomPlanBuilderView: View {
                     DayCard(
                         dayOfWeek: day,
                         draftDay: viewModel.days[day],
+                        occupiedDays: Set(viewModel.days.keys),
                         onAddExercises: { editingDayItem = DaySheetItem(id: day) },
                         onRemoveExercise: { id in
                             withAnimation(MotionTokens.snappy) {
@@ -129,6 +152,11 @@ struct CustomPlanBuilderView: View {
                         onToggleRest: {
                             withAnimation(MotionTokens.form) {
                                 viewModel.toggleDay(day)
+                            }
+                        },
+                        onMoveDay: { targetDOW in
+                            withAnimation(MotionTokens.form) {
+                                viewModel.moveDay(from: day, to: targetDOW)
                             }
                         }
                     )
@@ -151,17 +179,24 @@ struct CustomPlanBuilderView: View {
 
             Button {
                 HapticsManager.shared.medium()
-                viewModel.saveCustomPlan {
+                if let capture = onCapture {
+                    // Capture mode: hand data back to caller, no API call
+                    capture(viewModel.planName, viewModel.days)
                     HapticsManager.shared.success()
-                    onSave()
                     dismiss()
+                } else {
+                    viewModel.saveCustomPlan {
+                        HapticsManager.shared.success()
+                        onSave()
+                        dismiss()
+                    }
                 }
             } label: {
                 ZStack {
                     if viewModel.isLoading {
                         ProgressView().tint(.white)
                     } else {
-                        Text("Save Plan").font(.headline)
+                        Text(onCapture != nil ? "Use This Plan" : "Save Plan").font(.headline)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -185,12 +220,18 @@ struct CustomPlanBuilderView: View {
 private struct DayCard: View {
     let dayOfWeek: Int
     let draftDay: DraftDay?
+    let occupiedDays: Set<Int>
     let onAddExercises: () -> Void
     let onRemoveExercise: (UUID) -> Void
     let onUpdateExercise: (DraftExercise) -> Void
     let onToggleRest: () -> Void
+    let onMoveDay: (Int) -> Void
+
+    @State private var showRemoveConfirm = false
+    @State private var showMovePicker = false
 
     private var isActive: Bool { draftDay != nil }
+    private var hasExercises: Bool { !(draftDay?.exercises.isEmpty ?? true) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -242,8 +283,12 @@ private struct DayCard: View {
 
                 // Toggle active / rest
                 Button {
-                    onToggleRest()
-                    HapticsManager.shared.selection()
+                    if isActive && hasExercises {
+                        showRemoveConfirm = true
+                    } else {
+                        onToggleRest()
+                        HapticsManager.shared.selection()
+                    }
                 } label: {
                     Image(systemName: isActive ? "minus.circle.fill" : "plus.circle")
                         .font(.title3)
@@ -302,6 +347,32 @@ private struct DayCard: View {
         .cardShadow()
         .animation(MotionTokens.form, value: isActive)
         .animation(MotionTokens.form, value: draftDay?.exercises.count)
+        .confirmationDialog(
+            "Move or remove \(DraftDay.shortName(dayOfWeek))?",
+            isPresented: $showRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Move to Another Day") { showMovePicker = true }
+            Button("Remove Day", role: .destructive) {
+                onToggleRest()
+                HapticsManager.shared.selection()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This day has \(draftDay?.exercises.count ?? 0) exercise(s).")
+        }
+        .sheet(isPresented: $showMovePicker) {
+            MoveDayPicker(
+                sourceDayOfWeek: dayOfWeek,
+                occupiedDays: occupiedDays,
+                onSelect: { targetDOW in
+                    onMoveDay(targetDOW)
+                    showMovePicker = false
+                    HapticsManager.shared.selection()
+                }
+            )
+            .presentationDetents([.height(320)])
+        }
     }
 }
 
@@ -402,5 +473,62 @@ private struct ExerciseRow: View {
         updated.sets = sets
         updated.reps = reps
         onUpdate(updated)
+    }
+}
+
+// MARK: - Move Day Picker
+
+private struct MoveDayPicker: View {
+    let sourceDayOfWeek: Int
+    let occupiedDays: Set<Int>
+    let onSelect: (Int) -> Void
+
+    private let dayNumbers = Array(1...7)
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Move to…")
+                .font(.headline)
+                .padding(.top, 20)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                ForEach(dayNumbers, id: \.self) { day in
+                    let isSelf = day == sourceDayOfWeek
+                    let isOccupied = occupiedDays.contains(day) && !isSelf
+
+                    Button {
+                        if !isSelf { onSelect(day) }
+                    } label: {
+                        Text(DraftDay.shortName(day))
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(isSelf || isOccupied
+                                ? AppTheme.surface2
+                                : AppTheme.primary.opacity(0.15))
+                            .foregroundStyle(isSelf || isOccupied
+                                ? AppTheme.textTertiary
+                                : AppTheme.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(isSelf || isOccupied
+                                        ? AppTheme.border
+                                        : AppTheme.primary.opacity(0.4),
+                                        lineWidth: 1)
+                            )
+                    }
+                    .disabled(isSelf || isOccupied)
+                }
+            }
+            .padding(.horizontal)
+
+            Text("Occupied days are unavailable")
+                .font(.caption)
+                .foregroundStyle(AppTheme.textTertiary)
+
+            Spacer()
+        }
+        .background(AppTheme.backgroundDark.ignoresSafeArea())
     }
 }

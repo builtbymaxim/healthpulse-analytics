@@ -41,6 +41,10 @@ struct OnboardingView: View {
     @State private var suggestedPlan: PlanTemplatePreview?
     @State private var isLoadingPlan = false
     @State private var socialOptIn: Bool = false
+    // Plan customisation during onboarding
+    @State private var showPlanEditor = false
+    @State private var editedPlanName: String = ""
+    @State private var editedPlanDays: [Int: DraftDay]? = nil
 
     // Dietary profile (Phase 8C Batch 2)
     @State private var dietaryPattern: String = "omnivore"
@@ -934,11 +938,45 @@ struct OnboardingView: View {
                             .stroke(Color.green, lineWidth: 2)
                     )
 
-                    Text("You can customize this plan anytime")
+                    Text(editedPlanDays != nil ? "Plan customized" : "You can customize this plan anytime")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(editedPlanDays != nil ? .green : .secondary)
+
+                    Button {
+                        showPlanEditor = true
+                        HapticsManager.shared.light()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: editedPlanDays != nil ? "pencil.circle.fill" : "pencil.circle")
+                            Text(editedPlanDays != nil ? "Edit Again" : "Edit Plan")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(AppTheme.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(PressEffect())
                 }
                 .padding(.horizontal)
+                .fullScreenCover(isPresented: $showPlanEditor) {
+                    let initDays: [Int: DraftDay] = {
+                        if let existing = editedPlanDays { return existing }
+                        guard let plan = suggestedPlan else { return [:] }
+                        return Dictionary(uniqueKeysWithValues: plan.workouts.map { workout in
+                            (workout.day, DraftDay(dayOfWeek: workout.day, workoutName: workout.name))
+                        })
+                    }()
+                    CustomPlanBuilderView(
+                        onCapture: { name, days in
+                            editedPlanName = name
+                            editedPlanDays = days
+                        },
+                        initialPlanName: editedPlanName.isEmpty ? (suggestedPlan?.name ?? "My Plan") : editedPlanName,
+                        initialDays: initDays
+                    )
+                }
             } else {
                 // No plan available - show generic message
                 VStack(spacing: 16) {
@@ -1665,6 +1703,36 @@ struct OnboardingView: View {
                 )
 
                 try await APIService.shared.saveOnboardingProfile(profileData)
+
+                // If user customized the plan during onboarding, activate it now.
+                // createCustomPlan marks the new plan as active, superseding the template plan
+                // that was created by saveOnboardingProfile above.
+                if let capturedDays = editedPlanDays {
+                    let payloadDays = capturedDays.values
+                        .sorted { $0.dayOfWeek < $1.dayOfWeek }
+                        .map { day -> CustomPlanDayPayload in
+                            let exercises = day.exercises.map { draft in
+                                CustomPlanExercisePayload(
+                                    id: draft.exercise.id.uuidString,
+                                    name: draft.exercise.name,
+                                    sets: draft.sets,
+                                    reps: draft.reps.isEmpty ? nil : draft.reps,
+                                    notes: draft.notes.isEmpty ? nil : draft.notes
+                                )
+                            }
+                            return CustomPlanDayPayload(
+                                dayOfWeek: day.dayOfWeek,
+                                workoutName: day.workoutName,
+                                focus: day.focus.isEmpty ? nil : day.focus,
+                                exercises: exercises
+                            )
+                        }
+                    let request = CreateCustomPlanRequest(
+                        planName: editedPlanName.trimmingCharacters(in: .whitespaces),
+                        days: payloadDays
+                    )
+                    _ = try await APIService.shared.createCustomPlan(request)
+                }
 
                 await MainActor.run {
                     isSaving = false
