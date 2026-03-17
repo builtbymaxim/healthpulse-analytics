@@ -528,22 +528,19 @@ async def update_custom_plan(
         plan_id, current_user.id, request.plan_name, list(schedule.keys()),
     )
 
-    result = (
-        supabase.table("user_training_plans")
-        .update({"name": request.plan_name, "schedule": schedule})
-        .eq("id", str(plan_id))
-        .select("id, name")
-        .execute()
-    )
-
-    if not result.data:
+    try:
+        supabase.table("user_training_plans") \
+            .update({"name": request.plan_name, "schedule": schedule}) \
+            .eq("id", str(plan_id)) \
+            .execute()
+    except Exception as e:
+        logger.error("Failed to update custom plan %s: %s", plan_id, e)
         raise HTTPException(status_code=500, detail="Failed to update custom plan")
 
-    plan = result.data[0]
     return {
         "success": True,
-        "plan_id": plan["id"],
-        "name": plan["name"],
+        "plan_id": str(plan_id),
+        "name": request.plan_name,
         "days_per_week": len(request.days),
     }
 
@@ -586,18 +583,17 @@ async def update_training_plan(
         update_data["customizations"] = request.customizations
 
     # Perform update
-    result = (
-        supabase.table("user_training_plans")
-        .update(update_data)
-        .eq("id", str(plan_id))
-        .eq("user_id", str(current_user.id))
-        .execute()
-    )
-
-    if not result.data:
+    try:
+        supabase.table("user_training_plans") \
+            .update(update_data) \
+            .eq("id", str(plan_id)) \
+            .eq("user_id", str(current_user.id)) \
+            .execute()
+    except Exception as e:
+        logger.error("Failed to update plan %s: %s", plan_id, e)
         raise HTTPException(status_code=500, detail="Failed to update plan")
 
-    return {"success": True, "plan": result.data[0]}
+    return {"success": True}
 
 
 @router.get("/{plan_id}")
