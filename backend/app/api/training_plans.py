@@ -641,6 +641,14 @@ async def get_training_plan_details(
         workouts.sort(key=lambda w: w.get("day", 0))
     customizations = plan.get("customizations", {}) or {}
 
+    # Normalise schedule to {day_str: workout_name} so both template and custom
+    # plans decode as [String: String] on the iOS side.
+    raw_schedule = plan.get("schedule", {}) or {}
+    simple_schedule = {
+        day: (entry["name"] if isinstance(entry, dict) else entry)
+        for day, entry in raw_schedule.items()
+    }
+
     # Apply any exercise customizations
     if customizations.get("exerciseSwaps"):
         swaps = customizations["exerciseSwaps"]
@@ -655,7 +663,7 @@ async def get_training_plan_details(
         "id": plan["id"],
         "name": plan["name"],
         "description": plan.get("description"),
-        "schedule": plan.get("schedule", {}),
+        "schedule": simple_schedule,
         "workouts": workouts,
         "customizations": customizations,
         "is_active": plan.get("is_active", False),
