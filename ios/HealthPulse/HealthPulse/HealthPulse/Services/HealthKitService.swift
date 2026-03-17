@@ -9,6 +9,14 @@ import Foundation
 import HealthKit
 import Combine
 
+struct SleepStageHours {
+    let total: Double   // deep + rem + core (excludes awake periods)
+    let deep: Double
+    let rem: Double
+    let core: Double    // light/core sleep
+    let awake: Double
+}
+
 @MainActor
 class HealthKitService: ObservableObject {
     static let shared = HealthKitService()
@@ -19,6 +27,7 @@ class HealthKitService: ObservableObject {
     @Published var restingHeartRate: Double?
     @Published var hrv: Double?
     @Published var lastSleepHours: Double?
+    @Published var sleepStageHours: SleepStageHours?
 
     private let healthStore = HKHealthStore()
 
@@ -140,13 +149,13 @@ class HealthKitService: ObservableObject {
     private func fetchLastSleep() async {
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
 
-        let calendar = Calendar.current
         let now = Date()
-        let startOfToday = calendar.startOfDay(for: now)
-        let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday)!
+        // 36-hour lookback captures sleep sessions that started ~10pm the previous day
+        // and crossed midnight — a common Apple Watch recording pattern.
+        let windowStart = now.addingTimeInterval(-36 * 3600)
 
         let predicate = HKQuery.predicateForSamples(
-            withStart: startOfYesterday,
+            withStart: windowStart,
             end: now,
             options: .strictEndDate
         )
@@ -168,19 +177,40 @@ class HealthKitService: ObservableObject {
                 healthStore.execute(query)
             }
 
-            // Calculate total sleep (asleep stages only)
-            var totalSleep: TimeInterval = 0
+            // Accumulate each sleep stage separately.
+            var deepSleep: TimeInterval = 0
+            var remSleep: TimeInterval = 0
+            var coreSleep: TimeInterval = 0
+            var awakeDuration: TimeInterval = 0
+
             for sample in samples {
-                if sample.value == HKCategoryValueSleepAnalysis.asleepCore.rawValue ||
-                   sample.value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue ||
-                   sample.value == HKCategoryValueSleepAnalysis.asleepREM.rawValue {
-                    totalSleep += sample.endDate.timeIntervalSince(sample.startDate)
+                let duration = sample.endDate.timeIntervalSince(sample.startDate)
+                switch sample.value {
+                case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
+                    deepSleep += duration
+                case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
+                    remSleep += duration
+                case HKCategoryValueSleepAnalysis.asleepCore.rawValue:
+                    coreSleep += duration
+                case HKCategoryValueSleepAnalysis.awake.rawValue:
+                    awakeDuration += duration
+                default:
+                    break
                 }
             }
 
-            let hours = totalSleep / 3600
+            let totalSleep = deepSleep + remSleep + coreSleep
+            let totalHours = totalSleep / 3600
+
             await MainActor.run {
-                lastSleepHours = hours > 0 ? hours : nil
+                lastSleepHours = totalHours > 0 ? totalHours : nil
+                sleepStageHours = totalHours > 0 ? SleepStageHours(
+                    total: totalHours,
+                    deep: deepSleep / 3600,
+                    rem: remSleep / 3600,
+                    core: coreSleep / 3600,
+                    awake: awakeDuration / 3600
+                ) : nil
             }
         } catch {
             print("Failed to fetch sleep: \(error)")

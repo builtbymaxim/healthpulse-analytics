@@ -560,7 +560,7 @@ struct CreateCustomPlanRequest: Codable {
 
 struct CreateCustomPlanResponse: Codable {
     let success: Bool
-    let planId: UUID
+    let planId: String
     let name: String
     let daysPerWeek: Int
 

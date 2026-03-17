@@ -53,6 +53,46 @@ struct SocialRankCard: View {
     }
 }
 
+// MARK: - Social Prompt Card (no leaderboard rank yet)
+
+struct SocialPromptCard: View {
+    let activePartners: Int
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.primary.opacity(0.15))
+                    .frame(width: 56, height: 56)
+                Image(systemName: "person.2.fill")
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.primary)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Social")
+                    .font(.headline)
+                Group {
+                    if activePartners > 0 {
+                        Label("\(activePartners) partner\(activePartners == 1 ? "" : "s") active", systemImage: "person.2.fill")
+                    } else {
+                        Text("View leaderboard")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding()
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+    }
+}
+
 // MARK: - Last Workout Card
 
 struct LastWorkoutCard: View {

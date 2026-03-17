@@ -46,7 +46,11 @@ class CustomPlanBuilderViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    init(planName: String = "", days: [Int: DraftDay] = [:]) {
+    private var existingPlanId: UUID?
+
+    /// Standard mode (editing or creating via Workouts tab).
+    init(existingPlanId: UUID? = nil, planName: String = "", days: [Int: DraftDay] = [:]) {
+        self.existingPlanId = existingPlanId
         self.planName = planName
         self.days = days
     }
@@ -159,10 +163,15 @@ class CustomPlanBuilderViewModel: ObservableObject {
         error = nil
 
         let request = buildRequest()
+        let planId = existingPlanId
 
         Task {
             do {
-                _ = try await APIService.shared.createCustomPlan(request)
+                if let planId {
+                    _ = try await APIService.shared.updateCustomPlan(planId: planId, request)
+                } else {
+                    _ = try await APIService.shared.createCustomPlan(request)
+                }
                 isLoading = false
                 onSuccess()
             } catch {

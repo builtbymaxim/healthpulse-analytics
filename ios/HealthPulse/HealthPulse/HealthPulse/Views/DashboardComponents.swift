@@ -819,6 +819,7 @@ struct CausalRecoveryCard: View {
 
 struct DeficitRadarCard: View {
     let targets: ReadinessTargetsResponse
+    var isRestDay: Bool? = nil   // override from training-plan endpoint when available
     var onInfo: (() -> Void)?
     let onFixDeficit: () -> Void
 
@@ -833,6 +834,22 @@ struct DeficitRadarCard: View {
     private var calorieProgress: Double {
         guard targets.deficit.caloriesTarget > 0 else { return 0 }
         return min(targets.deficit.caloriesConsumed / targets.deficit.caloriesTarget, 1.0)
+    }
+
+    // Compute fuel score locally from actual intake — same formula as RecoveryFuelInfoSheet.
+    private var fuelScore: Double {
+        guard targets.deficit.caloriesTarget > 0 else { return 0 }
+        let calPct = targets.deficit.caloriesConsumed / targets.deficit.caloriesTarget
+        let proPct = targets.deficit.proteinTargetG > 0
+            ? targets.deficit.proteinConsumedG / targets.deficit.proteinTargetG
+            : 1.0
+        return min((calPct + proPct) / 2.0 * 100, 100)
+    }
+
+    // isRestDay override takes precedence; fall back to nutrition endpoint's isTrainingDay flag.
+    private var isTrainingDay: Bool {
+        if let override = isRestDay { return !override }
+        return targets.isTrainingDay
     }
 
     var body: some View {
@@ -852,9 +869,9 @@ struct DeficitRadarCard: View {
                         }
                     }
                     HStack(spacing: 6) {
-                        Image(systemName: targets.isTrainingDay ? "flame.fill" : "leaf.fill")
-                            .foregroundStyle(targets.isTrainingDay ? .orange : .green)
-                        Text(targets.isTrainingDay ? "Training Day" : "Rest Day")
+                        Image(systemName: isTrainingDay ? "flame.fill" : "leaf.fill")
+                            .foregroundStyle(isTrainingDay ? .orange : .green)
+                        Text(isTrainingDay ? "Training Day" : "Rest Day")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -862,19 +879,19 @@ struct DeficitRadarCard: View {
 
                 Spacer()
 
-                // Readiness badge
+                // Fuel score badge — computed from actual intake, same as detail sheet
                 ZStack {
                     Circle()
                         .stroke(Color.gray.opacity(0.2), lineWidth: 8)
                         .frame(width: 60, height: 60)
 
                     Circle()
-                        .trim(from: 0, to: targets.readinessScore / 100)
+                        .trim(from: 0, to: fuelScore / 100)
                         .stroke(urgencyColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                         .frame(width: 60, height: 60)
                         .rotationEffect(.degrees(-90))
 
-                    Text("\(Int(targets.readinessScore))")
+                    Text("\(Int(fuelScore))")
                         .font(.system(size: 18, weight: .bold))
                         .contentTransition(.numericText())
                 }

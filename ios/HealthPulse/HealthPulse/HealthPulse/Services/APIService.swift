@@ -906,6 +906,10 @@ class APIService {
         try await self.request(endpoint: "/training-plans/custom", method: "POST", body: request)
     }
 
+    func updateCustomPlan(planId: UUID, _ request: CreateCustomPlanRequest) async throws -> CreateCustomPlanResponse {
+        try await self.request(endpoint: "/training-plans/custom/\(planId)", method: "PUT", body: request)
+    }
+
     func getTrainingPlanDetail(_ id: UUID) async throws -> TrainingPlanSummary {
         try await self.request(endpoint: "/training-plans/\(id.uuidString)")
     }

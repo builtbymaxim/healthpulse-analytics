@@ -71,7 +71,8 @@ class TodayViewModel: ObservableObject {
     // Social (dashboard card)
     @Published var socialRankEntry: LeaderboardEntry?
     @Published var activePartnersCount: Int = 0
-    private var socialOptIn: Bool = false
+    @Published var socialOptIn: Bool = false
+    private var cancellables = Set<AnyCancellable>()
 
     // Narrative dashboard data
     @Published var commitments: [CommitmentSlot] = []
@@ -121,6 +122,24 @@ class TodayViewModel: ObservableObject {
 
     init() {
         setupCrossTabListeners()
+        observeAuthProfile()
+    }
+
+    /// Subscribe to AuthService.$currentUser so social data loads reactively even when
+    /// the ViewModel's own loadUserProfile() fails or completes before AuthService finishes.
+    private func observeAuthProfile() {
+        AuthService.shared.$currentUser
+            .compactMap { $0 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] user in
+                guard let self else { return }
+                let optIn = user.settings?.socialOptIn ?? false
+                self.socialOptIn = optIn
+                if optIn, self.socialRankEntry == nil, !self.isLoadInProgress {
+                    Task { await self.loadSocialData() }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func isCancelledError(_ error: Error) -> Bool {
@@ -205,13 +224,15 @@ class TodayViewModel: ObservableObject {
         // Reveal UI immediately — AI data loads silently behind the scenes
         withAnimation(MotionTokens.entrance) { isLoading = false }
 
-        // Phase 2 — Slow AI data (narrative dashboard, social, predictions)
+        // Phase 2 — Slow AI data (narrative dashboard + predictions, for established users)
         if !isNewUser {
             async let dashboardTask:   () = loadDashboardData()
-            async let socialTask:      () = loadSocialData()
             async let predictionsTask: () = loadPredictions()
-            _ = await (dashboardTask, socialTask, predictionsTask)
+            _ = await (dashboardTask, predictionsTask)
         }
+        // Social loads regardless of account age — gated internally by socialOptIn.
+        // Decoupled from isNewUser so a failed loadUserProfile() doesn't block it.
+        await loadSocialData()
     }
 
     private func loadDashboardData() async {

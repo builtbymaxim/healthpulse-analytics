@@ -176,10 +176,14 @@ struct TodayView: View {
 
             // 6. Nutrition — Deficit Radar or Progress Card
             if let targets = viewModel.readinessTargets {
-                DeficitRadarCard(targets: targets, onInfo: {
-                    viewModel.showRecoveryFuelInfo = true
-                    HapticsManager.shared.light()
-                }) {
+                DeficitRadarCard(
+                    targets: targets,
+                    isRestDay: viewModel.todaysWorkout?.isRestDay,
+                    onInfo: {
+                        viewModel.showRecoveryFuelInfo = true
+                        HapticsManager.shared.light()
+                    }
+                ) {
                     viewModel.showDeficitFix = true
                 }
                 .padding(.horizontal)
@@ -202,15 +206,19 @@ struct TodayView: View {
             }
 
             // 7. Social Rank
-            if let socialRank = viewModel.socialRankEntry {
+            if viewModel.socialOptIn {
                 NavigationLink {
                     SocialView()
                 } label: {
-                    SocialRankCard(
-                        rank: socialRank.rank,
-                        streakValue: Int(socialRank.value),
-                        activePartners: viewModel.activePartnersCount
-                    )
+                    if let socialRank = viewModel.socialRankEntry {
+                        SocialRankCard(
+                            rank: socialRank.rank,
+                            streakValue: Int(socialRank.value),
+                            activePartners: viewModel.activePartnersCount
+                        )
+                    } else {
+                        SocialPromptCard(activePartners: viewModel.activePartnersCount)
+                    }
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal)

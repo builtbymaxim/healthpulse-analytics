@@ -482,6 +482,72 @@ async def create_custom_plan(
     }
 
 
+@router.put("/custom/{plan_id}")
+async def update_custom_plan(
+    plan_id: UUID,
+    request: CreateCustomPlanRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Update an existing custom training plan in-place (preserves plan UUID and history)."""
+    supabase = get_supabase_client()
+
+    # Verify the plan belongs to this user
+    existing = (
+        supabase.table("user_training_plans")
+        .select("id")
+        .eq("id", str(plan_id))
+        .eq("user_id", str(current_user.id))
+        .maybe_single()
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Rebuild schedule JSONB in the same format as create_custom_plan
+    schedule: dict = {}
+    for day in request.days:
+        estimated_minutes = max(30, len(day.exercises) * 8)
+        schedule[str(day.day_of_week)] = {
+            "name": day.workout_name,
+            "focus": day.focus,
+            "exercises": [
+                {
+                    "id": ex.id,
+                    "name": ex.name,
+                    "sets": ex.sets,
+                    "reps": ex.reps,
+                    "notes": ex.notes,
+                }
+                for ex in day.exercises
+            ],
+            "estimatedMinutes": estimated_minutes,
+        }
+
+    logger.info(
+        "Updating custom training plan %s for user %s: name=%r days=%s",
+        plan_id, current_user.id, request.plan_name, list(schedule.keys()),
+    )
+
+    result = (
+        supabase.table("user_training_plans")
+        .update({"name": request.plan_name, "schedule": schedule})
+        .eq("id", str(plan_id))
+        .select("id, name")
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to update custom plan")
+
+    plan = result.data[0]
+    return {
+        "success": True,
+        "plan_id": plan["id"],
+        "name": plan["name"],
+        "days_per_week": len(request.days),
+    }
+
+
 # NOTE: /{plan_id} routes MUST come after all specific routes (/sessions, /progress, etc.)
 # to avoid catching path segments like "sessions" as a UUID parameter.
 

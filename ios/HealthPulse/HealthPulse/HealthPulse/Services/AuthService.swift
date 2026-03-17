@@ -119,11 +119,15 @@ class AuthService: ObservableObject {
             isAuthenticated = true
             isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboarding_complete")
             Task {
-                // Refresh token to ensure it's valid, then schedule proactive refresh
                 let success = await APIService.shared.refreshAccessTokenPublic()
                 if success {
                     scheduleTokenRefresh()
                 }
+                // Always load profile so currentUser is populated for social/profile-gated UI.
+                // If the token is genuinely expired and refresh also failed, the 401 from
+                // loadProfile() triggers handleAuthFailure → signOut() correctly. If the network
+                // is temporarily offline, loadProfile() catches the URLError silently and keeps
+                // cached onboarding state without logging the user out.
                 await loadProfile()
                 isRestoringSession = false
             }
@@ -194,9 +198,13 @@ class AuthService: ObservableObject {
             KeychainService.save(key: "refresh_token", value: refreshToken)
             APIService.shared.setRefreshToken(refreshToken)
         }
-        isAuthenticated = true
         scheduleTokenRefresh()
+        // Load profile first so isOnboardingComplete is set correctly before ContentView
+        // switches branches. Without this ordering, ContentView briefly shows OnboardingView
+        // because signOut() clears the UserDefaults cache, leaving isOnboardingComplete = false
+        // at the moment isAuthenticated becomes true.
         await loadProfile()
+        isAuthenticated = true
     }
 
     func loadProfile() async {

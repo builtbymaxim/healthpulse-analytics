@@ -32,7 +32,7 @@ struct CustomPlanBuilderView: View {
         self.onSave = onSave
         self.prefillPlanId = prefillPlanId
         self.onCapture = nil
-        _viewModel = StateObject(wrappedValue: CustomPlanBuilderViewModel())
+        _viewModel = StateObject(wrappedValue: CustomPlanBuilderViewModel(existingPlanId: prefillPlanId))
     }
 
     /// Capture mode — used during onboarding. No API call; passes data back via onCapture.
