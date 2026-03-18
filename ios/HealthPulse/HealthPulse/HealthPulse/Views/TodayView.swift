@@ -15,6 +15,7 @@ struct TodayView: View {
     @State private var showTrainingPlanSetup = false
     @State private var showWorkoutExecution = false
     @State private var showPRCelebration = false
+    @State private var showNutritionDetail = false
     @State private var achievedPRs: [PRInfo] = []
 
     var body: some View {
@@ -310,10 +311,16 @@ struct TodayView: View {
                     adherenceScore: viewModel.weeklyAdherenceScore
                 )
                 .onTapGesture {
-                    tabRouter.navigateTo(.nutrition)
+                    showNutritionDetail = true
                     HapticsManager.shared.light()
                 }
                 .padding(.horizontal)
+                .sheet(isPresented: $showNutritionDetail) {
+                    NutritionAdherenceDetailSheet(
+                        weeklyData: viewModel.weeklyNutritionData,
+                        adherenceScore: viewModel.weeklyAdherenceScore
+                    )
+                }
             }
 
             // 15. Quick Stats Row

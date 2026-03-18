@@ -124,6 +124,10 @@ struct NutritionAdherenceCard: View {
     let weeklyData: [DayAdherence]
     let adherenceScore: Int
 
+    private var sortedData: [DayAdherence] {
+        weeklyData.sorted { $0.day < $1.day }  // oldest left → today rightmost
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -137,20 +141,26 @@ struct NutritionAdherenceCard: View {
 
             // 7-day mini chart
             HStack(spacing: 4) {
-                ForEach(weeklyData.suffix(7), id: \.day) { day in
+                ForEach(sortedData) { day in
+                    let isToday = Calendar.current.isDateInToday(day.day)
                     VStack(spacing: 4) {
                         RoundedRectangle(cornerRadius: 3)
                             .fill(day.isOnTarget ? AppTheme.primary : Color.gray.opacity(0.3))
                             .frame(width: 32, height: 40 * (day.progress > 0 ? min(day.progress, 1.2) : 0.1))
 
                         Text(day.dayLabel)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: isToday ? .bold : .regular))
+                            .foregroundStyle(isToday ? AppTheme.primary : Color.secondary)
                     }
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(
+                        isToday ? AppTheme.primary.opacity(0.08) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
                 }
             }
-            .frame(height: 60)
+            .frame(height: 70)
 
             // Legend
             HStack(spacing: 12) {
@@ -183,12 +193,133 @@ struct NutritionAdherenceCard: View {
 struct DayAdherence: Identifiable {
     let id = UUID()
     let day: Date
-    let progress: Double  // 0-1+ representing % of goal
-    let isOnTarget: Bool  // 80-120% of goal
+    let progress: Double       // 0-1+ representing % of goal
+    let isOnTarget: Bool       // 80-120% of goal
+    let caloriesActual: Double
+    let caloriesTarget: Double
 
     var dayLabel: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "E"
-        return String(formatter.string(from: day).prefix(1))
+        return String(formatter.string(from: day).prefix(2))  // "Mo","Tu","We","Th","Fr","Sa","Su"
+    }
+}
+
+// MARK: - Nutrition Adherence Detail Sheet
+
+struct NutritionAdherenceDetailSheet: View {
+    let weeklyData: [DayAdherence]
+    let adherenceScore: Int
+    @Environment(\.dismiss) private var dismiss
+
+    private var sortedData: [DayAdherence] {
+        weeklyData.sorted { $0.day < $1.day }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Score header
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Eating Habits")
+                                .font(.title2.bold())
+                            Text("Last 7 days")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("\(adherenceScore)%")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(adherenceScore >= 80 ? .green : adherenceScore >= 60 ? .orange : .red)
+                    }
+                    .padding(.horizontal)
+
+                    Divider()
+
+                    // Explanation
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("How is this calculated?")
+                            .font(.headline)
+                        Text("You're on target for a day when your calorie intake is between 80% and 120% of your daily goal. Your score is the percentage of days you hit that range.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal)
+
+                    // Day-by-day rows
+                    VStack(spacing: 12) {
+                        ForEach(sortedData) { day in
+                            dayRow(day)
+                        }
+                    }
+
+                    Spacer(minLength: 20)
+                }
+                .padding(.top)
+            }
+            .background(ThemedBackground())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dayRow(_ day: DayAdherence) -> some View {
+        let isToday = Calendar.current.isDateInToday(day.day)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isToday ? "Today" : day.day.formatted(.dateTime.weekday(.wide)))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(isToday ? AppTheme.primary : .primary)
+                    Text(day.day.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                HStack(spacing: 6) {
+                    if day.caloriesActual > 0 {
+                        Text("\(Int(day.caloriesActual)) / \(Int(day.caloriesTarget)) kcal")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("No data")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: day.isOnTarget ? "checkmark.circle.fill"
+                          : (day.caloriesActual > 0 ? "xmark.circle.fill" : "circle.dashed"))
+                        .foregroundStyle(day.isOnTarget ? .green
+                                         : (day.caloriesActual > 0 ? .orange : .secondary))
+                }
+            }
+
+            if day.caloriesActual > 0 {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.15))
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(day.isOnTarget ? AppTheme.primary : Color.orange)
+                            .frame(width: geo.size.width * min(day.progress, 1.0))
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding()
+        .background(isToday ? AppTheme.primary.opacity(0.06) : AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isToday ? AppTheme.primary.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
+        .padding(.horizontal)
     }
 }

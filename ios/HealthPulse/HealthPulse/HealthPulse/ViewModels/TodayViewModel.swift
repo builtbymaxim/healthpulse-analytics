@@ -415,7 +415,9 @@ class TodayViewModel: ObservableObject {
                 adherenceData.append(DayAdherence(
                     day: date,
                     progress: progress,
-                    isOnTarget: isOnTarget
+                    isOnTarget: isOnTarget,
+                    caloriesActual: day.totalCalories,
+                    caloriesTarget: day.calorieTarget
                 ))
             }
 

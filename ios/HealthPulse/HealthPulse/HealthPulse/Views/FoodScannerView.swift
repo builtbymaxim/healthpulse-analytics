@@ -36,7 +36,8 @@ struct FoodScannerView: View {
     @State private var capturedImage: UIImage?
     @State private var classificationHints: [FoodClassification] = []
     @State private var scannedItems: [ScannedFoodItem] = []
-    @State private var portionMultipliers: [UUID: Double] = [:]
+    @State private var portionGramsText: [UUID: String] = [:]
+    @FocusState private var focusedItemId: UUID?
     @State private var selectedMealType: MealType = .lunch
     @State private var isLogging = false
     @State private var showSuccess = false
@@ -63,6 +64,10 @@ struct FoodScannerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focusedItemId = nil }
                 }
             }
         }
@@ -277,9 +282,13 @@ struct FoodScannerView: View {
 
     // MARK: - Components
 
+    private func multiplier(for item: ScannedFoodItem) -> Double {
+        let grams = Double(portionGramsText[item.id] ?? "") ?? item.portionGrams
+        return item.portionGrams > 0 ? grams / item.portionGrams : 1.0
+    }
+
     private func scannedFoodItemCard(_ item: ScannedFoodItem) -> some View {
-        let multiplier = portionMultipliers[item.id] ?? 1.0
-        let scaled = item.scaled(by: multiplier)
+        let scaled = item.scaled(by: multiplier(for: item))
 
         return VStack(spacing: 10) {
             HStack {
@@ -293,7 +302,7 @@ struct FoodScannerView: View {
                 Spacer()
                 Button {
                     scannedItems.removeAll { $0.id == item.id }
-                    portionMultipliers.removeValue(forKey: item.id)
+                    portionGramsText.removeValue(forKey: item.id)
                     HapticsManager.shared.light()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -308,21 +317,22 @@ struct FoodScannerView: View {
                 macroItem(value: scaled.fatG, label: "Fat", unit: "g", color: .purple)
             }
 
-            // Portion slider
+            // Portion input
             HStack {
-                Text("Portion:")
+                Text("Amount:")
                     .font(.caption)
-                Slider(
-                    value: Binding(
-                        get: { portionMultipliers[item.id] ?? 1.0 },
-                        set: { portionMultipliers[item.id] = $0 }
-                    ),
-                    in: 0.25...3.0,
-                    step: 0.25
-                )
-                Text("\(Int(multiplier * 100))%")
+                Spacer()
+                TextField("grams", text: Binding(
+                    get: { portionGramsText[item.id] ?? String(Int(item.portionGrams)) },
+                    set: { portionGramsText[item.id] = $0 }
+                ))
+                .keyboardType(.decimalPad)
+                .focused($focusedItemId, equals: item.id)
+                .font(.caption.bold())
+                .multilineTextAlignment(.trailing)
+                .frame(width: 70)
+                Text("g")
                     .font(.caption.bold())
-                    .frame(width: 44)
             }
         }
         .padding()
@@ -332,7 +342,7 @@ struct FoodScannerView: View {
 
     private var totalsSummary: some View {
         let totals = scannedItems.reduce((cal: 0.0, p: 0.0, c: 0.0, f: 0.0)) { acc, item in
-            let m = portionMultipliers[item.id] ?? 1.0
+            let m = multiplier(for: item)
             return (
                 acc.cal + item.calories * m,
                 acc.p + item.proteinG * m,
@@ -450,7 +460,7 @@ struct FoodScannerView: View {
         await MainActor.run {
             scannedItems = items
             for item in items {
-                portionMultipliers[item.id] = 1.0
+                portionGramsText[item.id] = String(Int(item.portionGrams))
             }
             HapticsManager.shared.success()
             withAnimation { phase = .review }
@@ -474,7 +484,7 @@ struct FoodScannerView: View {
                             fatG: 0, fiberG: 0, confidence: hint.confidence
                         )
                     }
-                    for item in scannedItems { portionMultipliers[item.id] = 1.0 }
+                    for item in scannedItems { portionGramsText[item.id] = String(Int(item.portionGrams)) }
                     withAnimation { phase = .review }
                 } else {
                     withAnimation { phase = .error("Failed to process image") }
@@ -492,7 +502,7 @@ struct FoodScannerView: View {
             )
             await MainActor.run {
                 scannedItems = response.items
-                for item in response.items { portionMultipliers[item.id] = 1.0 }
+                for item in response.items { portionGramsText[item.id] = String(Int(item.portionGrams)) }
                 HapticsManager.shared.success()
                 withAnimation { phase = .review }
             }
@@ -522,8 +532,9 @@ struct FoodScannerView: View {
         Task {
             do {
                 for item in scannedItems {
-                    let multiplier = portionMultipliers[item.id] ?? 1.0
-                    let scaled = item.scaled(by: multiplier)
+                    let m = multiplier(for: item)
+                    let scaled = item.scaled(by: m)
+                    let grams = Double(portionGramsText[item.id] ?? "") ?? item.portionGrams
                     let entry = FoodEntryCreate(
                         name: scaled.name,
                         mealType: selectedMealType,
@@ -532,7 +543,7 @@ struct FoodScannerView: View {
                         carbsG: scaled.carbsG,
                         fatG: scaled.fatG,
                         fiberG: scaled.fiberG,
-                        servingSize: scaled.portionGrams,
+                        servingSize: grams,
                         servingUnit: "g",
                         notes: "AI food scan",
                         source: "ai_scan"
@@ -555,7 +566,7 @@ struct FoodScannerView: View {
         capturedImage = nil
         classificationHints = []
         scannedItems = []
-        portionMultipliers = [:]
+        portionGramsText = [:]
         showSuccess = false
         isLogging = false
         withAnimation { phase = .camera }

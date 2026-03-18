@@ -9,6 +9,7 @@ import SwiftUI
 import Charts
 
 struct SleepView: View {
+    @EnvironmentObject var healthKitService: HealthKitService
     @State private var summary: SleepSummary?
     @State private var history: [SleepEntry] = []
     @State private var analytics: SleepAnalytics?
@@ -33,8 +34,10 @@ struct SleepView: View {
                             actionTitle: "Retry",
                             action: { Task { await loadData() } }
                         )
-                    } else if summary == nil && history.isEmpty {
-                        // No sleep data yet - show empty state
+                    } else if summary == nil && history.isEmpty
+                                && healthKitService.lastSleepHours == nil
+                                && healthKitService.sleepStageHours == nil {
+                        // No sleep data from HealthKit or backend yet
                         EmptyStateView(
                             icon: "moon.zzz",
                             title: "No Sleep Data Yet",
@@ -43,14 +46,16 @@ struct SleepView: View {
                             action: { showingLogSheet = true }
                         )
                     } else {
-                        // Today's Sleep Card
-                        if let summary = summary {
+                        // Last Night + Sleep Stages — prefer HealthKit, fall back to backend
+                        if healthKitService.sleepStageHours != nil || healthKitService.lastSleepHours != nil {
+                            LastNightHKCard(
+                                totalHours: healthKitService.lastSleepHours ?? 0,
+                                stages: healthKitService.sleepStageHours
+                            )
+                            .staggeredAnimation(index: 0)
+                        } else if let summary = summary {
                             TodaySleepCard(summary: summary)
                                 .staggeredAnimation(index: 0)
-                        }
-
-                        // Sleep Stages Card
-                        if let summary = summary {
                             SleepStagesCard(summary: summary)
                                 .staggeredAnimation(index: 1)
                         }
@@ -114,20 +119,113 @@ struct SleepView: View {
         }
         error = nil
 
+        // Refresh HealthKit in parallel with backend calls
+        async let hkRefresh: Void = healthKitService.refreshTodayData()
+
         do {
             async let summaryTask = APIService.shared.getSleepSummary()
             async let historyTask = APIService.shared.getSleepHistory(days: selectedPeriod)
             async let analyticsTask = APIService.shared.getSleepAnalytics(days: 30)
 
             let (s, h, a) = try await (summaryTask, historyTask, analyticsTask)
+            await hkRefresh
             summary = s
             history = h
             analytics = a
         } catch {
+            await hkRefresh
             self.error = error.localizedDescription
         }
 
         isLoading = false
+    }
+}
+
+// MARK: - Last Night HealthKit Card
+
+struct LastNightHKCard: View {
+    let totalHours: Double
+    let stages: SleepStageHours?
+
+    private var formattedTotal: String {
+        guard totalHours > 0 else { return "No Data" }
+        let h = Int(totalHours)
+        let m = Int((totalHours - Double(h)) * 60)
+        return "\(h)h \(m)m"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Last Night", systemImage: "moon.zzz.fill")
+                    .font(.headline)
+                Spacer()
+                Text(formattedTotal)
+                    .font(.title3.bold())
+                    .foregroundStyle(totalHours > 0 ? Color.purple : Color.secondary)
+                    .contentTransition(.numericText())
+            }
+
+            if totalHours == 0 {
+                Text("No Apple Watch sleep data for last night.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if let stages = stages, stages.total > 0 {
+                // Horizontal stage bar: Deep / REM / Light (Core mapped to Light)
+                GeometryReader { geo in
+                    HStack(spacing: 2) {
+                        if stages.deep > 0 {
+                            Rectangle()
+                                .fill(SleepStage.deep.color)
+                                .frame(width: geo.size.width * (stages.deep / stages.total))
+                        }
+                        if stages.rem > 0 {
+                            Rectangle()
+                                .fill(SleepStage.rem.color)
+                                .frame(width: geo.size.width * (stages.rem / stages.total))
+                        }
+                        if stages.core > 0 {
+                            Rectangle()
+                                .fill(SleepStage.light.color)
+                                .frame(width: geo.size.width * (stages.core / stages.total))
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .frame(height: 12)
+
+                HStack(spacing: 16) {
+                    if stages.deep > 0  { stageLegend(.deep,  hours: stages.deep) }
+                    if stages.rem > 0   { stageLegend(.rem,   hours: stages.rem) }
+                    if stages.core > 0  { stageLegend(.light, hours: stages.core) }
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .cardShadow()
+    }
+
+    private func stageLegend(_ stage: SleepStage, hours: Double) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(stage.color)
+                .frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(stage.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(formatHours(hours))
+                    .font(.subheadline.bold())
+            }
+        }
+    }
+
+    private func formatHours(_ hours: Double) -> String {
+        let h = Int(hours)
+        let m = Int((hours - Double(h)) * 60)
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 }
 
@@ -732,4 +830,5 @@ struct SleepLogSheet: View {
 
 #Preview {
     SleepView()
+        .environmentObject(HealthKitService.shared)
 }

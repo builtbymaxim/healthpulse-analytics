@@ -21,13 +21,14 @@ struct BarcodeScannerView: View {
     @State private var showManualEntry = false
 
     // Food log fields (shown after product found)
-    @State private var amount: Double = 100
+    @State private var amountText: String = "100"
+    @FocusState private var amountFocused: Bool
     @State private var selectedMealType: MealType = .snack
     @State private var isAdding = false
     @State private var showSuccess = false
 
     var onFoodAdded: (() -> Void)?
-    private let amountOptions: [Double] = [50, 100, 150, 200, 250]
+    private var amount: Double { Double(amountText) ?? 0 }
 
     var body: some View {
         NavigationStack {
@@ -45,6 +46,10 @@ struct BarcodeScannerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { amountFocused = false }
                 }
             }
         }
@@ -177,29 +182,21 @@ struct BarcodeScannerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .padding(.horizontal)
 
-                // Amount selector
+                // Amount input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Amount (grams)")
                         .font(.headline)
                         .padding(.horizontal)
 
-                    HStack(spacing: 8) {
-                        ForEach(amountOptions, id: \.self) { opt in
-                            Button {
-                                amount = opt
-                                HapticsManager.shared.selection()
-                            } label: {
-                                Text("\(Int(opt))g")
-                                    .font(.subheadline.bold())
-                                    .padding(.vertical, 10)
-                                    .frame(maxWidth: .infinity)
-                                    .background(amount == opt ? Color.green : AppTheme.surface2)
-                                    .foregroundStyle(amount == opt ? .white : .primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
+                    TextField("e.g. 750", text: $amountText)
+                        .keyboardType(.decimalPad)
+                        .focused($amountFocused)
+                        .font(.title3.bold())
+                        .multilineTextAlignment(.center)
+                        .padding()
+                        .background(AppTheme.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal)
                 }
 
                 // Computed totals
