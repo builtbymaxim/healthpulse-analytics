@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-03-01
+> Last updated: 2026-03-18
 
 ## Overview
 
@@ -760,6 +760,34 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 - Card flickering on pull-to-refresh (data reset before reload)
 - Workout completion not detected in daily actions
 - Stale dashboard data after logging in other tabs
+
+---
+
+### UX & Data Binding Polish (commit `386695e`)
+
+#### Supabase JWT TTL Fix
+- **Root cause identified:** Access token expiry was 3600s — users forced to re-login after app was closed >1h
+- **Fix:** Increased JWT access token expiry to 604800s (7 days) via Supabase dashboard (Project Settings → JWT Keys)
+- **Result:** Proactive refresh at 80% of expiry now fires every ~5.6 days; token is valid across typical usage gaps
+- No iOS code changes required — `AuthService.checkStoredSession()` architecture was already correct
+
+#### Portion Input UI (BarcodeScannerView + FoodScannerView)
+- **BarcodeScannerView:** Replaced fixed gram card buttons (`[50, 100, 150, 200, 250]g`) with free-text `TextField(.decimalPad)` — any gram amount, real-time macro recalculation, keyboard Done button
+- **FoodScannerView:** Replaced 25–300% percentage slider with per-item gram `TextField`; multiplier computed on-the-fly from `(typedGrams / item.portionGrams)`; `portionGramsText: [UUID: String]` state replaces `portionMultipliers: [UUID: Double]`
+
+#### Sleep View — HealthKit Data Binding
+- **Problem:** Dashboard sleep stat read from HealthKit (Apple Watch); SleepView "Last Night" read from backend API (manual logs) — two different sources showing different values
+- **Fix:** `SleepView` now injects `@EnvironmentObject var healthKitService: HealthKitService`; `loadData()` fires `healthKitService.refreshTodayData()` in parallel with backend calls
+- **Priority logic:** HealthKit data preferred → backend summary fallback → EmptyStateView
+- **New component:** `LastNightHKCard` — shows real Apple Watch total duration + horizontal Deep/REM/Light stage bar with legend; Core stage mapped to "Light" label
+- Dashboard cards (`TodayView` quick stat, `SleepPatternCard`) unchanged — no regression
+
+#### Nutrition Adherence Card Polish
+- **Ordering fixed:** Bars now sorted oldest → newest (Monday left, today rightmost); previously today appeared on the left
+- **Day labels:** Changed from single-letter ("M", "T"…) to 2-letter ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su") — eliminates Tu/Th and Sa/Su collisions
+- **Today highlight:** Subtle `AppTheme.primary.opacity(0.08)` background + bold/tinted label on today's column
+- **Detail sheet:** Tapping the card opens `NutritionAdherenceDetailSheet` (instead of navigating away to Nutrition tab) — per-day rows showing actual vs target kcal, progress bar, on/off-target icon, today row highlighted with border + tint, explanation of how adherence score is calculated
+- **`DayAdherence` model:** Extended with `caloriesActual: Double` and `caloriesTarget: Double` fields; `TodayViewModel.loadWeeklyNutrition()` populates them from `WeeklyNutritionDay` API response
 
 ---
 
