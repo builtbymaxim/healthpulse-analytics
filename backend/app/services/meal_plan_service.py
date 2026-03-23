@@ -8,8 +8,11 @@ from app.utils.retry import call_with_retry
 
 logger = logging.getLogger(__name__)
 
-# Circuit breaker for Open Food Facts: open after 5 failures, recover after 2 min
-_barcode_cb = CircuitBreaker("openfoodfacts", failure_threshold=5, cooldown_seconds=120)
+# Separate circuit breakers: barcode and search don't cross-contaminate
+_search_cb  = CircuitBreaker("openfoodfacts_search",  failure_threshold=5, cooldown_seconds=120)
+_barcode_cb = CircuitBreaker("openfoodfacts_barcode", failure_threshold=5, cooldown_seconds=120)
+
+_OFF_USER_AGENT = {"User-Agent": "HealthPulse/1.0 (healthpulse.app)"}
 from uuid import UUID
 from datetime import date, datetime, timedelta, timezone
 from app.models.meal_plans import (
@@ -227,8 +230,8 @@ class MealPlanService:
 
     def search_food(self, query: str) -> list[dict]:
         """Search Open Food Facts by text query with circuit breaker."""
-        if _barcode_cb.is_open:
-            logger.warning("Food search skipped — circuit open for openfoodfacts")
+        if _search_cb.is_open:
+            logger.warning("Food search skipped — circuit open for openfoodfacts_search")
             return []
 
         url = "https://world.openfoodfacts.org/cgi/search.pl"
@@ -239,7 +242,7 @@ class MealPlanService:
             "fields": "code,product_name,brands,nutriments,image_url,serving_size",
         }
         try:
-            with httpx.Client(timeout=10) as client:
+            with httpx.Client(timeout=10, headers=_OFF_USER_AGENT) as client:
                 response = call_with_retry(
                     client.get, url,
                     max_attempts=2,
@@ -249,7 +252,7 @@ class MealPlanService:
                 )
                 response.raise_for_status()
                 data = response.json()
-            _barcode_cb.record_success()
+            _search_cb.record_success()
             results = []
             for product in data.get("products", []):
                 nutriments = product.get("nutriments", {})
@@ -271,20 +274,29 @@ class MealPlanService:
                 })
             return results
         except Exception:
-            _barcode_cb.record_failure()
+            _search_cb.record_failure()
             logger.warning("Food search failed for %r", query, exc_info=True)
             return []
 
     def lookup_barcode(self, barcode: str) -> dict:
-        """Proxy to Open Food Facts API with retry and circuit breaker."""
+        """Proxy to Open Food Facts API with Supabase cache, retry, and circuit breaker."""
+        # --- Cache check (shared across all users) ---
+        try:
+            row = self.supabase.table("barcode_cache").select("*").eq("barcode", barcode).maybe_single().execute()
+            if row.data:
+                logger.info("Barcode cache hit for %s", barcode)
+                return {**row.data, "found": True}
+        except Exception:
+            pass  # cache miss — fall through to API
+
         if _barcode_cb.is_open:
-            logger.warning("Barcode lookup skipped — circuit open for openfoodfacts")
+            logger.warning("Barcode lookup skipped — circuit open for openfoodfacts_barcode")
             return {"barcode": barcode, "found": False}
 
         url = f"https://world.openfoodfacts.org/api/v2/product/{barcode}"
         params = {"fields": "product_name,brands,nutriments,image_url,serving_size"}
         try:
-            with httpx.Client(timeout=10) as client:
+            with httpx.Client(timeout=10, headers=_OFF_USER_AGENT) as client:
                 response = call_with_retry(
                     client.get, url,
                     max_attempts=3,
@@ -299,7 +311,7 @@ class MealPlanService:
                 return {"barcode": barcode, "found": False}
             product = data["product"]
             nutriments = product.get("nutriments", {})
-            return {
+            result = {
                 "barcode": barcode,
                 "name": product.get("product_name"),
                 "brand": product.get("brands"),
@@ -312,6 +324,14 @@ class MealPlanService:
                 "image_url": product.get("image_url"),
                 "found": True,
             }
+            # --- Store in cache for future users ---
+            try:
+                self.supabase.table("barcode_cache").upsert({
+                    k: v for k, v in result.items() if k != "found"
+                }).execute()
+            except Exception as e:
+                logger.warning("Failed to cache barcode %s: %s", barcode, e)
+            return result
         except Exception:
             _barcode_cb.record_failure()
             logger.warning("Barcode lookup failed for %s", barcode, exc_info=True)
