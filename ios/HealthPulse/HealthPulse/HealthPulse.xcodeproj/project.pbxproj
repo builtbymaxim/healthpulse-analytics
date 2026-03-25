@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		94AFEF242F73D04D00746BDE /* HealthPulseWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		94AFEF302F73D13100746BDE /* HealthPulse.app in Resources */ = {isa = PBXBuildFile; fileRef = 944B82402F04187B005ABFD3 /* HealthPulse.app */; };
+		94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; };
+		94AFEF382F73D17200746BDE /* WatchConnectivity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		94AFEF3A2F73D17700746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; };
+		94AFEF3B2F73D17700746BDE /* WatchConnectivity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
@@ -15,6 +21,27 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		94AFEF222F73D04D00746BDE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 94AFEF192F73D04B00746BDE;
+			remoteInfo = "HealthPulseWatch Watch App";
+		};
+		94AFEF312F73D13100746BDE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 944B823F2F04187B005ABFD3;
+			remoteInfo = HealthPulse;
+		};
+		94AFEF332F73D13900746BDE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 944B823F2F04187B005ABFD3;
+			remoteInfo = HealthPulse;
+		};
 		94F5E00C2F06A000005ABCFC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
@@ -25,6 +52,39 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		94AFEF282F73D04D00746BDE /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				94AFEF242F73D04D00746BDE /* HealthPulseWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94AFEF392F73D17200746BDE /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				94AFEF382F73D17200746BDE /* WatchConnectivity.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94AFEF3C2F73D17700746BDE /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				94AFEF3B2F73D17700746BDE /* WatchConnectivity.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		94F5E00A2F06A000005ABCFA /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -40,6 +100,9 @@
 
 /* Begin PBXFileReference section */
 		944B82402F04187B005ABFD3 /* HealthPulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthPulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "HealthPulseWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.2.sdk/System/Library/Frameworks/WatchConnectivity.framework; sourceTree = DEVELOPER_DIR; };
+		94AFEF352F73D16600746BDE /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
 		94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunningActivityWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningActivityAttributes.swift; sourceTree = "<group>"; };
 		AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthWorkoutAttributes.swift; sourceTree = "<group>"; };
@@ -71,6 +134,11 @@
 			path = HealthPulse;
 			sourceTree = "<group>";
 		};
+		94AFEF1B2F73D04B00746BDE /* HealthPulseWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "HealthPulseWatch Watch App";
+			sourceTree = "<group>";
+		};
 		94F5E0022F06A000005ABCF2 /* RunningActivityWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -86,6 +154,15 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94AFEF172F73D04B00746BDE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94AFEF3A2F73D17700746BDE /* WatchConnectivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +182,8 @@
 				944B82422F04187B005ABFD3 /* HealthPulse */,
 				94F5E0022F06A000005ABCF2 /* RunningActivityWidget */,
 				94F5E0102F06A000005ABCF0 /* Shared */,
+				94AFEF1B2F73D04B00746BDE /* HealthPulseWatch Watch App */,
+				94AFEF2D2F73D11300746BDE /* Frameworks */,
 				944B82412F04187B005ABFD3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -114,8 +193,18 @@
 			children = (
 				944B82402F04187B005ABFD3 /* HealthPulse.app */,
 				94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */,
+				94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		94AFEF2D2F73D11300746BDE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				94AFEF352F73D16600746BDE /* WatchConnectivity.framework */,
+				94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		94F5E0102F06A000005ABCF0 /* Shared */ = {
@@ -139,11 +228,14 @@
 				944B823E2F04187B005ABFD3 /* Resources */,
 				94F5E00A2F06A000005ABCFA /* Embed Foundation Extensions */,
 				AA000001000000000000AA06 /* Upload dSYMs to Crashlytics */,
+				94AFEF282F73D04D00746BDE /* Embed Watch Content */,
+				94AFEF392F73D17200746BDE /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				94F5E00D2F06A000005ABCFD /* PBXTargetDependency */,
+				94AFEF232F73D04D00746BDE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				944B82422F04187B005ABFD3 /* HealthPulse */,
@@ -153,6 +245,31 @@
 			);
 			productName = HealthPulse;
 			productReference = 944B82402F04187B005ABFD3 /* HealthPulse.app */;
+			productType = "com.apple.product-type.application";
+		};
+		94AFEF192F73D04B00746BDE /* HealthPulseWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 94AFEF252F73D04D00746BDE /* Build configuration list for PBXNativeTarget "HealthPulseWatch Watch App" */;
+			buildPhases = (
+				94AFEF162F73D04B00746BDE /* Sources */,
+				94AFEF172F73D04B00746BDE /* Frameworks */,
+				94AFEF182F73D04B00746BDE /* Resources */,
+				94AFEF3C2F73D17700746BDE /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				94AFEF322F73D13100746BDE /* PBXTargetDependency */,
+				94AFEF342F73D13900746BDE /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				94AFEF1B2F73D04B00746BDE /* HealthPulseWatch Watch App */,
+			);
+			name = "HealthPulseWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "HealthPulseWatch Watch App";
+			productReference = 94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
 		94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */ = {
@@ -184,11 +301,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2620;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					944B823F2F04187B005ABFD3 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					94AFEF192F73D04B00746BDE = {
+						CreatedOnToolsVersion = 26.3;
 					};
 					94F5E0062F06A000005ABCF6 = {
 						CreatedOnToolsVersion = 26.2;
@@ -213,6 +333,7 @@
 			targets = (
 				944B823F2F04187B005ABFD3 /* HealthPulse */,
 				94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */,
+				94AFEF192F73D04B00746BDE /* HealthPulseWatch Watch App */,
 			);
 		};
 /* End PBXProject section */
@@ -222,6 +343,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94AFEF182F73D04B00746BDE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94AFEF302F73D13100746BDE /* HealthPulse.app in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,6 +400,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		94AFEF162F73D04B00746BDE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		94F5E0032F06A000005ABCF3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -283,6 +419,21 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		94AFEF232F73D04D00746BDE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 94AFEF192F73D04B00746BDE /* HealthPulseWatch Watch App */;
+			targetProxy = 94AFEF222F73D04D00746BDE /* PBXContainerItemProxy */;
+		};
+		94AFEF322F73D13100746BDE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 944B823F2F04187B005ABFD3 /* HealthPulse */;
+			targetProxy = 94AFEF312F73D13100746BDE /* PBXContainerItemProxy */;
+		};
+		94AFEF342F73D13900746BDE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 944B823F2F04187B005ABFD3 /* HealthPulse */;
+			targetProxy = 94AFEF332F73D13900746BDE /* PBXContainerItemProxy */;
+		};
 		94F5E00D2F06A000005ABCFD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */;
@@ -496,6 +647,72 @@
 			};
 			name = Release;
 		};
+		94AFEF262F73D04D00746BDE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GLU69QBKBN;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HealthPulseWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.maxim.HealthPulse;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Debug;
+		};
+		94AFEF272F73D04D00746BDE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GLU69QBKBN;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HealthPulseWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.maxim.HealthPulse;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
 		94F5E0072F06A000005ABCF7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -571,6 +788,15 @@
 			buildConfigurations = (
 				944B824C2F04187D005ABFD3 /* Debug */,
 				944B824D2F04187D005ABFD3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		94AFEF252F73D04D00746BDE /* Build configuration list for PBXNativeTarget "HealthPulseWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				94AFEF262F73D04D00746BDE /* Debug */,
+				94AFEF272F73D04D00746BDE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
