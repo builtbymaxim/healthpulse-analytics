@@ -186,13 +186,18 @@ enum WorkoutType: String, Codable, CaseIterable {
     case strength, hiit, yoga, pilates, crossfit
     case rowing, elliptical, stairClimber = "stair_climber"
     case weightTraining = "weight_training"
-    case sports, other
+    // Sports
+    case football, basketball, tennis
+    case martialArts = "martial_arts"
+    case dancing, badminton, volleyball
+    case other
 
     var displayName: String {
         switch self {
         case .stairClimber: return "Stair Climber"
         case .weightTraining: return "Weight Training"
         case .hiit: return "HIIT"
+        case .martialArts: return "Martial Arts"
         default: return rawValue.capitalized
         }
     }
@@ -213,7 +218,13 @@ enum WorkoutType: String, Codable, CaseIterable {
         case .rowing: return "figure.rower"
         case .elliptical: return "figure.elliptical"
         case .stairClimber: return "figure.stair.stepper"
-        case .sports: return "sportscourt.fill"
+        case .football: return "figure.soccer"
+        case .basketball: return "figure.basketball"
+        case .tennis: return "figure.tennis"
+        case .martialArts: return "figure.martial.arts"
+        case .dancing: return "figure.dance"
+        case .badminton: return "figure.badminton"
+        case .volleyball: return "figure.volleyball"
         case .other: return "figure.mixed.cardio"
         }
     }
@@ -227,7 +238,19 @@ enum WorkoutType: String, Codable, CaseIterable {
         case .swimming: return .cyan
         case .yoga, .pilates: return .purple
         case .hiit, .crossfit: return .red
+        case .football, .basketball, .volleyball: return .green
+        case .tennis, .badminton: return .yellow
+        case .martialArts: return .red
+        case .dancing: return .pink
         default: return .gray
+        }
+    }
+
+    var isSport: Bool {
+        switch self {
+        case .football, .basketball, .tennis, .martialArts, .dancing, .badminton, .volleyball:
+            return true
+        default: return false
         }
     }
 }
@@ -383,7 +406,7 @@ struct TodayWorkoutResponse: Codable {
     let isCompleted: Bool?
     let workoutName: String?
     let workoutFocus: String?
-    let exercises: [PlannedExercise]?
+    var exercises: [PlannedExercise]?
     let estimatedMinutes: Int?
     let dayOfWeek: Int
     let planName: String?
@@ -403,7 +426,7 @@ struct TodayWorkoutResponse: Codable {
     }
 }
 
-struct UnifiedWorkoutEntry: Codable, Identifiable {
+struct UnifiedWorkoutEntry: Codable, Identifiable, Hashable {
     let id: UUID
     let source: String // "freeform" or "plan"
     let workoutType: String
@@ -432,6 +455,22 @@ struct UnifiedWorkoutEntry: Codable, Identifiable {
     }
 
     var isPlanWorkout: Bool { source == "plan" }
+}
+
+struct WorkoutCalendarDay: Codable, Identifiable {
+    let date: String   // "YYYY-MM-DD"
+    let workoutCount: Int
+    let hasPr: Bool
+    let bestRating: Int?
+
+    var id: String { date }
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case workoutCount = "workout_count"
+        case hasPr = "has_pr"
+        case bestRating = "best_rating"
+    }
 }
 
 struct PlannedExercise: Codable, Identifiable {

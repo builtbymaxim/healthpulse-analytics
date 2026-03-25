@@ -108,6 +108,20 @@ struct ProfileView: View {
                     SocialToggleRow()
                 }
 
+                Section("Reviews") {
+                    Button {
+                        TabRouter.shared.openWeeklyReview()
+                    } label: {
+                        Label("Weekly Review", systemImage: "chart.bar.fill")
+                    }
+
+                    Button {
+                        TabRouter.shared.openMonthlyReview()
+                    } label: {
+                        Label("Monthly Review", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                }
+
                 // Support section
                 Section("Support") {
                     Button {

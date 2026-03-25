@@ -464,6 +464,32 @@ struct ScoreBreakdown: Codable {
     }
 }
 
+// MARK: - Recent Food
+
+struct RecentFood: Codable, Identifiable {
+    let name: String
+    let caloriesPer100g: Double
+    let proteinGPer100g: Double
+    let carbsGPer100g: Double
+    let fatGPer100g: Double
+    let fiberGPer100g: Double
+    let frequency: Int
+    let lastLoggedAt: String?
+
+    var id: String { name }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case caloriesPer100g = "calories_per_100g"
+        case proteinGPer100g = "protein_g_per_100g"
+        case carbsGPer100g = "carbs_g_per_100g"
+        case fatGPer100g = "fat_g_per_100g"
+        case fiberGPer100g = "fiber_g_per_100g"
+        case frequency
+        case lastLoggedAt = "last_logged_at"
+    }
+}
+
 // MARK: - Calorie Preview
 
 struct CalorieTargetsPreview: Codable {

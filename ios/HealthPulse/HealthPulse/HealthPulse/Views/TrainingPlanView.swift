@@ -38,7 +38,10 @@ struct TrainingPlanView: View {
                         } else {
                             NoPlanCard(
                             onSelectPlan: { viewModel.showTemplates = true },
-                            onCreateCustom: { viewModel.showCustomBuilder = true }
+                            onCreateCustom: {
+                                viewModel.planToEdit = nil
+                                viewModel.showCustomBuilder = true
+                            }
                         )
                         }
 
@@ -72,7 +75,9 @@ struct TrainingPlanView: View {
             .sheet(isPresented: $viewModel.showTemplates) {
                 TemplateSelectionView(viewModel: viewModel)
             }
-            .sheet(isPresented: $viewModel.showCustomBuilder) {
+            .sheet(isPresented: $viewModel.showCustomBuilder, onDismiss: {
+                viewModel.planToEdit = nil
+            }) {
                 CustomPlanBuilderView(prefillPlanId: viewModel.planToEdit?.id) {
                     viewModel.planToEdit = nil
                     Task { await viewModel.loadData() }

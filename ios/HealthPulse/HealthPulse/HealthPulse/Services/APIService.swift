@@ -488,6 +488,10 @@ class APIService {
         try await request(endpoint: "/workouts/unified?days=\(days)&limit=\(limit)")
     }
 
+    func getWorkoutCalendar(month: String) async throws -> [WorkoutCalendarDay] {
+        try await request(endpoint: "/workouts/calendar?month=\(month)")
+    }
+
     func deleteWorkout(id: UUID) async throws {
         let _: EmptyResponse = try await request(endpoint: "/workouts/\(id)", method: "DELETE")
     }
@@ -892,6 +896,11 @@ class APIService {
         try await request(endpoint: "/training-plans/sessions?days=\(days)")
     }
 
+    func getWorkoutSession(id: UUID) async throws -> WorkoutSession? {
+        let sessions: [WorkoutSession] = try await request(endpoint: "/training-plans/sessions?session_id=\(id.uuidString)")
+        return sessions.first
+    }
+
     func getExerciseProgress(exerciseName: String, days: Int = 90) async throws -> ExerciseProgressResponse {
         let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? exerciseName
         return try await request(endpoint: "/training-plans/progress/\(encoded)?days=\(days)")
@@ -910,6 +919,22 @@ class APIService {
         try await self.request(endpoint: "/training-plans/custom/\(planId)", method: "PUT", body: request)
     }
 
+    func patchPlanDaySchedule(planId: UUID, dayOfWeek: Int, exercises: [PatchScheduleExercise]) async throws {
+        struct Body: Encodable {
+            let dayOfWeek: Int
+            let exercises: [PatchScheduleExercise]
+            enum CodingKeys: String, CodingKey {
+                case dayOfWeek = "day_of_week"
+                case exercises
+            }
+        }
+        let _: EmptyResponse = try await self.request(
+            endpoint: "/training-plans/\(planId.uuidString)/schedule",
+            method: "PATCH",
+            body: Body(dayOfWeek: dayOfWeek, exercises: exercises)
+        )
+    }
+
     func getTrainingPlanDetail(_ id: UUID) async throws -> TrainingPlanSummary {
         try await self.request(endpoint: "/training-plans/\(id.uuidString)")
     }
@@ -924,6 +949,25 @@ class APIService {
 
     func getReview(period: String) async throws -> ReviewResponse {
         try await request(endpoint: "/predictions/review?period=\(period)")
+    }
+
+    // MARK: - Device Tokens
+
+    func registerDeviceToken(_ token: String) async throws {
+        struct Req: Encodable { let deviceToken: String; let platform: String }
+        let _: EmptyResponse = try await request(
+            endpoint: "/users/device-token",
+            method: "POST",
+            body: Req(deviceToken: token, platform: "ios")
+        )
+    }
+
+    func unregisterDeviceToken(_ token: String) async throws {
+        guard let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+        let _: EmptyResponse = try await request(
+            endpoint: "/users/device-token?device_token=\(encoded)",
+            method: "DELETE"
+        )
     }
 
     // MARK: - Social
@@ -1034,6 +1078,10 @@ class APIService {
 
     func lookupBarcode(_ barcode: String) async throws -> BarcodeProduct {
         try await request(endpoint: "/meal-plans/barcode/\(barcode)")
+    }
+
+    func getRecentFoods(limit: Int = 10) async throws -> [RecentFood] {
+        try await request(endpoint: "/nutrition/food/recent?limit=\(limit)")
     }
 
     func searchFood(query: String) async throws -> [BarcodeProduct] {
@@ -1165,6 +1213,19 @@ class APIService {
 // Helper for empty responses
 struct EmptyResponse: Decodable {
     let message: String?
+}
+
+struct PatchScheduleExercise: Encodable {
+    let name: String
+    let sets: Int
+    let reps: String?
+    let notes: String?
+    let isKeyLift: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name, sets, reps, notes
+        case isKeyLift = "is_key_lift"
+    }
 }
 
 // Weekly nutrition summary day

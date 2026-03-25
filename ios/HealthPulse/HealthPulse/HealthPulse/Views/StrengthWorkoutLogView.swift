@@ -27,6 +27,7 @@ struct StrengthWorkoutLogView: View {
     @State private var prExerciseName = ""
     @State private var showRestTimer = false
     @State private var suggestions: [String: WeightSuggestion] = [:]
+    @State private var isFocusMode = true
 
     var body: some View {
         NavigationStack {
@@ -34,135 +35,42 @@ struct StrengthWorkoutLogView: View {
                 if isLoadingExercises {
                     ProgressView("Loading exercises...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isFocusMode {
+                    FreeformFocusModeView(
+                        sets: $sets,
+                        exercises: exercises,
+                        suggestions: suggestions,
+                        onSelectExercise: { index in
+                            selectedExerciseIndex = index
+                            showingExercisePicker = true
+                        },
+                        onAddSet: { addSet() },
+                        onFetchSuggestion: { name in
+                            if suggestions[name] == nil {
+                                Task { await fetchSuggestion(for: name) }
+                            }
+                        },
+                        onFinish: { Task { await saveWorkout() } }
+                    )
                 } else {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: 16) {
-                            // Sets List
-                            ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
-                                SetRowView(
-                                    set: $sets[index],
-                                    setNumber: index + 1,
-                                    suggestion: set.exercise.flatMap { suggestions[$0.name] },
-                                    onSelectExercise: {
-                                        selectedExerciseIndex = index
-                                        showingExercisePicker = true
-                                    },
-                                    onDelete: {
-                                        withAnimation {
-                                            let _: SetInputState = sets.remove(at: index)
-                                        }
-                                    }
-                                )
-                            }
-
-                            // Action Buttons
-                            HStack(spacing: 12) {
-                                // Add Set Button
-                                Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                        addSet()
-                                    }
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "plus.circle.fill")
-                                        Text("Add Set")
-                                    }
-                                    .font(.headline)
-                                    .foregroundStyle(AppTheme.primary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(AppTheme.primary.opacity(0.1))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                }
-
-                                // Rest Timer Button (show when there are sets)
-                                if !sets.isEmpty {
-                                    Button {
-                                        showRestTimer = true
-                                        HapticsManager.shared.medium()
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "timer")
-                                            Text("Rest")
-                                        }
-                                        .font(.headline)
-                                        .foregroundStyle(.orange)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.orange.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    }
-                                }
-                            }
-
-                            // Quick Add Previous
-                            if !sets.isEmpty, let lastSet = sets.last, lastSet.exercise != nil {
-                                Button {
-                                    duplicateLastSet()
-                                    // Auto-show rest timer after duplicating
-                                    showRestTimer = true
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "arrow.counterclockwise")
-                                        Text("Same Set + Rest")
-                                    }
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                }
-                            }
-
-                            if isOfflineMode {
-                                HStack {
-                                    Image(systemName: "wifi.slash")
-                                    Text("Offline mode - saving disabled. Connect to save workouts.")
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .padding(.horizontal)
-                            }
-
-                            if let error = error {
-                                Text(error)
-                                    .foregroundStyle(.red)
-                                    .font(.caption)
-                                    .padding()
-                            }
-                        }
-                        .padding()
-                    }
-
-                    // Summary Footer
-                    if !sets.isEmpty {
-                        VStack(spacing: 8) {
-                            Divider()
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text("\(validSetsCount) sets")
-                                        .font(.headline)
-                                    Text("Volume: \(formattedTotalVolume)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button("Save Workout") {
-                                    Task { await saveWorkout() }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(!canSave || isSaving)
-                            }
-                            .padding()
-                        }
-                        .background(AppTheme.surface1)
-                    }
+                    listModeBody
                 }
             }
             .navigationTitle("Log Strength Workout")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(leading: Button(action: { dismiss() }, label: { Text("Cancel") }))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        withAnimation { isFocusMode.toggle() }
+                    } label: {
+                        Image(systemName: isFocusMode ? "list.bullet" : "rectangle.on.rectangle")
+                            .font(.body)
+                    }
+                }
+            }
             .sheet(isPresented: $showingExercisePicker) {
                 ExercisePickerView(
                     exercises: exercises,
@@ -174,7 +82,6 @@ struct StrengthWorkoutLogView: View {
                             sets[index].exerciseId = exercise.id
                         }
                         showingExercisePicker = false
-                        // Fetch suggestion for this exercise if not cached
                         if suggestions[exercise.name] == nil {
                             Task { await fetchSuggestion(for: exercise.name) }
                         }
@@ -187,7 +94,6 @@ struct StrengthWorkoutLogView: View {
                 Text("Congratulations! You set a new PR on \(prExerciseName)!")
             }
             .restTimerSheet(isPresented: $showRestTimer) {
-                // Timer completed - ready for next set
                 HapticsManager.shared.success()
             }
             .overlay {
@@ -204,6 +110,127 @@ struct StrengthWorkoutLogView: View {
         }
     }
 
+    @ViewBuilder
+    private var listModeBody: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 16) {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                    SetRowView(
+                        entry: $sets[index],
+                        setNumber: index + 1,
+                        suggestion: set.exercise.flatMap { suggestions[$0.name] },
+                        onSelectExercise: {
+                            selectedExerciseIndex = index
+                            showingExercisePicker = true
+                        },
+                        onHitIt: {
+                            sets[index].isCompleted = true
+                            HapticsManager.shared.success()
+                            showRestTimer = true
+                        },
+                        onDelete: {
+                            withAnimation { let _: SetInputState = sets.remove(at: index) }
+                        }
+                    )
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { addSet() }
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Set")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.primary.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    if !sets.isEmpty {
+                        Button {
+                            showRestTimer = true
+                            HapticsManager.shared.medium()
+                        } label: {
+                            HStack {
+                                Image(systemName: "timer")
+                                Text("Rest")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+
+                if !sets.isEmpty, let lastSet = sets.last, lastSet.exercise != nil {
+                    Button {
+                        duplicateLastSet()
+                        showRestTimer = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Same Set + Rest")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+
+                if isOfflineMode {
+                    HStack {
+                        Image(systemName: "wifi.slash")
+                        Text("Offline mode - saving disabled. Connect to save workouts.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal)
+                }
+
+                if let error = error {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                        .padding()
+                }
+            }
+            .padding()
+        }
+
+        if !sets.isEmpty {
+            VStack(spacing: 8) {
+                Divider()
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("\(validSetsCount) sets")
+                            .font(.headline)
+                        Text("Volume: \(formattedTotalVolume)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Save Workout") {
+                        Task { await saveWorkout() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSave || isSaving)
+                }
+                .padding()
+            }
+            .background(AppTheme.surface1)
+        }
+    }
+
     // MARK: - Computed Properties
 
     private var validSetsCount: Int {
@@ -213,7 +240,7 @@ struct StrengthWorkoutLogView: View {
     private var totalVolume: Double {
         sets.filter { $0.isValid }
             .compactMap { set -> Double? in
-                guard let weight = Double(set.weight),
+                guard let weight = set.weightKg,
                       let reps = Int(set.reps) else { return nil }
                 return weight * Double(reps)
             }
@@ -300,7 +327,7 @@ struct StrengthWorkoutLogView: View {
         var newSet = SetInputState()
         newSet.exerciseId = lastSet.exerciseId
         newSet.exercise = lastSet.exercise
-        newSet.weight = lastSet.weight
+        newSet.weightKg = lastSet.weightKg
         newSet.reps = lastSet.reps
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             sets.append(newSet)
@@ -357,18 +384,25 @@ struct StrengthWorkoutLogView: View {
 // MARK: - Set Row View (Simplified)
 
 struct SetRowView: View {
-    @Binding var set: SetInputState
+    @Binding var entry: SetInputState
     let setNumber: Int
     var suggestion: WeightSuggestion?
     let onSelectExercise: () -> Void
+    let onHitIt: () -> Void
     let onDelete: () -> Void
+
+    @State private var showWeightPicker = false
+
+    private var isReady: Bool {
+        entry.weightKg != nil && !entry.reps.isEmpty && Int(entry.reps) != nil && entry.exercise != nil
+    }
 
     var body: some View {
         VStack(spacing: 12) {
             // Exercise selector
             Button(action: onSelectExercise) {
                 HStack {
-                    if let exercise = set.exercise {
+                    if let exercise = entry.exercise {
                         Image(systemName: exercise.category.icon)
                             .foregroundStyle(exercise.category.color)
                         Text(exercise.name)
@@ -391,47 +425,60 @@ struct SetRowView: View {
             // Suggestion hint
             if let suggestion = suggestion, suggestion.status != "new" {
                 SuggestionHint(suggestion: suggestion) {
-                    if let weight = suggestion.suggestedWeightKg {
-                        set.weight = formatWeight(weight)
-                    }
+                    entry.weightKg = suggestion.suggestedWeightKg
                     HapticsManager.shared.light()
                 }
                 .padding(.horizontal, 4)
             }
 
-            // Weight & Reps inputs (simplified - no RPE, no warmup)
             HStack(spacing: 16) {
-                // Set number
-                Text("#\(setNumber)")
-                    .font(.title3.bold())
-                    .foregroundStyle(.green)
-                    .frame(width: 40)
+                // Set number / completed indicator
+                if entry.isCompleted {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                        .frame(width: 40)
+                } else {
+                    Text("#\(setNumber)")
+                        .font(.title3.bold())
+                        .foregroundStyle(.green)
+                        .frame(width: 40)
+                }
 
-                // Weight - larger touch target
+                // Weight picker button
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Weight")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    HStack(spacing: 4) {
-                        TextField("0", text: $set.weight)
-                            .keyboardType(.decimalPad)
+                    Button { showWeightPicker = true } label: {
+                        HStack(spacing: 4) {
+                            Text(entry.weightKg.map { w in
+                                w.truncatingRemainder(dividingBy: 1) == 0
+                                    ? String(format: "%.0f", w)
+                                    : String(format: "%.1f", w)
+                            } ?? "—")
                             .font(.title2.bold())
-                            .frame(width: 80)
-                            .padding(8)
-                            .background(AppTheme.surface2)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        Text("kg")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(entry.weightKg == nil ? .tertiary : .primary)
+                            .frame(width: 56, alignment: .trailing)
+                            Text("kg")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(8)
+                        .background(AppTheme.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .sheet(isPresented: $showWeightPicker) {
+                        WeightInputSelector(weight: $entry.weightKg)
                     }
                 }
 
-                // Reps - larger touch target
+                // Reps
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Reps")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("0", text: $set.reps)
+                    TextField("0", text: $entry.reps)
                         .keyboardType(.numberPad)
                         .font(.title2.bold())
                         .frame(width: 60)
@@ -442,11 +489,30 @@ struct SetRowView: View {
 
                 Spacer()
 
-                // Delete button
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.red.opacity(0.7))
-                        .font(.title2)
+                // Hit it / delete
+                if entry.isCompleted {
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red.opacity(0.7))
+                            .font(.title2)
+                    }
+                } else if isReady {
+                    Button {
+                        onHitIt()
+                    } label: {
+                        Text("Hit it!")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.green, in: Capsule())
+                    }
+                } else {
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red.opacity(0.7))
+                            .font(.title2)
+                    }
                 }
             }
         }
@@ -454,10 +520,7 @@ struct SetRowView: View {
         .background(AppTheme.surface1)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .cardShadow()
-    }
-
-    private func formatWeight(_ w: Double) -> String {
-        w.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", w) : String(format: "%.1f", w)
+        .opacity(entry.isCompleted ? 0.7 : 1.0)
     }
 }
 

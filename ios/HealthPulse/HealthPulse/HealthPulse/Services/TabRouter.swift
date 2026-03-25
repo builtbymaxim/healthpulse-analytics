@@ -36,6 +36,7 @@ class TabRouter: ObservableObject {
     @Published var showWeightTracking = false
     @Published var showWeeklyReview = false
     @Published var showMonthlyReview = false
+    @Published var showSocialView = false
 
     private init() {}
 
@@ -71,5 +72,20 @@ class TabRouter: ObservableObject {
     func openMonthlyReview() {
         selectedTab = .dashboard
         showMonthlyReview = true
+    }
+
+    func handleDeepLink(_ url: URL) {
+        guard url.scheme == "healthpulse" else { return }
+        switch url.host {
+        case "social":
+            selectedTab = .profile
+            showSocialView = true
+        case "review":
+            let path = url.pathComponents.dropFirst().first
+            if path == "weekly" { openWeeklyReview() }
+            else if path == "monthly" { openMonthlyReview() }
+        default:
+            break
+        }
     }
 }

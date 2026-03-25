@@ -10,6 +10,7 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user, CurrentUser
+from app.database import get_supabase_client
 from app.services.prediction_service import get_prediction_service
 from app.services.dashboard_service import (
     get_dashboard_service,

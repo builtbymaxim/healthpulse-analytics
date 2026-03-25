@@ -11,6 +11,8 @@ import AudioToolbox
 struct RestTimer: View {
     @Binding var isPresented: Bool
     let onComplete: () -> Void
+    var defaultDuration: Int = 90
+    var autoStart: Bool = false
 
     @State private var selectedDuration: Int = 90
     @State private var remainingSeconds: Int = 90
@@ -153,6 +155,11 @@ struct RestTimer: View {
             Spacer()
         }
         .padding(.top, 20)
+        .onAppear {
+            selectedDuration = defaultDuration
+            remainingSeconds = defaultDuration
+            if autoStart { startTimer() }
+        }
         .onDisappear {
             stopTimer()
         }
@@ -228,11 +235,21 @@ struct RestTimer: View {
 // MARK: - Rest Timer Sheet Modifier
 
 extension View {
-    func restTimerSheet(isPresented: Binding<Bool>, onComplete: @escaping () -> Void) -> some View {
+    func restTimerSheet(
+        isPresented: Binding<Bool>,
+        defaultDuration: Int = 90,
+        autoStart: Bool = false,
+        onComplete: @escaping () -> Void
+    ) -> some View {
         self.sheet(isPresented: isPresented) {
-            RestTimer(isPresented: isPresented, onComplete: onComplete)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+            RestTimer(
+                isPresented: isPresented,
+                onComplete: onComplete,
+                defaultDuration: defaultDuration,
+                autoStart: autoStart
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 }

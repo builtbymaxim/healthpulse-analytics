@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta
 from uuid import UUID
@@ -69,6 +69,12 @@ class CreateCustomPlanRequest(BaseModel):
     """Request to create a custom training plan from scratch."""
     plan_name: str
     days: list[CustomPlanDay]
+
+
+class PatchDayScheduleRequest(BaseModel):
+    """Update exercises for one day without replacing the whole plan."""
+    day_of_week: int            # ISO 1=Mon … 7=Sun
+    exercises: list[dict]       # same shape as schedule JSONB exercises array
 
 
 # Response Models
@@ -393,10 +399,21 @@ async def log_workout_session(
 @router.get("/sessions")
 async def get_workout_sessions(
     days: int = 30,
+    session_id: UUID | None = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Get recent workout sessions."""
+    """Get recent workout sessions. Pass session_id to fetch a single session by ID."""
     supabase = get_supabase_client()
+
+    if session_id:
+        result = (
+            supabase.table("workout_sessions")
+            .select("*")
+            .eq("user_id", str(current_user.id))
+            .eq("id", str(session_id))
+            .execute()
+        )
+        return result.data or []
 
     from_date = (datetime.now() - timedelta(days=days)).isoformat()
 
@@ -543,6 +560,37 @@ async def update_custom_plan(
         "name": request.plan_name,
         "days_per_week": len(request.days),
     }
+
+
+@router.patch("/{plan_id}/schedule")
+async def patch_plan_day_schedule(
+    plan_id: UUID,
+    request: PatchDayScheduleRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Patch the exercise list for a single day without replacing the whole plan."""
+    supabase = get_supabase_client()
+    result = (
+        supabase.table("training_plans")
+        .select("schedule")
+        .eq("id", str(plan_id))
+        .eq("user_id", str(current_user.id))
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    schedule = result.data.get("schedule") or {}
+    day_key = str(request.day_of_week)
+    if day_key in schedule:
+        schedule[day_key]["exercises"] = request.exercises
+
+    supabase.table("training_plans").update({"schedule": schedule}).eq(
+        "id", str(plan_id)
+    ).eq("user_id", str(current_user.id)).execute()
+
+    return {"status": "ok"}
 
 
 # NOTE: /{plan_id} routes MUST come after all specific routes (/sessions, /progress, etc.)

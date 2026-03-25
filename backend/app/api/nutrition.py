@@ -326,6 +326,20 @@ async def scan_food(
         raise HTTPException(status_code=502, detail="Vision API error")
 
 
+@router.get("/food/recent")
+async def get_recent_foods(
+    limit: int = Query(10, ge=1, le=20),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get the user's most recently logged foods, deduplicated by name.
+
+    Returns up to `limit` distinct foods ordered by most-recently logged,
+    with per-100g macro values and a frequency count.
+    """
+    service = get_nutrition_service()
+    return await service.get_recent_foods(current_user.id, limit=limit)
+
+
 @router.post("/food", response_model=FoodEntryResponse)
 async def log_food(
     entry: FoodEntryCreate,

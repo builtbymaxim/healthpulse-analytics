@@ -20,9 +20,14 @@ struct WorkoutTabView: View {
     @State private var unifiedWorkouts: [UnifiedWorkoutEntry] = []
     @State private var todaysWorkout: TodayWorkoutResponse?
     @State private var hasActivePlan = false
-    @State private var selectedWorkout: Workout?
-    @State private var isLoadingDetail = false
+    @State private var selectedEntry: UnifiedWorkoutEntry?
     @State private var loadError: String?
+    @State private var historyMode: HistoryMode = .recent
+
+    private enum HistoryMode: String, CaseIterable {
+        case recent = "Recent"
+        case calendar = "Calendar"
+    }
 
     var body: some View {
         NavigationStack {
@@ -89,35 +94,49 @@ struct WorkoutTabView: View {
                     Divider()
                         .padding(.horizontal)
 
-                    // Recent Workouts (unified: freeform + plan sessions)
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionHeaderLabel(text: "Recent Workouts")
-
-                        if let err = loadError {
-                            EmptyStateView(
-                                icon: "exclamationmark.triangle",
-                                title: "Could Not Load Workouts",
-                                message: err,
-                                actionTitle: "Retry"
-                            ) { loadError = nil; loadRecentWorkouts() }
-                        } else if unifiedWorkouts.isEmpty {
-                            EmptyStateView(
-                                icon: "figure.run.circle",
-                                title: "No Workouts Yet",
-                                message: "Start your first workout using the Quick Start options above."
-                            )
-                        } else {
-                            ForEach(unifiedWorkouts.prefix(8)) { entry in
-                                Button {
-                                    Task { await loadWorkoutDetail(id: entry.id) }
-                                } label: {
-                                    UnifiedWorkoutRow(entry: entry)
-                                }
-                                .buttonStyle(.plain)
-                            }
+                    // History mode toggle
+                    Picker("History Mode", selection: $historyMode) {
+                        ForEach(HistoryMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
                         }
                     }
+                    .pickerStyle(.segmented)
                     .padding(.horizontal)
+
+                    if historyMode == .recent {
+                        // Recent Workouts (unified: freeform + plan sessions)
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeaderLabel(text: "Recent Workouts")
+
+                            if let err = loadError {
+                                EmptyStateView(
+                                    icon: "exclamationmark.triangle",
+                                    title: "Could Not Load Workouts",
+                                    message: err,
+                                    actionTitle: "Retry"
+                                ) { loadError = nil; loadRecentWorkouts() }
+                            } else if unifiedWorkouts.isEmpty {
+                                EmptyStateView(
+                                    icon: "figure.run.circle",
+                                    title: "No Workouts Yet",
+                                    message: "Start your first workout using the Quick Start options above."
+                                )
+                            } else {
+                                ForEach(unifiedWorkouts.prefix(8)) { entry in
+                                    Button {
+                                        selectedEntry = entry
+                                    } label: {
+                                        UnifiedWorkoutRow(entry: entry)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    } else {
+                        WorkoutHistoryView()
+                            .padding(.horizontal)
+                    }
 
                     Spacer(minLength: 40)
                 }
@@ -140,7 +159,7 @@ struct WorkoutTabView: View {
             }
             .fullScreenCover(isPresented: $showWorkoutExecution) {
                 if let workout = todaysWorkout {
-                    WorkoutExecutionView(workout: workout, planId: workout.planId) { prs in
+                    PreWorkoutOverviewView(workout: workout, planId: workout.planId) { prs in
                         if !prs.isEmpty {
                             achievedPRs = prs
                             showPRCelebration = true
@@ -150,6 +169,7 @@ struct WorkoutTabView: View {
                             loadRecentWorkouts()
                             NotificationCenter.default.post(name: .workoutCompleted, object: nil)
                         }
+                        showWorkoutExecution = false
                     }
                 }
             }
@@ -160,9 +180,9 @@ struct WorkoutTabView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            .navigationDestination(item: $selectedWorkout) { workout in
-                WorkoutDetailView(workout: workout) {
-                    selectedWorkout = nil
+            .navigationDestination(item: $selectedEntry) { entry in
+                UnifiedWorkoutDetailView(entry: entry) {
+                    selectedEntry = nil
                     loadRecentWorkouts()
                 }
             }
@@ -193,6 +213,12 @@ struct WorkoutTabView: View {
                     recentWorkouts.insert(workout, at: 0)
                     loadRecentWorkouts()
                     NotificationCenter.default.post(name: .workoutCompleted, object: nil)
+                }
+            }
+            .onAppear {
+                // Auto-restore if a workout was minimized and user returns to this tab
+                if WorkoutSessionStore.shared.isActive {
+                    WorkoutSessionStore.shared.restore()
                 }
             }
             .task {
@@ -240,18 +266,7 @@ struct WorkoutTabView: View {
         }
     }
 
-    private func loadWorkoutDetail(id: UUID) async {
-        isLoadingDetail = true
-        do {
-            let workout = try await APIService.shared.getWorkouts(days: 90).first { $0.id == id }
-            if let workout {
-                selectedWorkout = workout
-            }
-        } catch {
-            print("Failed to load workout detail: \(error)")
-        }
-        isLoadingDetail = false
-    }
+
 }
 
 // MARK: - Today's Plan Workout Card
@@ -507,8 +522,27 @@ struct GeneralWorkoutSheet: View {
                         .font(.headline)
 
 
+                    let generalTypes = WorkoutType.allCases.filter { !$0.isSport && $0 != .strength }
+                    let sportTypes = WorkoutType.allCases.filter { $0.isSport }
+
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 12) {
-                        ForEach(WorkoutType.allCases.filter { $0 != .strength }, id: \.self) { type in
+                        ForEach(generalTypes, id: \.self) { type in
+                            WorkoutTypeButton(
+                                type: type,
+                                isSelected: workoutType == type
+                            ) {
+                                workoutType = type
+                                HapticsManager.shared.selection()
+                            }
+                        }
+                    }
+
+                    Text("Sports")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 12) {
+                        ForEach(sportTypes, id: \.self) { type in
                             WorkoutTypeButton(
                                 type: type,
                                 isSelected: workoutType == type

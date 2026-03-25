@@ -37,6 +37,9 @@ struct FoodLogView: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
 
+    // Recently logged foods
+    @State private var recentFoods: [RecentFood] = []
+
     var isEditing: Bool { editingEntry != nil }
 
     init(editingEntry: FoodEntry? = nil, onSave: @escaping (FoodEntry) -> Void) {
@@ -282,32 +285,36 @@ struct FoodLogView: View {
                     }
                     .padding(.horizontal)
 
-                    // Quick Add Suggestions
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Quick Add")
-                            .font(.headline)
+                    // Recently Logged Foods
+                    if !recentFoods.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Recently Logged")
+                                .font(.headline)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                QuickFoodChip(name: "Chicken", cal: 165, p: 31, c: 0, f: 3.6) {
-                                    fillQuickAdd(name: "Chicken Breast", cal: 165, p: 31, c: 0, f: 3.6)
-                                }
-                                QuickFoodChip(name: "Rice", cal: 130, p: 2.7, c: 28, f: 0.3) {
-                                    fillQuickAdd(name: "White Rice", cal: 130, p: 2.7, c: 28, f: 0.3)
-                                }
-                                QuickFoodChip(name: "Eggs", cal: 155, p: 13, c: 1.1, f: 11) {
-                                    fillQuickAdd(name: "Eggs", cal: 155, p: 13, c: 1.1, f: 11)
-                                }
-                                QuickFoodChip(name: "Oats", cal: 389, p: 17, c: 66, f: 7) {
-                                    fillQuickAdd(name: "Oats", cal: 389, p: 17, c: 66, f: 7)
-                                }
-                                QuickFoodChip(name: "Banana", cal: 89, p: 1.1, c: 23, f: 0.3) {
-                                    fillQuickAdd(name: "Banana", cal: 89, p: 1.1, c: 23, f: 0.3)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(recentFoods) { food in
+                                        QuickFoodChip(
+                                            name: food.name,
+                                            cal: food.caloriesPer100g,
+                                            p: food.proteinGPer100g,
+                                            c: food.carbsGPer100g,
+                                            f: food.fatGPer100g
+                                        ) {
+                                            fillQuickAdd(
+                                                name: food.name,
+                                                cal: food.caloriesPer100g,
+                                                p: food.proteinGPer100g,
+                                                c: food.carbsGPer100g,
+                                                f: food.fatGPer100g
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
                     // Save Button
                     Button {
@@ -334,6 +341,12 @@ struct FoodLogView: View {
             }
             .navigationTitle(isEditing ? "Edit Entry" : "Log Food")
             .onAppear { prefillIfEditing() }
+            .task {
+                guard !isEditing else { return }
+                if let foods = try? await APIService.shared.getRecentFoods() {
+                    recentFoods = foods
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

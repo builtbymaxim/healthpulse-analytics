@@ -81,6 +81,7 @@ struct ContentView: View {
 struct MainTabView: View {
     @EnvironmentObject var tabRouter: TabRouter
     @EnvironmentObject var authService: AuthService
+    @ObservedObject private var workoutStore = WorkoutSessionStore.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -98,7 +99,24 @@ struct MainTabView: View {
             }
             .toolbar(.hidden, for: .tabBar)
 
-            CustomTabBar(selectedTab: $tabRouter.selectedTab)
+            VStack(spacing: 0) {
+                LiveWorkoutBar()
+                CustomTabBar(selectedTab: $tabRouter.selectedTab)
+            }
+        }
+        .animation(MotionTokens.entrance, value: workoutStore.isActive && !workoutStore.isPresenting)
+        .fullScreenCover(isPresented: $workoutStore.isPresenting) {
+            if let vm = workoutStore.activeViewModel {
+                WorkoutExecutionView(viewModel: vm) { prs in
+                    workoutStore.endWorkout(prs: prs)
+                }
+            }
+        }
+        .sheet(isPresented: $tabRouter.showSocialView) {
+            NavigationStack {
+                SocialView()
+                    .navigationBarTitleDisplayMode(.inline)
+            }
         }
     }
 }

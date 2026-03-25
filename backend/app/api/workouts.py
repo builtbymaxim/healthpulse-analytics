@@ -31,7 +31,48 @@ class WorkoutType(str, Enum):
     PILATES = "pilates"
     STRETCHING = "stretching"
     HIIT = "hiit"
+    # Sports
+    SOCCER = "soccer"
+    BASKETBALL = "basketball"
+    TENNIS = "tennis"
+    MARTIAL_ARTS = "martial_arts"
+    DANCING = "dancing"
+    BADMINTON = "badminton"
+    VOLLEYBALL = "volleyball"
     OTHER = "other"
+
+
+# MET (Metabolic Equivalent of Task) values per workout type
+_MET_VALUES: dict[str, float] = {
+    "running": 9.8,
+    "cycling": 7.5,
+    "swimming": 6.0,
+    "walking": 3.5,
+    "hiking": 6.0,
+    "rowing": 7.0,
+    "weight_training": 5.0,
+    "bodyweight": 5.0,
+    "crossfit": 8.0,
+    "yoga": 2.5,
+    "pilates": 3.0,
+    "stretching": 2.0,
+    "hiit": 8.0,
+    "soccer": 7.0,
+    "basketball": 6.5,
+    "tennis": 7.3,
+    "martial_arts": 10.3,
+    "dancing": 5.0,
+    "badminton": 5.5,
+    "volleyball": 4.0,
+    "other": 5.0,
+}
+
+_INTENSITY_MET_FALLBACK: dict[str, float] = {
+    "light": 3.0,
+    "moderate": 5.0,
+    "hard": 7.0,
+    "very_hard": 9.0,
+}
 
 
 class IntensityLevel(str, Enum):
@@ -232,13 +273,31 @@ async def create_workout(
         current_user.id, workout.workout_type.value,
         workout.duration_minutes, workout.intensity.value,
     )
+    # Auto-estimate calories via MET when not provided
+    calories_burned = workout.calories_burned
+    if calories_burned is None:
+        met = _MET_VALUES.get(workout.workout_type.value,
+                              _INTENSITY_MET_FALLBACK.get(workout.intensity.value, 5.0))
+        weight_kg = 70.0  # default fallback
+        try:
+            profile = supabase.table("health_metrics").select("value") \
+                .eq("user_id", str(current_user.id)) \
+                .eq("metric_type", "weight") \
+                .order("timestamp", desc=True) \
+                .limit(1).execute()
+            if profile.data:
+                weight_kg = float(profile.data[0]["value"])
+        except Exception:
+            pass
+        calories_burned = round(met * weight_kg * (workout.duration_minutes / 60.0))
+
     data = {
         "user_id": str(current_user.id),
         "workout_type": workout.workout_type.value,
         "start_time": workout.started_at.isoformat(),  # DB column is start_time
         "duration_minutes": workout.duration_minutes,
         "intensity": workout.intensity.value,
-        "calories_burned": workout.calories_burned,
+        "calories_burned": calories_burned,
         "distance_km": workout.distance_km,
         "avg_heart_rate": workout.avg_heart_rate,
         "max_heart_rate": workout.max_heart_rate,
@@ -365,6 +424,82 @@ async def get_weekly_summaries(
         )
 
     return summaries
+
+
+@router.get("/calendar")
+async def get_workout_calendar(
+    month: str = Query(description="Month in YYYY-MM format, e.g. 2026-03"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Get per-day workout summary for a calendar month."""
+    try:
+        year, mon = map(int, month.split("-"))
+        first_day = date(year, mon, 1)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
+
+    if mon == 12:
+        last_day = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = date(year, mon + 1, 1) - timedelta(days=1)
+
+    start_iso = f"{first_day}T00:00:00"
+    end_iso = f"{last_day}T23:59:59"
+    user_id = str(current_user.id)
+    supabase = get_supabase_client()
+
+    freeform_result = (
+        supabase.table("workouts")
+        .select("start_time, overall_rating")
+        .eq("user_id", user_id)
+        .gte("start_time", start_iso)
+        .lte("start_time", end_iso)
+        .execute()
+    )
+
+    session_result = (
+        supabase.table("workout_sessions")
+        .select("started_at, overall_rating")
+        .eq("user_id", user_id)
+        .gte("started_at", start_iso)
+        .lte("started_at", end_iso)
+        .execute()
+    )
+
+    pr_result = (
+        supabase.table("personal_records")
+        .select("achieved_at")
+        .eq("user_id", user_id)
+        .gte("achieved_at", start_iso)
+        .lte("achieved_at", end_iso)
+        .execute()
+    )
+
+    days: dict[str, dict] = {}
+
+    def _day(d: str) -> dict:
+        if d not in days:
+            days[d] = {"date": d, "workout_count": 0, "has_pr": False, "best_rating": None}
+        return days[d]
+
+    for w in (freeform_result.data or []):
+        entry = _day(w["start_time"][:10])
+        entry["workout_count"] += 1
+        r = w.get("overall_rating")
+        if r and (entry["best_rating"] is None or r > entry["best_rating"]):
+            entry["best_rating"] = r
+
+    for s in (session_result.data or []):
+        entry = _day(s["started_at"][:10])
+        entry["workout_count"] += 1
+        r = s.get("overall_rating")
+        if r and (entry["best_rating"] is None or r > entry["best_rating"]):
+            entry["best_rating"] = r
+
+    for pr in (pr_result.data or []):
+        _day(pr["achieved_at"][:10])["has_pr"] = True
+
+    return sorted(days.values(), key=lambda x: x["date"])
 
 
 @router.get("/{workout_id}", response_model=WorkoutResponse)

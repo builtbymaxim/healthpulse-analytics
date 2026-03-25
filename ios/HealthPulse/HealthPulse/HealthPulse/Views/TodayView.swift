@@ -13,7 +13,6 @@ struct TodayView: View {
     @EnvironmentObject var healthKitService: HealthKitService
     @EnvironmentObject var tabRouter: TabRouter
     @State private var showTrainingPlanSetup = false
-    @State private var showWorkoutExecution = false
     @State private var showPRCelebration = false
     @State private var showNutritionDetail = false
     @State private var achievedPRs: [PRInfo] = []
@@ -55,19 +54,6 @@ struct TodayView: View {
             }
             .sheet(isPresented: $showTrainingPlanSetup) {
                 TrainingPlanView()
-            }
-            .fullScreenCover(isPresented: $showWorkoutExecution) {
-                if let workout = viewModel.todaysWorkout {
-                    WorkoutExecutionView(workout: workout, planId: nil) { prs in
-                        if !prs.isEmpty {
-                            achievedPRs = prs
-                            showPRCelebration = true
-                        }
-                        Task {
-                            await viewModel.loadData()
-                        }
-                    }
-                }
             }
             .sheet(isPresented: $showPRCelebration) {
                 PRCelebrationView(prs: achievedPRs) {
@@ -167,7 +153,16 @@ struct TodayView: View {
                         if todaysWorkout.isRestDay {
                             tabRouter.navigateTo(.workout)
                         } else {
-                            showWorkoutExecution = true
+                            WorkoutSessionStore.shared.startWorkout(
+                                workout: todaysWorkout,
+                                planId: todaysWorkout.planId
+                            ) { prs in
+                                if !prs.isEmpty {
+                                    achievedPRs = prs
+                                    showPRCelebration = true
+                                }
+                                Task { await viewModel.loadData() }
+                            }
                         }
                     }
                 )

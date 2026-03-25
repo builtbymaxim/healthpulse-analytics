@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct HealthPulseApp: App {
 
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var authService = AuthService.shared
     @StateObject private var healthKitService = HealthKitService.shared
     @StateObject private var notificationService = NotificationService.shared
@@ -28,6 +29,9 @@ struct HealthPulseApp: App {
                 .task {
                     await notificationService.requestAuthorization()
                 }
+                .onOpenURL { url in
+                    TabRouter.shared.handleDeepLink(url)
+                }
                 .onChange(of: authService.isAuthenticated) { _, authenticated in
                     if authenticated {
                         Task {
@@ -36,6 +40,7 @@ struct HealthPulseApp: App {
                         calendarSyncService.checkAuthorizationStatus()
                     } else {
                         notificationService.cancelAllNotifications()
+                        notificationService.unregisterCurrentToken()
                         calendarSyncService.cleanupOnLogout()
                     }
                 }

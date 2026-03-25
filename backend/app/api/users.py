@@ -95,6 +95,12 @@ class UserProfileUpdate(BaseModel):
     fitness_goal: str | None = None
 
 
+class DeviceTokenRequest(BaseModel):
+    """Device push token registration request."""
+    device_token: str
+    platform: str = "ios"
+
+
 # Endpoints
 @router.get("/me", response_model=UserProfile)
 async def get_my_profile(
@@ -522,3 +528,34 @@ async def complete_onboarding(
             status_code=500,
             detail=f"Failed to save onboarding data: {str(e)}"
         )
+
+
+# MARK: - Device Push Tokens
+
+@router.post("/device-token", status_code=204)
+async def register_device_token(
+    req: DeviceTokenRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Register a device push token for APNs notifications."""
+    supabase = get_supabase_client()
+    supabase.table("device_tokens").upsert(
+        {
+            "user_id": str(current_user.id),
+            "device_token": req.device_token,
+            "platform": req.platform,
+        },
+        on_conflict="user_id,device_token",
+    ).execute()
+
+
+@router.delete("/device-token", status_code=204)
+async def unregister_device_token(
+    device_token: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Unregister a device push token (called on logout)."""
+    supabase = get_supabase_client()
+    supabase.table("device_tokens").delete().eq(
+        "user_id", str(current_user.id)
+    ).eq("device_token", device_token).execute()

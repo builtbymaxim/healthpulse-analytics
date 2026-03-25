@@ -327,6 +327,41 @@ class NutritionService:
         result = query.execute()
         return result.data or []
 
+    async def get_recent_foods(self, user_id: UUID, limit: int = 10) -> list[dict]:
+        """Get user's most recently logged foods, deduplicated by name.
+
+        Fetches the last 200 entries, groups by name in Python (avoids raw SQL),
+        and returns the top N by most-recent log date with frequency count.
+        """
+        result = (
+            self.supabase.table("food_entries")
+            .select("name, calories, protein_g, carbs_g, fat_g, fiber_g, logged_at")
+            .eq("user_id", str(user_id))
+            .order("logged_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+        entries = result.data or []
+
+        seen: dict[str, dict] = {}
+        for e in entries:
+            key = e["name"].strip().lower()
+            if key not in seen:
+                seen[key] = {
+                    "name": e["name"],
+                    "calories_per_100g": float(e.get("calories") or 0),
+                    "protein_g_per_100g": float(e.get("protein_g") or 0),
+                    "carbs_g_per_100g": float(e.get("carbs_g") or 0),
+                    "fat_g_per_100g": float(e.get("fat_g") or 0),
+                    "fiber_g_per_100g": float(e.get("fiber_g") or 0),
+                    "frequency": 1,
+                    "last_logged_at": e.get("logged_at"),
+                }
+            else:
+                seen[key]["frequency"] += 1
+
+        return list(seen.values())[:limit]
+
     async def delete_food_entry(self, user_id: UUID, entry_id: UUID) -> bool:
         """Delete a food entry.
 

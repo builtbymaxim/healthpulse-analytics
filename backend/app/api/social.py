@@ -198,6 +198,34 @@ async def use_invite_code(
 
     p = p_result.data[0]
     profile = inviter_profile.data or {}
+
+    # Notify the inviter that someone used their invite code
+    try:
+        from app.services.push_service import send_push
+        tokens_result = (
+            supabase.table("device_tokens")
+            .select("device_token")
+            .eq("user_id", inviter_id)
+            .execute()
+        )
+        invitee_profile = (
+            supabase.table("profiles")
+            .select("display_name")
+            .eq("id", str(current_user.id))
+            .single()
+            .execute()
+        )
+        invitee_name = (invitee_profile.data or {}).get("display_name") or "Someone"
+        for row in (tokens_result.data or []):
+            await send_push(
+                row["device_token"],
+                title="New Partnership Request",
+                body=f"{invitee_name} wants to be your training partner!",
+                data={"deep_link": "healthpulse://social/pending"},
+            )
+    except Exception:
+        pass  # Push failure must never block the partnership response
+
     return _build_partner_summary(p, current_user.id, profile)
 
 

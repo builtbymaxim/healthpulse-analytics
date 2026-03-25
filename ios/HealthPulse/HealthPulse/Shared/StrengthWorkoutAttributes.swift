@@ -16,6 +16,10 @@ struct StrengthWorkoutAttributes: ActivityAttributes {
         var currentExerciseName: String
         var currentSetNumber: Int
         var totalSets: Int
+        /// True while rest timer is running between sets
+        var isResting: Bool = false
+        /// End date of the rest timer — Text(restEndDate, style: .timer) counts down
+        var restEndDate: Date? = nil
     }
 
     var workoutName: String

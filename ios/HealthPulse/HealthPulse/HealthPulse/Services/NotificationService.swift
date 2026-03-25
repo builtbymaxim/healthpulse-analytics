@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import UIKit
 import UserNotifications
 
 @MainActor
@@ -15,6 +16,7 @@ class NotificationService: ObservableObject {
     static let shared = NotificationService()
 
     @Published var isAuthorized = false
+    @Published var currentDeviceToken: String?
     @Published var mealRemindersEnabled = true
     @Published var workoutReminderEnabled = true
     @Published var weeklyReviewEnabled = true
@@ -105,6 +107,9 @@ class NotificationService: ObservableObject {
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             isAuthorized = granted
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
         } catch {
             print("Notification authorization failed: \(error)")
         }
@@ -215,6 +220,7 @@ class NotificationService: ObservableObject {
         content.body = "Your weekly performance summary is ready. See how you did!"
         content.sound = .default
         content.categoryIdentifier = "WEEKLY_REVIEW"
+        content.userInfo = ["deep_link": "healthpulse://review/weekly"]
 
         // Sunday at 6pm
         var dateComponents = DateComponents()
@@ -236,6 +242,7 @@ class NotificationService: ObservableObject {
         content.body = "Check your monthly fitness progress and trends!"
         content.sound = .default
         content.categoryIdentifier = "MONTHLY_REVIEW"
+        content.userInfo = ["deep_link": "healthpulse://review/monthly"]
 
         // 1st of each month at 10am
         var dateComponents = DateComponents()
@@ -247,6 +254,26 @@ class NotificationService: ObservableObject {
         let request = UNNotificationRequest(identifier: "monthly_review", content: content, trigger: trigger)
 
         center.add(request)
+    }
+
+    // MARK: - Remote (APNs) Token
+
+    func registerDeviceToken(_ token: Data) async {
+        let hexToken = token.map { String(format: "%02x", $0) }.joined()
+        currentDeviceToken = hexToken
+        do {
+            try await APIService.shared.registerDeviceToken(hexToken)
+        } catch {
+            print("[APNs] Failed to register device token: \(error)")
+        }
+    }
+
+    func unregisterCurrentToken() {
+        guard let token = currentDeviceToken else { return }
+        currentDeviceToken = nil
+        Task {
+            try? await APIService.shared.unregisterDeviceToken(token)
+        }
     }
 
     // MARK: - Management

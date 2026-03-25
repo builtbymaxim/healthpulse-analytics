@@ -391,26 +391,102 @@ struct MuscleGroupStats: Codable {
     }
 }
 
+// MARK: - Workout Execution Log Models
+
+/// Infer exercise input type from reps string (e.g., "60s" → timeOnly) and exercise name.
+/// Extracted from WorkoutExecutionView for reuse in ViewModel and tests.
+func inferInputType(from reps: String?, exerciseName: String) -> ExerciseInputType {
+    if let reps = reps {
+        let lowercased = reps.lowercased()
+        if lowercased.hasSuffix("s") || lowercased.contains("sec") {
+            return .timeOnly
+        }
+        if lowercased.contains("km") || lowercased.contains("mi") || lowercased.contains("m ") {
+            return .distanceAndTime
+        }
+    }
+
+    let bodyweightExercises = ["push-up", "pushup", "pull-up", "pullup", "chin-up", "chinup",
+                                "dip", "burpee", "sit-up", "situp", "crunch", "lunge"]
+    let timedExercises = ["plank", "wall sit", "dead hang", "hollow hold", "l-sit"]
+
+    let nameLower = exerciseName.lowercased()
+    if timedExercises.contains(where: { nameLower.contains($0) }) {
+        return .timeOnly
+    }
+    if bodyweightExercises.contains(where: { nameLower.contains($0) }) {
+        return .repsOnly
+    }
+
+    return .weightAndReps
+}
+
+struct SetLogEntry: Identifiable {
+    let id = UUID()
+    var weight: Double?       // For weight_and_reps (nil = empty field)
+    var reps: Int?            // For weight_and_reps, reps_only
+    var duration: Int?        // For time_only (seconds)
+    var distance: Double?     // For distance_and_time (km)
+    var rpe: Int?
+    var completedAt: Date?
+}
+
+struct ExerciseLogEntry: Identifiable {
+    let id = UUID()
+    let name: String
+    let isKeyLift: Bool
+    let inputType: ExerciseInputType
+    let targetSetsReps: String?
+    var sets: [SetLogEntry]
+    var isCompleted: Bool
+    var suggestion: WeightSuggestion?
+
+    init(from planned: PlannedExercise, isKeyLift: Bool = false) {
+        self.name = planned.name
+        self.isKeyLift = isKeyLift
+        self.inputType = inferInputType(from: planned.reps, exerciseName: planned.name)
+
+        if let sets = planned.sets, let reps = planned.reps {
+            self.targetSetsReps = "\(sets) x \(reps)"
+            self.sets = (0..<sets).map { _ in SetLogEntry() }
+        } else {
+            self.targetSetsReps = nil
+            self.sets = isKeyLift ? [SetLogEntry(), SetLogEntry(), SetLogEntry()] : []
+        }
+        self.isCompleted = false
+    }
+
+    init(name: String, isKeyLift: Bool, inputType: ExerciseInputType = .weightAndReps,
+         targetSetsReps: String?, sets: [SetLogEntry], isCompleted: Bool) {
+        self.name = name
+        self.isKeyLift = isKeyLift
+        self.inputType = inputType
+        self.targetSetsReps = targetSetsReps
+        self.sets = sets
+        self.isCompleted = isCompleted
+    }
+}
+
 // MARK: - Set Input State (for UI)
 
 struct SetInputState: Identifiable {
     let id = UUID()
     var exerciseId: UUID?
     var exercise: Exercise?
-    var weight: String = ""
+    var weightKg: Double? = nil
     var reps: String = ""
     var rpe: Double?
     var isWarmup: Bool = false
     var notes: String = ""
+    var isCompleted: Bool = false
 
     var isValid: Bool {
-        exerciseId != nil && !weight.isEmpty && !reps.isEmpty &&
-        Double(weight) != nil && Int(reps) != nil
+        exerciseId != nil && weightKg != nil && !reps.isEmpty && Int(reps) != nil
     }
 
     func toCreate(setNumber: Int) -> WorkoutSetCreate? {
         guard let exerciseId = exerciseId,
-              let weightKg = Double(weight),
+              let weightKg = weightKg,
               let reps = Int(reps) else {
             return nil
         }

@@ -10,33 +10,27 @@ import Combine
 import ActivityKit
 
 struct WorkoutExecutionView: View {
-    let workout: TodayWorkoutResponse
-    let planId: UUID?
+    @ObservedObject var viewModel: WorkoutExecutionViewModel
     let onComplete: ([PRInfo]) -> Void
 
-    @StateObject private var viewModel: WorkoutExecutionViewModel
-    @Environment(\.dismiss) private var dismiss
     @State private var showExercisePicker = false
     @State private var showCancelConfirmation = false
     @State private var showCompletion = false
     @State private var completionPRs: [PRInfo] = []
     @State private var completionSummary: (duration: Int, exercises: Int, sets: Int)?
     @State private var saveError: String?
-
-    init(workout: TodayWorkoutResponse, planId: UUID?, onComplete: @escaping ([PRInfo]) -> Void) {
-        self.workout = workout
-        self.planId = planId
-        self.onComplete = onComplete
-        _viewModel = StateObject(wrappedValue: WorkoutExecutionViewModel(workout: workout, planId: planId))
-    }
+    @State private var isFocusMode = true
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if isFocusMode {
+                    FocusModeView(viewModel: viewModel, onFinish: { triggerComplete() })
+                } else {
                 // Workout header
                 WorkoutHeader(
-                    workoutName: workout.workoutName ?? "Workout",
-                    focus: workout.workoutFocus,
+                    workoutName: viewModel.workoutName,
+                    focus: viewModel.workoutFocus,
                     elapsedTime: viewModel.elapsedTime,
                     isRunning: viewModel.isTimerRunning
                 )
@@ -136,59 +130,71 @@ struct WorkoutExecutionView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+            }   // closes else
+        }       // closes VStack(spacing: 0)
+        .navigationTitle("Workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    showCancelConfirmation = true
+                }
             }
-            .navigationTitle("Workout")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showCancelConfirmation = true
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 4) {
+                    Button {
+                        withAnimation(MotionTokens.snappy) { isFocusMode.toggle() }
+                    } label: {
+                        Image(systemName: isFocusMode ? "list.bullet" : "rectangle.stack")
+                    }
+                    Button {
+                        WorkoutSessionStore.shared.minimize()
+                    } label: {
+                        Image(systemName: "minus")
                     }
                 }
-            }
-            .alert("Cancel Workout?", isPresented: $showCancelConfirmation) {
-                Button("Keep Going", role: .cancel) { }
-                Button("Discard", role: .destructive) {
-                    viewModel.stopTimer()
-                    dismiss()
-                }
-            } message: {
-                Text("Your workout progress will be lost.")
-            }
-            .onAppear {
-                viewModel.startTimer()
-            }
-            .onDisappear {
-                viewModel.stopTimer()
-            }
-            .task {
-                await viewModel.fetchSuggestions()
-            }
-            .fullScreenCover(isPresented: $showCompletion) {
-                if let summary = completionSummary {
-                    WorkoutCompletionView(summary: summary) {
-                        showCompletion = false
-                        if !completionPRs.isEmpty {
-                            // PRs will show via the onComplete callback
-                        }
-                        onComplete(completionPRs)
-                        dismiss()
-                    }
-                }
-            }
-            .alert("Save Failed", isPresented: Binding(
-                get: { saveError != nil },
-                set: { if !$0 { saveError = nil } }
-            )) {
-                Button("Try Again") {
-                    saveError = nil
-                    triggerComplete()
-                }
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(saveError ?? "Could not save your workout. Please try again.")
             }
         }
+        .alert("Cancel Workout?", isPresented: $showCancelConfirmation) {
+            Button("Keep Going", role: .cancel) { }
+            Button("Discard", role: .destructive) {
+                WorkoutSessionStore.shared.cancelWorkout()
+            }
+        } message: {
+            Text("Your workout progress will be lost.")
+        }
+        .task {
+            await viewModel.fetchSuggestions()
+        }
+        .fullScreenCover(isPresented: $showCompletion) {
+            if let summary = completionSummary {
+                WorkoutCompletionView(summary: summary) {
+                    showCompletion = false
+                    WorkoutSessionStore.shared.endWorkout(prs: completionPRs)
+                }
+            }
+        }
+        .alert("Save Failed", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("Try Again") {
+                saveError = nil
+                triggerComplete()
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(saveError ?? "Could not save your workout. Please try again.")
+        }
+        .alert("Resume Workout?", isPresented: $viewModel.wasInterrupted) {
+            Button("Resume") {}
+            Button("Discard", role: .destructive) {
+                viewModel.discardSavedWorkout()
+            }
+        } message: {
+            Text("You have an unfinished workout from a previous session.")
+        }
+    }
     }
 
     private func triggerComplete() {
@@ -501,6 +507,8 @@ struct SetLogRow: View {
     let inputType: ExerciseInputType
     let onDelete: () -> Void
 
+    @State private var showWeightPicker = false
+
     var body: some View {
         HStack {
             Text("\(setNumber)")
@@ -541,24 +549,29 @@ struct SetLogRow: View {
     // MARK: - Input Components
 
     private var weightInput: some View {
-        HStack(spacing: 4) {
-            TextField("", value: $setLog.weight, format: .number)
-                .keyboardType(.decimalPad)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 60)
-                .overlay(alignment: .leading) {
-                    if setLog.weight == nil {
-                        Text("0")
-                            .foregroundStyle(.tertiary)
-                            .padding(.leading, 8)
-                            .allowsHitTesting(false)
-                    }
-                }
-            Text("kg")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        Button {
+            showWeightPicker = true
+        } label: {
+            HStack(spacing: 4) {
+                Text(setLog.weight.map { w in
+                    w.truncatingRemainder(dividingBy: 1) == 0
+                        ? String(format: "%.0f", w)
+                        : String(format: "%.2g", w)
+                } ?? "—")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(setLog.weight == nil ? .tertiary : .primary)
+                .frame(width: 46, alignment: .trailing)
+                Text("kg")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(AppTheme.surface2, in: RoundedRectangle(cornerRadius: 8))
         }
-        .frame(width: 80)
+        .sheet(isPresented: $showWeightPicker) {
+            WeightInputSelector(weight: $setLog.weight)
+        }
     }
 
     private var repsInput: some View {
@@ -637,537 +650,6 @@ struct SetLogRow: View {
                 .foregroundStyle(.secondary)
         }
         .frame(width: 80)
-    }
-}
-
-// MARK: - Exercise Log Entry (View Model)
-
-/// Infer exercise input type from reps string (e.g., "60s" → timeOnly)
-private func inferInputType(from reps: String?, exerciseName: String) -> ExerciseInputType {
-    // Check reps string for time indicator
-    if let reps = reps {
-        let lowercased = reps.lowercased()
-        if lowercased.hasSuffix("s") || lowercased.contains("sec") {
-            return .timeOnly
-        }
-        if lowercased.contains("km") || lowercased.contains("mi") || lowercased.contains("m ") {
-            return .distanceAndTime
-        }
-    }
-
-    // Check known bodyweight exercises
-    let bodyweightExercises = ["push-up", "pushup", "pull-up", "pullup", "chin-up", "chinup",
-                                "dip", "burpee", "sit-up", "situp", "crunch", "lunge"]
-    let timedExercises = ["plank", "wall sit", "dead hang", "hollow hold", "l-sit"]
-
-    let nameLower = exerciseName.lowercased()
-    if timedExercises.contains(where: { nameLower.contains($0) }) {
-        return .timeOnly
-    }
-    if bodyweightExercises.contains(where: { nameLower.contains($0) }) {
-        return .repsOnly
-    }
-
-    return .weightAndReps
-}
-
-struct ExerciseLogEntry: Identifiable {
-    let id = UUID()
-    let name: String
-    let isKeyLift: Bool
-    let inputType: ExerciseInputType
-    let targetSetsReps: String?
-    var sets: [SetLogEntry]
-    var isCompleted: Bool
-    var suggestion: WeightSuggestion?
-
-    init(from planned: PlannedExercise, isKeyLift: Bool = false) {
-        self.name = planned.name
-        self.isKeyLift = isKeyLift
-        self.inputType = inferInputType(from: planned.reps, exerciseName: planned.name)
-
-        if let sets = planned.sets, let reps = planned.reps {
-            self.targetSetsReps = "\(sets) x \(reps)"
-            // Pre-populate empty sets based on target
-            self.sets = (0..<sets).map { _ in SetLogEntry() }
-        } else {
-            self.targetSetsReps = nil
-            self.sets = isKeyLift ? [SetLogEntry(), SetLogEntry(), SetLogEntry()] : []
-        }
-        self.isCompleted = false
-    }
-
-    // For adding custom exercises during workout
-    init(name: String, isKeyLift: Bool, inputType: ExerciseInputType = .weightAndReps, targetSetsReps: String?, sets: [SetLogEntry], isCompleted: Bool) {
-        self.name = name
-        self.isKeyLift = isKeyLift
-        self.inputType = inputType
-        self.targetSetsReps = targetSetsReps
-        self.sets = sets
-        self.isCompleted = isCompleted
-    }
-}
-
-struct SetLogEntry: Identifiable {
-    let id = UUID()
-    var weight: Double?                 // For weight_and_reps (nil = empty field)
-    var reps: Int?                      // For weight_and_reps, reps_only
-    var duration: Int?                  // For time_only (seconds)
-    var distance: Double?               // For distance_and_time (km)
-    var rpe: Int?
-    var completedAt: Date?
-}
-
-// MARK: - View Model
-
-@MainActor
-class WorkoutExecutionViewModel: ObservableObject {
-    @Published var exerciseLogs: [ExerciseLogEntry] = []
-    @Published var elapsedTime: TimeInterval = 0
-    @Published var isTimerRunning = false
-    @Published var isSaving = false
-
-    private let workout: TodayWorkoutResponse
-    private let planId: UUID?
-    private var timer: Timer?
-    private let startTime = Date()
-    private var strengthActivity: Activity<StrengthWorkoutAttributes>?
-
-    init(workout: TodayWorkoutResponse, planId: UUID?) {
-        self.workout = workout
-        self.planId = planId
-
-        // Initialize exercise logs from planned exercises
-        if let exercises = workout.exercises {
-            // First 2-3 exercises are typically key lifts
-            exerciseLogs = exercises.enumerated().map { index, exercise in
-                ExerciseLogEntry(from: exercise, isKeyLift: index < 2)
-            }
-        }
-    }
-
-    var canComplete: Bool {
-        // At least one set logged or one exercise completed
-        exerciseLogs.contains { log in
-            if log.isCompleted { return true }
-
-            // Check sets based on input type
-            return log.sets.contains { set in
-                switch log.inputType {
-                case .weightAndReps:
-                    return (set.weight ?? 0) > 0 && (set.reps ?? 0) > 0
-                case .repsOnly:
-                    return (set.reps ?? 0) > 0
-                case .timeOnly:
-                    return (set.duration ?? 0) > 0
-                case .distanceAndTime:
-                    return (set.distance ?? 0) > 0 || (set.duration ?? 0) > 0
-                }
-            }
-        }
-    }
-
-    func startTimer() {
-        isTimerRunning = true
-        startLiveActivity()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor [self] in
-                self.elapsedTime = Date().timeIntervalSince(self.startTime)
-            }
-        }
-    }
-
-    func stopTimer() {
-        isTimerRunning = false
-        timer?.invalidate()
-        timer = nil
-        endLiveActivity()
-    }
-
-    func addSet(to exerciseIndex: Int) {
-        guard exerciseIndex < exerciseLogs.count else { return }
-        exerciseLogs[exerciseIndex].sets.append(SetLogEntry())
-        updateLiveActivity()
-    }
-
-    func deleteSet(from exerciseIndex: Int, setIndex: Int) {
-        guard exerciseIndex < exerciseLogs.count,
-              setIndex < exerciseLogs[exerciseIndex].sets.count else { return }
-        exerciseLogs[exerciseIndex].sets.remove(at: setIndex)
-    }
-
-    func addExercise(name: String) {
-        let detectedInputType = inferInputType(from: nil, exerciseName: name)
-        let newExercise = ExerciseLogEntry(
-            name: name,
-            isKeyLift: false,  // Added exercises are accessories
-            inputType: detectedInputType,
-            targetSetsReps: nil,
-            sets: [SetLogEntry()],
-            isCompleted: false
-        )
-        exerciseLogs.append(newExercise)
-        updateLiveActivity()
-    }
-
-    func fetchSuggestions() async {
-        let names = exerciseLogs
-            .filter { $0.inputType == .weightAndReps }
-            .map(\.name)
-
-        guard !names.isEmpty else { return }
-
-        do {
-            let suggestions = try await APIService.shared.getExerciseSuggestions(exerciseNames: names)
-
-            for i in exerciseLogs.indices {
-                guard let suggestion = suggestions[exerciseLogs[i].name] else { continue }
-                exerciseLogs[i].suggestion = suggestion
-
-                // Pre-fill empty weight fields with suggested weight
-                if let weight = suggestion.suggestedWeightKg, weight > 0 {
-                    for j in exerciseLogs[i].sets.indices {
-                        if exerciseLogs[i].sets[j].weight == nil {
-                            exerciseLogs[i].sets[j].weight = weight
-                        }
-                    }
-                }
-            }
-        } catch {
-            print("Failed to fetch suggestions: \(error)")
-        }
-    }
-
-    // MARK: - Live Activity
-
-    private var liveActivityState: StrengthWorkoutAttributes.ContentState {
-        let activeExercise = exerciseLogs.first { !$0.isCompleted } ?? exerciseLogs.first
-        let name = activeExercise?.name ?? (workout.workoutName ?? "Workout")
-        let completedSets = activeExercise?.sets.filter { $0.completedAt != nil }.count ?? 0
-        let totalSets = max(activeExercise?.sets.count ?? 1, 1)
-        return StrengthWorkoutAttributes.ContentState(
-            timerDate: startTime,
-            currentExerciseName: name,
-            currentSetNumber: min(completedSets + 1, totalSets),
-            totalSets: totalSets
-        )
-    }
-
-    private func startLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        let attributes = StrengthWorkoutAttributes(workoutName: workout.workoutName ?? "Workout")
-        do {
-            strengthActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: liveActivityState, staleDate: nil),
-                pushType: nil
-            )
-        } catch {
-            // Live Activities unavailable (simulator or not supported)
-        }
-    }
-
-    private func updateLiveActivity() {
-        guard let activity = strengthActivity else { return }
-        let state = liveActivityState
-        Task { [activity] in
-            await activity.update(.init(state: state, staleDate: nil))
-        }
-    }
-
-    private func endLiveActivity() {
-        guard let activity = strengthActivity else { return }
-        strengthActivity = nil
-        let finalState = liveActivityState
-        Task { [activity] in
-            await activity.end(.init(state: finalState, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(10)))
-        }
-    }
-
-    func completeWorkout(onError: ((String) -> Void)? = nil, completion: @escaping ([PRInfo]) -> Void) {
-        isSaving = true
-        stopTimer()
-
-        Task {
-            do {
-                // Convert exercise logs to API format
-                let exercises = exerciseLogs.compactMap { log -> ExerciseLog? in
-                    // Filter out empty sets based on input type
-                    let validSets = log.sets.filter { set in
-                        switch log.inputType {
-                        case .weightAndReps:
-                            return (set.weight ?? 0) > 0 && (set.reps ?? 0) > 0
-                        case .repsOnly:
-                            return (set.reps ?? 0) > 0
-                        case .timeOnly:
-                            return (set.duration ?? 0) > 0
-                        case .distanceAndTime:
-                            return (set.distance ?? 0) > 0 || (set.duration ?? 0) > 0
-                        }
-                    }
-
-                    // Skip exercises with no data
-                    guard log.isCompleted || !validSets.isEmpty else { return nil }
-
-                    let setLogs = validSets.map { entry in
-                        SetLog(
-                            weight: entry.weight ?? 0,
-                            reps: entry.reps ?? 0,
-                            rpe: entry.rpe,
-                            completedAt: entry.completedAt ?? Date()
-                        )
-                    }
-
-                    return ExerciseLog(
-                        name: log.name,
-                        isKeyLift: log.isKeyLift,
-                        sets: setLogs,
-                        isCompleted: log.isCompleted
-                    )
-                }
-
-                let sessionRequest = WorkoutSessionRequest(
-                    planId: planId,
-                    plannedWorkoutName: workout.workoutName,
-                    startedAt: startTime,
-                    completedAt: Date(),
-                    durationMinutes: Int(elapsedTime / 60),
-                    exercises: exercises,
-                    overallRating: nil,
-                    notes: nil
-                )
-
-                let response = try await APIService.shared.logWorkoutSession(sessionRequest)
-
-                await MainActor.run {
-                    isSaving = false
-                    HapticsManager.shared.success()
-                    completion(response.prsAchieved)
-                }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                    HapticsManager.shared.error()
-                    startTimer()
-                    let message = (error as? APIError)?.message ?? "Could not save your workout. Please check your connection and try again."
-                    print("Failed to save workout: \(error)")
-                    onError?(message)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Workout Completion View
-
-struct WorkoutCompletionView: View {
-    let summary: (duration: Int, exercises: Int, sets: Int)
-    let onDone: () -> Void
-
-    @State private var checkmarkScale: CGFloat = 0.3
-    @State private var checkmarkOpacity: Double = 0
-    @State private var textOpacity: Double = 0
-
-    // Generic messages (no name)
-    private static let genericMessages = [
-        "Another one in the books!",
-        "Consistency wins. Always.",
-        "Stronger than yesterday.",
-        "That's how champions train.",
-        "Hard work pays off.",
-        "Discipline over motivation.",
-        "Progress, not perfection.",
-        "The only bad workout is the one that didn't happen.",
-        "Beast mode: activated."
-    ]
-
-    // Personalized messages (with {name} placeholder)
-    private static let personalizedMessages = [
-        "Crushed it, {name}!",
-        "Great work, {name}!",
-        "You showed up, {name}. That's what matters.",
-        "One step closer to your goals, {name}.",
-        "Your future self will thank you, {name}.",
-        "You earned this rest, {name}.",
-        "Keep stacking those wins, {name}.",
-    ]
-
-    private let message: String
-
-    init(summary: (duration: Int, exercises: Int, sets: Int), onDone: @escaping () -> Void) {
-        self.summary = summary
-        self.onDone = onDone
-
-        let name = AuthService.shared.currentUser?.displayName
-        if let name, !name.isEmpty {
-            // Mix personalized and generic messages
-            let allMessages = Self.personalizedMessages.map {
-                $0.replacingOccurrences(of: "{name}", with: name)
-            } + Self.genericMessages
-            self.message = allMessages.randomElement() ?? "Well done!"
-        } else {
-            self.message = Self.genericMessages.randomElement() ?? "Well done!"
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            AppTheme.primary.opacity(0.15)
-                .ignoresSafeArea()
-
-            VStack(spacing: 28) {
-                Spacer()
-
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.green)
-                    .scaleEffect(checkmarkScale)
-                    .opacity(checkmarkOpacity)
-
-                VStack(spacing: 8) {
-                    Text("Workout Complete")
-                        .font(.title.bold())
-
-                    Text(message)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .opacity(textOpacity)
-
-                // Summary stats
-                GlassCard {
-                    HStack(spacing: 24) {
-                        SummaryStatView(value: "\(summary.duration)", label: "min", icon: "clock")
-                        SummaryStatView(value: "\(summary.exercises)", label: "exercises", icon: "figure.strengthtraining.traditional")
-                        SummaryStatView(value: "\(summary.sets)", label: "sets", icon: "checkmark.circle")
-                    }
-                }
-                .padding(.horizontal)
-                .opacity(textOpacity)
-                .padding(.top, 8)
-
-                Spacer()
-
-                Button {
-                    onDone()
-                } label: {
-                    Text("Done")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppTheme.primary)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .padding(.horizontal)
-                .opacity(textOpacity)
-                .padding(.bottom, 32)
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
-                checkmarkScale = 1.0
-                checkmarkOpacity = 1.0
-            }
-            withAnimation(.easeOut(duration: 0.4).delay(0.4)) {
-                textOpacity = 1.0
-            }
-        }
-    }
-}
-
-private struct SummaryStatView: View {
-    let value: String
-    let label: String
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(.green)
-            Text(value)
-                .font(.title2.bold())
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - PR Celebration View
-
-struct PRCelebrationView: View {
-    let prs: [PRInfo]
-    let onDismiss: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Fixed header
-            VStack(spacing: 12) {
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.yellow)
-
-                Text("New Personal Records!")
-                    .font(.title.bold())
-            }
-            .padding(.top, 32)
-            .padding(.bottom, 16)
-
-            // Scrollable PR list
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(prs) { pr in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pr.exerciseName)
-                                    .font(.headline)
-                                Text(pr.recordType.uppercased())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("\(Int(pr.value)) kg")
-                                    .font(.title3.bold())
-                                    .foregroundStyle(.green)
-                                if let previous = pr.previousValue {
-                                    Text("+\(Int(pr.value - previous)) kg")
-                                        .font(.caption)
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(AppTheme.surface2)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                }
-                .padding(.horizontal)
-            }
-
-            // Fixed bottom button
-            Button("Awesome!") {
-                onDismiss()
-            }
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(AppTheme.primary)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
-            .padding(.bottom, 32)
-        }
-        .onAppear {
-            HapticsManager.shared.doubleHeavy()
-        }
     }
 }
 
@@ -1411,5 +893,8 @@ struct AddExerciseSheet: View {
         planId: nil
     )
 
-    WorkoutExecutionView(workout: mockWorkout, planId: nil) { _ in }
+    WorkoutExecutionView(
+        viewModel: WorkoutExecutionViewModel(workout: mockWorkout, planId: nil),
+        onComplete: { _ in }
+    )
 }
