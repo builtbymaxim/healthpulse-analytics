@@ -9,9 +9,7 @@
 /* Begin PBXBuildFile section */
 		94AFEF242F73D04D00746BDE /* HealthPulseWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; };
-		94AFEF382F73D17200746BDE /* WatchConnectivity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94AFEF3A2F73D17700746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; };
-		94AFEF3B2F73D17700746BDE /* WatchConnectivity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
@@ -54,7 +52,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				94AFEF382F73D17200746BDE /* WatchConnectivity.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -65,7 +62,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				94AFEF3B2F73D17700746BDE /* WatchConnectivity.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
