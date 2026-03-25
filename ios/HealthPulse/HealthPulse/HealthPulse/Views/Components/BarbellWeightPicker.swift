@@ -2,143 +2,177 @@
 //  BarbellWeightPicker.swift
 //  HealthPulse
 //
-//  Interactive barbell plate visualizer. Olympic bar = 20 kg.
-//  Tap a plate button to add a pair (both sides); long-press to remove last pair of that size.
+//  Plate-tap weight picker. Tap a plate to add its kg.
+//  Loaded plates shown as colored chips — tap a chip to remove that plate.
+//  Uses realistic plate images with IPF competition color coding.
 //
 
 import SwiftUI
 
 struct BarbellWeightPicker: View {
     @Binding var weight: Double?
+    @State private var addedPlates: [Double] = []
 
-    private let barWeight = 20.0
-    private let plates: [(kg: Double, color: Color)] = [
-        (1.25, .gray),
-        (2.5,  Color(white: 0.85)),
-        (5,    Color(white: 0.9)),
-        (10,   .green),
-        (15,   .yellow),
-        (20,   .blue),
-        (25,   .red)
+    private let plates: [(kg: Double, asset: String)] = [
+        (1.25, "plate_1_25"),
+        (2.5,  "plate_2_5"),
+        (5,    "plate_5"),
+        (10,   "plate_10"),
+        (15,   "plate_15"),
+        (20,   "plate_20"),
+        (25,   "plate_25")
     ]
-
-    @State private var platePairs: [Double] = []
-
-    private var totalWeight: Double {
-        barWeight + platePairs.reduce(0) { $0 + $1 * 2 }
-    }
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(weightLabel(totalWeight))
-                .font(.title2.bold())
+            // Animated weight total
+            Text(weightLabel(weight ?? 0))
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(MotionTokens.snappy, value: weight)
 
-            barbellDiagram
+            // Loaded plates chip row
+            loadedPlatesRow
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
+            // Plate button grid
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
                 ForEach(plates, id: \.kg) { plate in
                     plateButton(plate)
                 }
             }
 
+            // Clear button
             Button("Clear") {
-                platePairs.removeAll()
-                syncWeight()
+                withAnimation(MotionTokens.snappy) {
+                    addedPlates.removeAll()
+                    syncWeight()
+                }
+                HapticsManager.shared.selection()
             }
             .font(.caption)
             .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
-        .onAppear { initFromWeight() }
-    }
-
-    // MARK: - Barbell Diagram
-
-    private var barbellDiagram: some View {
-        HStack(spacing: 2) {
-            ForEach(platePairs.reversed(), id: \.self) { kg in
-                plateSlice(kg)
-            }
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.secondary.opacity(0.5))
-                .frame(width: 56, height: 10)
-            ForEach(platePairs, id: \.self) { kg in
-                plateSlice(kg)
+        .onAppear {
+            if let w = weight, w > 0 {
+                addedPlates = decompose(w)
+                syncWeight()
             }
         }
-        .frame(height: 36)
-        .animation(MotionTokens.micro, value: platePairs.count)
     }
 
-    private func plateSlice(_ kg: Double) -> some View {
-        let w = max(7, CGFloat(kg) * 1.4)
-        return RoundedRectangle(cornerRadius: 2)
-            .fill(colorFor(kg))
-            .frame(width: w, height: 30)
-            .overlay(
-                Text(kg < 10 ? String(format: "%.2g", kg) : "\(Int(kg))")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(.black.opacity(0.5))
-                    .rotationEffect(.degrees(-90))
-            )
+    // MARK: - Loaded Plates Chip Row
+
+    @ViewBuilder
+    private var loadedPlatesRow: some View {
+        if !addedPlates.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(addedPlates.enumerated()), id: \.offset) { index, kg in
+                        Button {
+                            withAnimation(MotionTokens.snappy) {
+                                addedPlates.remove(at: index)
+                                syncWeight()
+                            }
+                            HapticsManager.shared.light()
+                        } label: {
+                            Text(formatPlate(kg))
+                                .font(.caption2.bold())
+                                .foregroundStyle(plateTextColor(kg))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(plateColor(kg), in: Capsule())
+                                .overlay(
+                                    Capsule().strokeBorder(
+                                        Color.secondary.opacity(kg == 5 ? 0.4 : 0),
+                                        lineWidth: 1
+                                    )
+                                )
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(height: 28)
+        }
     }
 
-    // MARK: - Plate Buttons
+    // MARK: - Plate Button
 
-    private func plateButton(_ plate: (kg: Double, color: Color)) -> some View {
-        let label = plate.kg < 10 ? String(format: "%.2g", plate.kg) : "\(Int(plate.kg))"
-        return Button {
-            platePairs.append(plate.kg)
-            syncWeight()
+    private func plateButton(_ plate: (kg: Double, asset: String)) -> some View {
+        Button {
+            withAnimation(MotionTokens.snappy) {
+                addedPlates.append(plate.kg)
+                addedPlates.sort(by: >)
+                syncWeight()
+            }
             HapticsManager.shared.selection()
         } label: {
-            Text("+\(label)")
-                .font(.caption.bold())
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(plate.color.opacity(0.25))
-                .foregroundStyle(plate.color == Color(white: 0.85) || plate.color == Color(white: 0.9) ? Color.primary : plate.color)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(plate.color.opacity(0.4), lineWidth: 1))
-        }
-        .simultaneousGesture(
-            LongPressGesture().onEnded { _ in
-                if let last = platePairs.lastIndex(of: plate.kg) {
-                    platePairs.remove(at: last)
-                    syncWeight()
-                    HapticsManager.shared.selection()
-                }
+            VStack(spacing: 4) {
+                Image(plate.asset)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 60, height: 60)
+                    .clipShape(Circle())
+                Text(formatPlate(plate.kg))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
             }
-        )
+        }
     }
 
     // MARK: - Helpers
 
-    private func colorFor(_ kg: Double) -> Color {
-        plates.first { $0.kg == kg }?.color ?? .gray
+    private func syncWeight() {
+        let total = addedPlates.reduce(0, +)
+        weight = total == 0 ? nil : total
     }
 
-    private func syncWeight() {
-        weight = totalWeight
+    private func decompose(_ total: Double) -> [Double] {
+        let available = plates.map(\.kg).sorted(by: >)
+        var remaining = total
+        var result: [Double] = []
+        for plateKg in available {
+            while remaining >= plateKg - 0.001 {
+                result.append(plateKg)
+                remaining -= plateKg
+            }
+        }
+        return result
+    }
+
+    private func plateColor(_ kg: Double) -> Color {
+        switch kg {
+        case 25:   return .red
+        case 20:   return .blue
+        case 15:   return .yellow
+        case 10:   return .green
+        case 5:    return Color(UIColor.systemGray5)
+        case 2.5:  return Color(UIColor.systemGray3)
+        case 1.25: return Color(UIColor.systemGray3)
+        default:   return .gray
+        }
+    }
+
+    private func plateTextColor(_ kg: Double) -> Color {
+        switch kg {
+        case 25, 20, 10: return .white
+        default:          return .primary
+        }
+    }
+
+    private func formatPlate(_ kg: Double) -> String {
+        kg.truncatingRemainder(dividingBy: 1) == 0
+            ? String(format: "%.0f kg", kg)
+            : String(format: "%g kg", kg)
     }
 
     private func weightLabel(_ value: Double) -> String {
-        value.truncatingRemainder(dividingBy: 1) == 0
+        if value == 0 { return "— kg" }
+        return value.truncatingRemainder(dividingBy: 1) == 0
             ? String(format: "%.0f kg", value)
-            : String(format: "%.2g kg", value)
-    }
-
-    private func initFromWeight() {
-        guard let w = weight, w > barWeight else { return }
-        var remaining = (w - barWeight) / 2
-        var result: [Double] = []
-        for plate in plates.sorted(by: { $0.kg > $1.kg }) {
-            while remaining >= plate.kg - 0.001 {
-                result.append(plate.kg)
-                remaining -= plate.kg
-            }
-        }
-        platePairs = result
+            : String(format: "%g kg", value)
     }
 }

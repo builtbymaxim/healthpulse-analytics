@@ -26,16 +26,18 @@ struct FoodLogView: View {
 
     // Amount consumed
     @State private var amountGrams = "100"
+    @State private var showAmountPicker = false
 
     @State private var isSaving = false
     @State private var error: String?
     @State private var showSaveError = false
 
-    // Food search
-    @State private var searchQuery = ""
+    // Food search (unified with name field)
     @State private var searchResults: [BarcodeProduct] = []
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
+    @State private var suppressSearch = false
+    @State private var searchRanEmpty = false
 
     // Recently logged foods
     @State private var recentFoods: [RecentFood] = []
@@ -80,44 +82,29 @@ struct FoodLogView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Food Name & Meal Type
+                    // Food Name & Search (unified)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("What did you eat?")
                             .font(.headline)
 
-                        TextField("Food name", text: $name)
-                            .font(.title3)
-                            .padding()
-                            .background(AppTheme.surface2)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                        // Meal type selector
-                        HStack(spacing: 8) {
-                            ForEach(MealType.allCases.prefix(4), id: \.self) { meal in
-                                MealTypeChip(meal: meal, isSelected: selectedMealType == meal) {
-                                    selectedMealType = meal
-                                    HapticsManager.shared.selection()
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // Food Search
-                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "magnifyingglass")
                                 .foregroundStyle(.secondary)
-                            TextField("Search foods (e.g. chicken breast)", text: $searchQuery)
-                                .textInputAutocapitalization(.never)
-                                .onChange(of: searchQuery) { _, newValue in
+                            TextField("Search or enter food name", text: $name)
+                                .textInputAutocapitalization(.words)
+                                .onChange(of: name) { _, newValue in
                                     searchTask?.cancel()
-                                    guard newValue.count >= 2 else {
+                                    searchRanEmpty = false
+                                    guard !suppressSearch else {
+                                        suppressSearch = false
+                                        return
+                                    }
+                                    guard newValue.count >= 3 else {
                                         searchResults = []
                                         return
                                     }
                                     searchTask = Task {
-                                        try? await Task.sleep(nanoseconds: 500_000_000)
+                                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                                         guard !Task.isCancelled else { return }
                                         await performSearch(newValue)
                                     }
@@ -163,6 +150,21 @@ struct FoodLogView: View {
                             }
                             .background(AppTheme.surface2)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } else if searchRanEmpty {
+                            Text("No results for \"\(name)\" — enter macros manually")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 4)
+                        }
+
+                        // Meal type selector
+                        HStack(spacing: 8) {
+                            ForEach(MealType.allCases.prefix(4), id: \.self) { meal in
+                                MealTypeChip(meal: meal, isSelected: selectedMealType == meal) {
+                                    selectedMealType = meal
+                                    HapticsManager.shared.selection()
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal)
@@ -195,8 +197,7 @@ struct FoodLogView: View {
                         Text("Amount consumed")
                             .font(.headline)
 
-                        HStack(spacing: 16) {
-                            // Quick amount buttons
+                        HStack(spacing: 10) {
                             ForEach([50, 100, 150, 200], id: \.self) { grams in
                                 Button {
                                     amountGrams = String(grams)
@@ -204,7 +205,8 @@ struct FoodLogView: View {
                                 } label: {
                                     Text("\(grams)g")
                                         .font(.subheadline.bold())
-                                        .padding(.horizontal, 12)
+                                        .fixedSize()
+                                        .padding(.horizontal, 10)
                                         .padding(.vertical, 8)
                                         .background(amountGrams == String(grams) ? Color.green : AppTheme.surface2)
                                         .foregroundStyle(amountGrams == String(grams) ? .white : .primary)
@@ -214,20 +216,25 @@ struct FoodLogView: View {
 
                             Spacer()
 
-                            // Custom amount input
-                            HStack {
-                                TextField("100", text: $amountGrams)
-                                    .keyboardType(.numberPad)
+                            // Custom amount pill — tap for wheel picker
+                            Button {
+                                showAmountPicker = true
+                                HapticsManager.shared.selection()
+                            } label: {
+                                Text("\(Int(amount)) g")
                                     .font(.title2.bold())
-                                    .frame(width: 60)
-                                    .multilineTextAlignment(.center)
-
-                                Text("g")
-                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                    .fixedSize()
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(AppTheme.surface2)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.green.opacity(0.4), lineWidth: 1.5)
+                                    )
                             }
-                            .padding(8)
-                            .background(AppTheme.surface2)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(.primary)
                         }
                     }
                     .padding(.horizontal)
@@ -368,6 +375,9 @@ struct FoodLogView: View {
             } message: {
                 Text(error ?? "An unknown error occurred. Please try again.")
             }
+            .sheet(isPresented: $showAmountPicker) {
+                AmountPickerSheet(amountGrams: $amountGrams)
+            }
         }
     }
 
@@ -377,11 +387,13 @@ struct FoodLogView: View {
             let results = try await APIService.shared.searchFood(query: query)
             await MainActor.run {
                 searchResults = results
+                searchRanEmpty = results.isEmpty
                 isSearching = false
             }
         } catch {
             await MainActor.run {
                 searchResults = []
+                searchRanEmpty = true
                 isSearching = false
                 ToastManager.shared.error("Search failed. Check your connection.")
             }
@@ -389,6 +401,7 @@ struct FoodLogView: View {
     }
 
     private func selectSearchResult(_ product: BarcodeProduct) {
+        suppressSearch = true
         name = product.name ?? "Unknown"
         caloriesPer100g = String(Int(product.caloriesPer100g))
         proteinPer100g = String(format: "%.1f", product.proteinGPer100g)
@@ -396,11 +409,11 @@ struct FoodLogView: View {
         fatPer100g = String(format: "%.1f", product.fatGPer100g)
         amountGrams = "100"
         searchResults = []
-        searchQuery = ""
         HapticsManager.shared.light()
     }
 
     private func fillQuickAdd(name: String, cal: Double, p: Double, c: Double, f: Double) {
+        suppressSearch = true
         self.name = name
         self.caloriesPer100g = String(Int(cal))
         self.proteinPer100g = String(format: "%.1f", p)
@@ -412,6 +425,7 @@ struct FoodLogView: View {
 
     private func prefillIfEditing() {
         guard let entry = editingEntry else { return }
+        suppressSearch = true
         name = entry.name
         if let mealStr = entry.mealType, let meal = MealType(rawValue: mealStr) {
             selectedMealType = meal
@@ -504,6 +518,15 @@ struct NutrientInput: View {
     @Binding var value: String
     let unit: String
     let color: Color
+    @State private var showPicker = false
+
+    private var displayValue: String {
+        if let v = Double(value), v > 0 {
+            return v.truncatingRemainder(dividingBy: 1) == 0
+                ? "\(Int(v))" : String(format: "%.1f", v)
+        }
+        return "0"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -511,19 +534,122 @@ struct NutrientInput: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
-                TextField("0", text: $value)
-                    .keyboardType(.decimalPad)
-                    .font(.title3.bold())
-
-                Text(unit)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Button {
+                showPicker = true
+                HapticsManager.shared.selection()
+            } label: {
+                HStack {
+                    Text(displayValue)
+                        .font(.title3.bold())
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(unit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(color.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .padding(12)
-            .background(color.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .sheet(isPresented: $showPicker) {
+                NutrientPickerSheet(label: label, value: $value, unit: unit, color: color)
+            }
         }
+    }
+}
+
+struct NutrientPickerSheet: View {
+    let label: String
+    @Binding var value: String
+    let unit: String
+    let color: Color
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var wholeValue: Int = 0
+    @State private var decimalValue: Int = 0
+
+    private var isCalories: Bool { unit == "kcal" }
+    private var maxWhole: Int { isCalories ? 2000 : 200 }
+    private var step: Int { isCalories ? 5 : 1 }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text(formattedDisplay)
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(color)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: wholeValue)
+
+                HStack(spacing: 0) {
+                    Picker("Whole", selection: $wholeValue) {
+                        ForEach(Array(stride(from: 0, through: maxWhole, by: step)), id: \.self) { v in
+                            Text("\(v)").tag(v)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(width: 100)
+                    .clipped()
+                    .onChange(of: wholeValue) { _, _ in HapticsManager.shared.selection() }
+
+                    if !isCalories {
+                        Text(".")
+                            .font(.title3.bold())
+                            .foregroundStyle(.secondary)
+
+                        Picker("Decimal", selection: $decimalValue) {
+                            ForEach(0..<10, id: \.self) { d in
+                                Text("\(d)").tag(d)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(width: 60)
+                        .clipped()
+                        .onChange(of: decimalValue) { _, _ in HapticsManager.shared.selection() }
+                    }
+
+                    Text(unit)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                }
+                .frame(height: 150)
+            }
+            .padding()
+            .navigationTitle(label)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        if isCalories {
+                            value = "\(wholeValue)"
+                        } else {
+                            let total = Double(wholeValue) + Double(decimalValue) / 10.0
+                            value = total.truncatingRemainder(dividingBy: 1) == 0
+                                ? "\(Int(total))" : String(format: "%.1f", total)
+                        }
+                        dismiss()
+                    }
+                    .bold()
+                }
+            }
+        }
+        .presentationDetents([.height(340)])
+        .onAppear {
+            let parsed = Double(value) ?? 0
+            wholeValue = isCalories ? (Int(parsed) / step) * step : Int(parsed)
+            decimalValue = isCalories ? 0 : Int((parsed - Double(Int(parsed))) * 10)
+        }
+    }
+
+    private var formattedDisplay: String {
+        if isCalories {
+            return "\(wholeValue) \(unit)"
+        }
+        let total = Double(wholeValue) + Double(decimalValue) / 10.0
+        return total.truncatingRemainder(dividingBy: 1) == 0
+            ? "\(Int(total)) \(unit)" : String(format: "%.1f %@", total, unit)
     }
 }
 
@@ -570,6 +696,51 @@ struct QuickFoodChip: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct AmountPickerSheet: View {
+    @Binding var amountGrams: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var pickerValue: Int = 100
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("\(pickerValue) g")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: pickerValue)
+
+                Picker("Grams", selection: $pickerValue) {
+                    ForEach(Array(stride(from: 10, through: 1000, by: 10)), id: \.self) { g in
+                        Text("\(g)").tag(g)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 150)
+                .onChange(of: pickerValue) { _, _ in
+                    HapticsManager.shared.selection()
+                }
+            }
+            .padding()
+            .navigationTitle("Amount")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        amountGrams = String(pickerValue)
+                        dismiss()
+                    }
+                    .bold()
+                }
+            }
+        }
+        .presentationDetents([.height(320)])
+        .onAppear {
+            pickerValue = Int(amountGrams) ?? 100
+        }
     }
 }
 

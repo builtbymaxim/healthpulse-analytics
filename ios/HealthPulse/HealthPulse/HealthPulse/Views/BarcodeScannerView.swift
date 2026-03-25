@@ -19,6 +19,7 @@ struct BarcodeScannerView: View {
     @State private var notFound = false
     @State private var manualBarcode = ""
     @State private var showManualEntry = false
+    @State private var cameraResetId = UUID()
 
     // Food log fields (shown after product found)
     @State private var amountText: String = "100"
@@ -67,6 +68,7 @@ struct BarcodeScannerView: View {
                     HapticsManager.shared.medium()
                     lookupBarcode(barcode)
                 })
+                .id(cameraResetId)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 // Scan overlay
@@ -102,6 +104,7 @@ struct BarcodeScannerView: View {
                     Button("Scan Again") {
                         scannedBarcode = nil
                         notFound = false
+                        cameraResetId = UUID()
                     }
                     .font(.subheadline.bold())
                     .foregroundStyle(.green)
@@ -273,6 +276,7 @@ struct BarcodeScannerView: View {
                     self.product = nil
                     scannedBarcode = nil
                     notFound = false
+                    cameraResetId = UUID()
                 } label: {
                     Text("Scan Another Product")
                         .font(.subheadline)

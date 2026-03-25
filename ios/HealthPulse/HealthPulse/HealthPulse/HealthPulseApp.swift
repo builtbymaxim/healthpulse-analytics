@@ -17,6 +17,7 @@ struct HealthPulseApp: App {
     @StateObject private var calendarSyncService = CalendarSyncService.shared
     @StateObject private var networkMonitor = NetworkMonitor.shared
     @Environment(\.scenePhase) private var scenePhase
+    @State private var lastBackgroundTime: Date?
 
     var body: some Scene {
         WindowGroup {
@@ -48,10 +49,15 @@ struct HealthPulseApp: App {
                     switch phase {
                     case .active:
                         Task { await calendarSyncService.syncIfNeeded() }
-                        // Return from background — release the background task token
                         ActiveWorkoutManager.shared.endBackgroundTask()
+                        // Clear stale caches if backgrounded > 5 minutes
+                        if let bg = lastBackgroundTime, bg.timeIntervalSinceNow < -300 {
+                            APIService.shared.invalidateCache(matching: "")
+                            Task { await healthKitService.refreshTodayData() }
+                        }
+                        lastBackgroundTime = nil
                     case .background:
-                        // Keep the workout timer alive while backgrounded
+                        lastBackgroundTime = Date()
                         if ActiveWorkoutManager.shared.isWorkoutActive {
                             ActiveWorkoutManager.shared.beginBackgroundTask()
                         }

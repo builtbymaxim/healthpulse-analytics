@@ -97,10 +97,10 @@ struct GreetingView: View {
                     .font(.title.bold())
                     .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.78)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.6)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, 24)
                     .blur(radius: textBlur)
                     .opacity(textOpacity)
             }

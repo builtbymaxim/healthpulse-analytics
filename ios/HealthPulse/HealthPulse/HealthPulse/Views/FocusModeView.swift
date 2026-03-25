@@ -13,7 +13,6 @@ struct FocusModeView: View {
     @ObservedObject var viewModel: WorkoutExecutionViewModel
     let onFinish: () -> Void
     @State private var currentIndex = 0
-    @State private var showOverview = false
     @State private var showAddExercise = false
     @State private var undoName: String?
     @State private var undoTarget: Int?
@@ -77,33 +76,6 @@ struct FocusModeView: View {
                 }
             }
         }
-        .overlay(alignment: .topLeading) {
-            // Minimize button — always visible since NavigationBar is shared with list mode
-            Button {
-                WorkoutSessionStore.shared.minimize()
-            } label: {
-                Image(systemName: "chevron.down")
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .padding(.top, 8)
-            .padding(.leading, 12)
-        }
-        .overlay(alignment: .top) {
-            Text(formattedElapsed)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.top, 16)
-        }
-        .overlay(alignment: .topTrailing) {
-            Button { showOverview = true } label: {
-                Image(systemName: "list.bullet")
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .padding(.top, 8)
-            .padding(.trailing, 12)
-        }
         .overlay(alignment: .bottom) {
             if let name = undoName, let target = undoTarget {
                 undoToast(name: name, target: target)
@@ -112,12 +84,6 @@ struct FocusModeView: View {
             }
         }
         .animation(MotionTokens.micro, value: undoName != nil)
-        .sheet(isPresented: $showOverview) {
-            FocusModeOverviewSheet(exerciseLogs: viewModel.exerciseLogs) { index in
-                withAnimation(MotionTokens.primary) { currentIndex = index }
-                showOverview = false
-            }
-        }
         .sheet(isPresented: $showAddExercise) {
             AddExerciseSheet { name in
                 let newIndex = viewModel.exerciseLogs.count

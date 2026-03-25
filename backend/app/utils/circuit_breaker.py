@@ -63,3 +63,10 @@ class CircuitBreaker:
                     self.name, self._failure_count,
                 )
             self._state = "open"
+
+    def reset(self) -> None:
+        """Manually reset the circuit to closed state."""
+        if self._state != "closed":
+            logger.info("Circuit '%s' manually reset to closed", self.name)
+        self._failure_count = 0
+        self._state = "closed"

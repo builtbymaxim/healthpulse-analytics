@@ -14,6 +14,8 @@ struct FocusModeExerciseCard: View {
     let exerciseIndex: Int
 
     @State private var showRestTimer = false
+    @State private var showRPEInfo = false
+    @State private var completedSetIndex: Int?
 
     // Key lifts rest 3 min, accessories rest 90 s
     private var defaultRestDuration: Int { log.isKeyLift ? 180 : 90 }
@@ -25,6 +27,7 @@ struct FocusModeExerciseCard: View {
                 if let suggestion = log.suggestion {
                     SuggestionHint(suggestion: suggestion, onTap: {})
                 }
+                columnHeaders
                 setList
                 addSetButton
                 markDoneButton
@@ -48,9 +51,20 @@ struct FocusModeExerciseCard: View {
                 viewModel.stopResting()
             }
         }
+        .sheet(isPresented: $showRPEInfo) {
+            RPEInfoSheet()
+        }
     }
 
     // MARK: - Subviews
+
+    private var formattedElapsed: String {
+        let t = Int(viewModel.elapsedTime)
+        let h = t / 3600, m = (t % 3600) / 60, s = t % 60
+        return h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%02d:%02d", m, s)
+    }
 
     private var cardHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -62,6 +76,10 @@ struct FocusModeExerciseCard: View {
                         .font(.caption)
                         .foregroundStyle(.yellow)
                 }
+                Spacer()
+                Text(formattedElapsed)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
             if let target = log.targetSetsReps {
                 Text(target)
@@ -71,21 +89,82 @@ struct FocusModeExerciseCard: View {
         }
     }
 
+    // Dynamic column headers (mirrors ExerciseLogCard pattern)
+    private var columnHeaders: some View {
+        HStack {
+            Text("Set")
+                .frame(width: 35, alignment: .leading)
+
+            switch log.inputType {
+            case .weightAndReps:
+                Text("Weight")
+                    .frame(width: 80)
+                Text("Reps")
+                    .frame(width: 60)
+                rpeHeaderWithInfo
+
+            case .repsOnly:
+                Text("Reps")
+                    .frame(width: 60)
+                rpeHeaderWithInfo
+
+            case .timeOnly:
+                Text("Duration")
+                    .frame(width: 80)
+
+            case .distanceAndTime:
+                Text("Distance")
+                    .frame(width: 80)
+                Text("Time")
+                    .frame(width: 80)
+            }
+
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var rpeHeaderWithInfo: some View {
+        HStack(spacing: 2) {
+            Text("RPE")
+            Button {
+                showRPEInfo = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.caption2)
+            }
+        }
+        .frame(width: 50)
+    }
+
     private var setList: some View {
         VStack(spacing: 4) {
             ForEach(log.sets.indices, id: \.self) { setIndex in
-                HStack(spacing: 8) {
-                    SetLogRow(
-                        setNumber: setIndex + 1,
-                        setLog: $log.sets[setIndex],
-                        inputType: log.inputType,
-                        onDelete: { viewModel.deleteSet(from: exerciseIndex, setIndex: setIndex) }
-                    )
-                    setActionButton(setIndex: setIndex)
+                let isCompleted = log.sets[setIndex].completedAt != nil
+                HStack(spacing: 0) {
+                    // Green left border for completed sets
+                    if isCompleted {
+                        Rectangle()
+                            .fill(Color.green)
+                            .frame(width: 3)
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                    }
+
+                    HStack(spacing: 8) {
+                        SetLogRow(
+                            setNumber: setIndex + 1,
+                            setLog: $log.sets[setIndex],
+                            inputType: log.inputType,
+                            onDelete: { viewModel.deleteSet(from: exerciseIndex, setIndex: setIndex) }
+                        )
+                        setActionButton(setIndex: setIndex)
+                    }
+                    .padding(10)
                 }
-                .padding(10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                .opacity(log.sets[setIndex].completedAt != nil ? 0.7 : 1.0)
+                .scaleEffect(completedSetIndex == setIndex ? 0.92 : 1.0)
+                .animation(MotionTokens.snappy, value: completedSetIndex)
             }
         }
     }
@@ -97,7 +176,6 @@ struct FocusModeExerciseCard: View {
         let isReady = setIsReady(set)
 
         if isCompleted {
-            // Already done — show green checkmark
             Button {
                 viewModel.markSetCompleted(exerciseIndex: exerciseIndex, setIndex: setIndex)
                 HapticsManager.shared.selection()
@@ -107,11 +185,17 @@ struct FocusModeExerciseCard: View {
                     .font(.title3)
             }
         } else if isReady {
-            // Ready to log — show "Hit it!" pill
             Button {
                 viewModel.markSetCompleted(exerciseIndex: exerciseIndex, setIndex: setIndex)
                 HapticsManager.shared.success()
-                showRestTimer = true
+                // Bounce animation then delayed rest timer
+                completedSetIndex = setIndex
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    completedSetIndex = nil
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showRestTimer = true
+                }
             } label: {
                 Text("Hit it!")
                     .font(.caption.bold())
@@ -121,7 +205,6 @@ struct FocusModeExerciseCard: View {
                     .background(Color.green, in: Capsule())
             }
         } else {
-            // Not yet filled — show empty circle
             Button {
                 viewModel.markSetCompleted(exerciseIndex: exerciseIndex, setIndex: setIndex)
                 HapticsManager.shared.selection()

@@ -338,7 +338,7 @@ class NutritionService:
             .select("name, calories, protein_g, carbs_g, fat_g, fiber_g, logged_at")
             .eq("user_id", str(user_id))
             .order("logged_at", desc=True)
-            .limit(200)
+            .limit(30)
             .execute()
         )
         entries = result.data or []

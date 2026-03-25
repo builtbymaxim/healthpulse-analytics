@@ -11,6 +11,7 @@ import Combine
 
 struct LiveWorkoutBar: View {
     @ObservedObject private var store = WorkoutSessionStore.shared
+    @State private var isBlinking = false
 
     var body: some View {
         if store.isActive && !store.isPresenting {
@@ -21,10 +22,13 @@ struct LiveWorkoutBar: View {
 
     private var content: some View {
         HStack(spacing: 12) {
-            // Pulsing live indicator
+            // Recording-style blinking red dot
             Circle()
-                .fill(AppTheme.primary)
-                .frame(width: 8, height: 8)
+                .fill(Color.red)
+                .frame(width: 10, height: 10)
+                .opacity(isBlinking ? 1.0 : 0.0)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBlinking)
+                .onAppear { isBlinking = true }
 
             // Current exercise or workout name
             Text(currentExerciseName)

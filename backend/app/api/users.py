@@ -3,7 +3,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -97,7 +97,8 @@ class UserProfileUpdate(BaseModel):
 
 class DeviceTokenRequest(BaseModel):
     """Device push token registration request."""
-    device_token: str
+    model_config = ConfigDict(populate_by_name=True)
+    device_token: str = Field(alias="deviceToken")
     platform: str = "ios"
 
 

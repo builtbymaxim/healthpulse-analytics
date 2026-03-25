@@ -42,6 +42,7 @@ struct FoodScannerView: View {
     @State private var isLogging = false
     @State private var showSuccess = false
     @State private var shouldCapture = false
+    @State private var cameraId = UUID()
 
     var onFoodAdded: (() -> Void)?
 
@@ -83,6 +84,7 @@ struct FoodScannerView: View {
                 capturedImage = image
                 analyzePhoto(image)
             }, shouldCapture: $shouldCapture)
+            .id(cameraId)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal)
             .frame(maxHeight: .infinity)
@@ -569,6 +571,7 @@ struct FoodScannerView: View {
         portionGramsText = [:]
         showSuccess = false
         isLogging = false
+        cameraId = UUID()
         withAnimation { phase = .camera }
     }
 
@@ -617,12 +620,10 @@ class FoodCameraUIView: UIView, AVCapturePhotoCaptureDelegate {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        setupCamera()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupCamera()
     }
 
     private func setupCamera() {
@@ -672,6 +673,9 @@ class FoodCameraUIView: UIView, AVCapturePhotoCaptureDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         previewLayer?.frame = bounds
+        if captureSession == nil {
+            setupCamera()
+        }
     }
 
     func capturePhoto() {

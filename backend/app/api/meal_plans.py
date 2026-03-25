@@ -1,5 +1,6 @@
 """Meal plans API routes for recipes, templates, barcode lookups, and shopping lists."""
 
+import asyncio
 from datetime import date as Date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -152,13 +153,30 @@ async def search_food(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     service = get_meal_plan_service()
-    return service.search_food(query)
+    return await asyncio.to_thread(service.search_food, query)
+
+
+@router.get("/food-search/circuit-status")
+async def food_search_circuit_status(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    from app.services.meal_plan_service import _search_cb
+    return {"state": _search_cb.state, "failures": _search_cb._failure_count}
+
+
+@router.post("/food-search/reset-circuit")
+async def reset_food_search_circuit(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    from app.services.meal_plan_service import _search_cb
+    _search_cb.reset()
+    return {"status": "reset", "state": _search_cb.state}
 
 
 @router.get("/barcode/{barcode}", response_model=BarcodeProductResponse)
 async def lookup_barcode(barcode: str, current_user: CurrentUser = Depends(get_current_user)):
     service = get_meal_plan_service()
-    result = service.lookup_barcode(barcode)
+    result = await asyncio.to_thread(service.lookup_barcode, barcode)
     return result
 
 

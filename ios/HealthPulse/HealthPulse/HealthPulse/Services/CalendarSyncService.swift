@@ -18,8 +18,12 @@ class CalendarSyncService: ObservableObject {
     // MARK: - Published State
 
     @Published var isAuthorized = false
-    @Published var calendarSyncEnabled = false
-    @Published var defaultWorkoutTime: Date
+    @Published var calendarSyncEnabled = false {
+        didSet { savePreferences() }
+    }
+    @Published var defaultWorkoutTime: Date {
+        didSet { savePreferences() }
+    }
 
     private let eventStore = EKEventStore()
     private let defaults = UserDefaults.standard

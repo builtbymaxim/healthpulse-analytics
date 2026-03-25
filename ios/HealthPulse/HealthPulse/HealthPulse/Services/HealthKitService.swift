@@ -64,6 +64,8 @@ class HealthKitService: ObservableObject {
         return types
     }()
 
+    private static let authKey = "healthkit_authorized"
+
     private init() {
         checkAuthorization()
     }
@@ -79,6 +81,7 @@ class HealthKitService: ObservableObject {
             try await healthStore.requestAuthorization(toShare: [], read: readTypes)
             await MainActor.run {
                 isAuthorized = true
+                UserDefaults.standard.set(true, forKey: Self.authKey)
             }
             await refreshTodayData()
             return true
@@ -91,10 +94,34 @@ class HealthKitService: ObservableObject {
     private func checkAuthorization() {
         guard isHealthKitAvailable else { return }
 
-        // Check if we have at least step count authorization
-        if let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) {
-            let status = healthStore.authorizationStatus(for: stepType)
-            isAuthorized = (status == .sharingAuthorized)
+        // HKHealthStore doesn't expose read-only auth status, so we persist
+        // our own flag after a successful requestAuthorization().
+        if UserDefaults.standard.bool(forKey: Self.authKey) {
+            isAuthorized = true
+            // Validate by attempting a lightweight query
+            Task {
+                await validateAuthorization()
+            }
+        }
+    }
+
+    private func validateAuthorization() async {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        let start = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { [weak self] _, result, error in
+                Task { @MainActor [weak self] in
+                    if error != nil && result == nil {
+                        // Authorization was revoked
+                        self?.isAuthorized = false
+                        UserDefaults.standard.set(false, forKey: Self.authKey)
+                    }
+                }
+                cont.resume()
+            }
+            healthStore.execute(query)
         }
     }
 

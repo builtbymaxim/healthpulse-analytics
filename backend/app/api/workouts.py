@@ -193,13 +193,15 @@ async def get_unified_workouts(
     from_date = (datetime.now() - timedelta(days=days)).isoformat()
     user_id = str(current_user.id)
 
-    # Fetch freeform workouts
+    # Fetch freeform workouts (limit to what we'll need after merge)
+    fetch_limit = limit + offset
     freeform_result = (
         supabase.table("workouts")
         .select("id, workout_type, start_time, duration_minutes, calories_burned, notes, intensity, plan_id, planned_workout_name, overall_rating")
         .eq("user_id", user_id)
         .gte("start_time", from_date)
         .order("start_time", desc=True)
+        .limit(fetch_limit)
         .execute()
     )
 
@@ -210,6 +212,7 @@ async def get_unified_workouts(
         .eq("user_id", user_id)
         .gte("started_at", from_date)
         .order("started_at", desc=True)
+        .limit(fetch_limit)
         .execute()
     )
 

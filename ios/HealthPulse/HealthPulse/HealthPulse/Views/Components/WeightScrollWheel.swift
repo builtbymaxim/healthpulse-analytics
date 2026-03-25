@@ -2,7 +2,8 @@
 //  WeightScrollWheel.swift
 //  HealthPulse
 //
-//  Native wheel picker for weight input. 0–300 kg in 1.25 kg increments.
+//  Dual-column wheel picker for weight input.
+//  Left: whole kg (0–300). Right: fraction (.00/.25/.50/.75).
 //
 
 import SwiftUI
@@ -10,26 +11,75 @@ import SwiftUI
 struct WeightScrollWheel: View {
     @Binding var weight: Double?
 
-    private let steps: [Double] = stride(from: 0.0, through: 300.0, by: 1.25).map { $0 }
+    @State private var wholeKg: Int = 0
+    @State private var fraction: Double = 0.0
+
+    private let fractions: [Double] = [0.0, 0.25, 0.50, 0.75]
 
     var body: some View {
-        Picker("Weight (kg)", selection: Binding(
-            get: { weight ?? 0 },
-            set: { weight = $0 == 0 ? nil : $0 }
-        )) {
-            ForEach(steps, id: \.self) { step in
-                Text(step == 0 ? "—" : formatted(step))
-                    .tag(step)
+        HStack(spacing: 0) {
+            // Whole kg column
+            Picker("kg", selection: $wholeKg) {
+                Text("—").tag(0)
+                ForEach(1...300, id: \.self) { kg in
+                    Text("\(kg)").tag(kg)
+                }
             }
+            .pickerStyle(.wheel)
+            .frame(width: 100)
+            .clipped()
+            .onChange(of: wholeKg) { _, _ in
+                syncWeight()
+                HapticsManager.shared.selection()
+            }
+
+            Text(".")
+                .font(.title3.bold())
+                .foregroundStyle(.secondary)
+
+            // Fraction column
+            Picker("fraction", selection: $fraction) {
+                ForEach(fractions, id: \.self) { f in
+                    Text(fractionLabel(f)).tag(f)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(width: 80)
+            .clipped()
+            .onChange(of: fraction) { _, _ in
+                syncWeight()
+                HapticsManager.shared.selection()
+            }
+
+            Text("kg")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
         }
-        .pickerStyle(.wheel)
         .frame(height: 140)
-        .clipped()
+        .onAppear { initFromWeight() }
     }
 
-    private func formatted(_ value: Double) -> String {
-        value.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f kg", value)
-            : String(format: "%.2g kg", value)
+    private func fractionLabel(_ f: Double) -> String {
+        switch f {
+        case 0.0:  return "00"
+        case 0.25: return "25"
+        case 0.50: return "50"
+        case 0.75: return "75"
+        default:   return "00"
+        }
+    }
+
+    private func syncWeight() {
+        let total = Double(wholeKg) + fraction
+        weight = total == 0 ? nil : total
+    }
+
+    private func initFromWeight() {
+        guard let w = weight, w > 0 else { return }
+        wholeKg = Int(w)
+        let remainder = w - Double(Int(w))
+        // Snap to nearest fraction
+        fraction = fractions.min(by: { abs($0 - remainder) < abs($1 - remainder) }) ?? 0.0
     }
 }

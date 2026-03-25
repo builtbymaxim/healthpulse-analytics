@@ -97,10 +97,21 @@ class MealPlanService:
             query = query.eq("goal_type", goal_type)
         result = query.order("goal_type").order("name").execute()
         templates = result.data or []
-        # Add item counts
-        for t in templates:
-            items_result = self.supabase.table("meal_plan_items").select("id", count="exact").eq("template_id", t["id"]).execute()
-            t["item_count"] = items_result.count or 0
+        # Batch item counts (single query instead of N+1)
+        if templates:
+            template_ids = [t["id"] for t in templates]
+            items_result = (
+                self.supabase.table("meal_plan_items")
+                .select("template_id")
+                .in_("template_id", template_ids)
+                .execute()
+            )
+            counts: dict[str, int] = {}
+            for item in (items_result.data or []):
+                tid = item["template_id"]
+                counts[tid] = counts.get(tid, 0) + 1
+            for t in templates:
+                t["item_count"] = counts.get(t["id"], 0)
         return templates
 
     def get_meal_plan_template(self, template_id: UUID):
@@ -245,7 +256,7 @@ class MealPlanService:
             with httpx.Client(timeout=10, headers=_OFF_USER_AGENT) as client:
                 response = call_with_retry(
                     client.get, url,
-                    max_attempts=2,
+                    max_attempts=3,
                     base_delay=1.0,
                     exceptions=(httpx.HTTPError, httpx.TimeoutException),
                     params=params,

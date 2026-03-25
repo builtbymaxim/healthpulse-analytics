@@ -508,6 +508,8 @@ struct SetLogRow: View {
     let onDelete: () -> Void
 
     @State private var showWeightPicker = false
+    @State private var showRepsPicker = false
+    @State private var showRPEPicker = false
 
     var body: some View {
         HStack {
@@ -551,6 +553,7 @@ struct SetLogRow: View {
     private var weightInput: some View {
         Button {
             showWeightPicker = true
+            HapticsManager.shared.selection()
         } label: {
             HStack(spacing: 4) {
                 Text(setLog.weight.map { w in
@@ -564,6 +567,7 @@ struct SetLogRow: View {
                 Text("kg")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize()
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
@@ -572,42 +576,65 @@ struct SetLogRow: View {
         .sheet(isPresented: $showWeightPicker) {
             WeightInputSelector(weight: $setLog.weight)
         }
+        .frame(width: 80)
     }
 
     private var repsInput: some View {
-        TextField("", value: $setLog.reps, format: .number)
-            .keyboardType(.numberPad)
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 60)
-            .overlay(alignment: .leading) {
-                if setLog.reps == nil {
-                    Text("0")
-                        .foregroundStyle(.tertiary)
-                        .padding(.leading, 8)
-                        .allowsHitTesting(false)
+        Button {
+            showRepsPicker = true
+            HapticsManager.shared.selection()
+        } label: {
+            Text(setLog.reps.map { "\($0)" } ?? "—")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(setLog.reps == nil ? .tertiary : .primary)
+                .frame(width: 46, alignment: .center)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(AppTheme.surface2, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .frame(width: 60)
+        .sheet(isPresented: $showRepsPicker) {
+            VStack(spacing: 12) {
+                Text("Reps")
+                    .font(.headline)
+                    .padding(.top, 12)
+                Picker("Reps", selection: Binding(
+                    get: { setLog.reps ?? 0 },
+                    set: { setLog.reps = $0 == 0 ? nil : $0 }
+                )) {
+                    Text("—").tag(0)
+                    ForEach(1...99, id: \.self) { rep in
+                        Text("\(rep)").tag(rep)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 140)
+                .clipped()
+                .onChange(of: setLog.reps) { _, _ in
+                    HapticsManager.shared.selection()
                 }
             }
+            .presentationDetents([.height(220)])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var rpeSelector: some View {
-        Menu {
-            ForEach(6...10, id: \.self) { rpe in
-                Button("RPE \(rpe)") {
-                    setLog.rpe = rpe
-                }
-            }
-            Button("Clear") {
-                setLog.rpe = nil
-            }
+        Button {
+            showRPEPicker = true
+            HapticsManager.shared.selection()
         } label: {
             Text(setLog.rpe != nil ? "\(setLog.rpe!)" : "-")
-                .font(.subheadline)
+                .font(.body.monospacedDigit())
+                .foregroundStyle(setLog.rpe == nil ? .tertiary : .primary)
                 .frame(width: 40)
                 .padding(.vertical, 6)
-                .background(AppTheme.surface2)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(AppTheme.surface2, in: RoundedRectangle(cornerRadius: 8))
         }
         .frame(width: 50)
+        .sheet(isPresented: $showRPEPicker) {
+            RPEPickerSheet(selectedRPE: $setLog.rpe)
+        }
     }
 
     private var durationInput: some View {
@@ -716,6 +743,71 @@ struct RPEInfoSheet: View {
         case 7: return .green
         default: return .blue
         }
+    }
+}
+
+// MARK: - RPE Picker Sheet
+
+struct RPEPickerSheet: View {
+    @Binding var selectedRPE: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    private let rpeOptions: [(value: Int, description: String, color: Color)] = [
+        (10, "Max effort — couldn't do another rep", .red),
+        (9, "Very hard — maybe 1 rep left", .orange),
+        (8, "Hard — 2 reps left in the tank", .yellow),
+        (7, "Moderate — 3 reps left", .green),
+        (6, "Light — 4+ reps left", .blue)
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Rate of Perceived Exertion")
+                .font(.headline)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            ForEach(rpeOptions, id: \.value) { option in
+                Button {
+                    selectedRPE = option.value
+                    HapticsManager.shared.light()
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("\(option.value)")
+                            .font(.title3.bold())
+                            .foregroundStyle(option.color)
+                            .frame(width: 32)
+                        Text(option.description)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if selectedRPE == option.value {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(option.color)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+            }
+
+            Divider().padding(.top, 4)
+
+            Button {
+                selectedRPE = nil
+                HapticsManager.shared.selection()
+                dismiss()
+            } label: {
+                Text("Clear")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+        }
+        .presentationDetents([.height(320)])
+        .presentationDragIndicator(.visible)
     }
 }
 

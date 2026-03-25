@@ -81,6 +81,63 @@ class APIService {
     private let refreshCoordinator = TokenRefreshCoordinator()
     private let session: URLSession
 
+    // MARK: - Response Cache
+
+    private var cache: [String: (data: Data, expiry: Date)] = [:]
+
+    /// Returns cached response if fresh, otherwise falls through to network and caches the result.
+    private func cachedRequest<T: Decodable>(endpoint: String, ttl: TimeInterval = 300) async throws -> T {
+        let key = endpoint
+        if let hit = cache[key], hit.expiry > Date() {
+            return try decoder.decode(T.self, from: hit.data)
+        }
+        // Cache miss — fetch from network
+        guard NetworkMonitor.shared.isCurrentlyConnected else { throw APIError.offline }
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw APIError.invalidURL }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+
+        switch http.statusCode {
+        case 200...299:
+            cache[key] = (data: data, expiry: Date().addingTimeInterval(ttl))
+            return try decoder.decode(T.self, from: data)
+        case 401:
+            if await refreshAccessToken() {
+                var retry = req
+                if let newToken = authToken { retry.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization") }
+                let (retryData, retryResp) = try await session.data(for: retry)
+                if let retryHttp = retryResp as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
+                    cache[key] = (data: retryData, expiry: Date().addingTimeInterval(ttl))
+                    return try decoder.decode(T.self, from: retryData)
+                }
+            }
+            NotificationCenter.default.post(name: .authenticationFailed, object: nil)
+            throw APIError.unauthorized
+        case 404: throw APIError.notFound
+        case 422: throw APIError.validationError
+        case 500...599: throw APIError.serverError
+        default: throw APIError.unknown(http.statusCode)
+        }
+    }
+
+    /// Remove all cached responses whose key contains the given substring.
+    /// Pass "" to clear all.
+    func invalidateCache(matching prefix: String) {
+        if prefix.isEmpty {
+            cache.removeAll()
+        } else {
+            cache = cache.filter { !$0.key.contains(prefix) }
+        }
+    }
+
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -428,11 +485,11 @@ class APIService {
     }
 
     func getDashboardData() async throws -> DashboardResponse {
-        try await request(endpoint: "/predictions/dashboard")
+        try await cachedRequest(endpoint: "/predictions/dashboard")
     }
 
     func getNarrativeDashboard() async throws -> NarrativeDashboardResponse {
-        try await request(endpoint: "/predictions/dashboard/narrative")
+        try await cachedRequest(endpoint: "/predictions/dashboard/narrative")
     }
 
     // MARK: - Metrics
@@ -481,11 +538,11 @@ class APIService {
     }
 
     func getWorkouts(days: Int = 30) async throws -> [Workout] {
-        try await request(endpoint: "/workouts?days=\(days)")
+        try await cachedRequest(endpoint: "/workouts?days=\(days)")
     }
 
     func getUnifiedWorkouts(days: Int = 30, limit: Int = 20) async throws -> [UnifiedWorkoutEntry] {
-        try await request(endpoint: "/workouts/unified?days=\(days)&limit=\(limit)")
+        try await cachedRequest(endpoint: "/workouts/unified?days=\(days)&limit=\(limit)")
     }
 
     func getWorkoutCalendar(month: String) async throws -> [WorkoutCalendarDay] {
@@ -556,7 +613,7 @@ class APIService {
     // MARK: - User
 
     func getProfile() async throws -> User {
-        try await request(endpoint: "/users/me")
+        try await cachedRequest(endpoint: "/users/me")
     }
 
     func updateProfile(_ user: User) async throws -> User {
@@ -814,11 +871,11 @@ class APIService {
             formatter.dateFormat = "yyyy-MM-dd"
             endpoint += "?date=\(formatter.string(from: date))"
         }
-        return try await request(endpoint: endpoint)
+        return try await cachedRequest(endpoint: endpoint)
     }
 
     func getWeeklyNutritionSummary() async throws -> [WeeklyNutritionDay] {
-        try await request(endpoint: "/nutrition/summary/weekly")
+        try await cachedRequest(endpoint: "/nutrition/summary/weekly")
     }
 
     // MARK: - Sleep
@@ -830,15 +887,20 @@ class APIService {
             formatter.dateFormat = "yyyy-MM-dd"
             endpoint += "?target_date=\(formatter.string(from: date))"
         }
-        return try await optionalRequest(endpoint: endpoint)
+        // SleepSummary is optional — use cachedRequest for non-nil, fall back to optionalRequest for 404
+        do {
+            return try await cachedRequest(endpoint: endpoint) as SleepSummary
+        } catch APIError.notFound {
+            return nil
+        }
     }
 
     func getSleepHistory(days: Int = 7) async throws -> [SleepEntry] {
-        try await request(endpoint: "/sleep/history?days=\(days)")
+        try await cachedRequest(endpoint: "/sleep/history?days=\(days)")
     }
 
     func getSleepAnalytics(days: Int = 30) async throws -> SleepAnalytics {
-        try await request(endpoint: "/sleep/analytics?days=\(days)")
+        try await cachedRequest(endpoint: "/sleep/analytics?days=\(days)")
     }
 
     func logSleep(_ request: SleepLogRequest) async throws -> EmptyResponse {
@@ -848,7 +910,7 @@ class APIService {
     // MARK: - Training Plans
 
     func getTodaysWorkout() async throws -> TodayWorkoutResponse {
-        try await request(endpoint: "/training-plans/today")
+        try await cachedRequest(endpoint: "/training-plans/today")
     }
 
     func getActiveTrainingPlan() async throws -> TrainingPlanSummary? {
@@ -986,7 +1048,7 @@ class APIService {
     }
 
     func getPartners() async throws -> [Partner] {
-        try await request(endpoint: "/social/partners")
+        try await cachedRequest(endpoint: "/social/partners", ttl: 120)
     }
 
     func acceptPartnership(_ id: UUID) async throws -> Partner {
@@ -1007,7 +1069,7 @@ class APIService {
             let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exerciseName
             endpoint += "?exercise_name=\(encoded)"
         }
-        return try await request(endpoint: endpoint)
+        return try await cachedRequest(endpoint: endpoint, ttl: 120)
     }
 
     func updateSocialOptIn(_ optIn: Bool) async throws {
@@ -1033,17 +1095,17 @@ class APIService {
         if let tag { params.append("tag=\(tag)") }
         var endpoint = "/meal-plans/recipes"
         if !params.isEmpty { endpoint += "?" + params.joined(separator: "&") }
-        return try await request(endpoint: endpoint)
+        return try await cachedRequest(endpoint: endpoint, ttl: 600)
     }
 
     func getRecipe(id: UUID) async throws -> Recipe {
-        try await request(endpoint: "/meal-plans/recipes/\(id)")
+        try await cachedRequest(endpoint: "/meal-plans/recipes/\(id)", ttl: 600)
     }
 
     func getMealPlanTemplates(goalType: String? = nil) async throws -> [MealPlanTemplate] {
         var endpoint = "/meal-plans/templates"
         if let goalType { endpoint += "?goal_type=\(goalType)" }
-        return try await request(endpoint: endpoint)
+        return try await cachedRequest(endpoint: endpoint, ttl: 600)
     }
 
     func getMealPlanTemplate(id: UUID) async throws -> MealPlanTemplate {
