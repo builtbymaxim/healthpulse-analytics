@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		94AFEF242F73D04D00746BDE /* HealthPulseWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		94AFEF302F73D13100746BDE /* HealthPulse.app in Resources */ = {isa = PBXBuildFile; fileRef = 944B82402F04187B005ABFD3 /* HealthPulse.app */; };
 		94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; };
 		94AFEF382F73D17200746BDE /* WatchConnectivity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94AFEF3A2F73D17700746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; };
@@ -27,20 +26,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 94AFEF192F73D04B00746BDE;
 			remoteInfo = "HealthPulseWatch Watch App";
-		};
-		94AFEF312F73D13100746BDE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 944B823F2F04187B005ABFD3;
-			remoteInfo = HealthPulse;
-		};
-		94AFEF332F73D13900746BDE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 944B823F2F04187B005ABFD3;
-			remoteInfo = HealthPulse;
 		};
 		94F5E00C2F06A000005ABCFC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -259,8 +244,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				94AFEF322F73D13100746BDE /* PBXTargetDependency */,
-				94AFEF342F73D13900746BDE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				94AFEF1B2F73D04B00746BDE /* HealthPulseWatch Watch App */,
@@ -350,7 +333,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				94AFEF302F73D13100746BDE /* HealthPulse.app in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,16 +405,6 @@
 			isa = PBXTargetDependency;
 			target = 94AFEF192F73D04B00746BDE /* HealthPulseWatch Watch App */;
 			targetProxy = 94AFEF222F73D04D00746BDE /* PBXContainerItemProxy */;
-		};
-		94AFEF322F73D13100746BDE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 944B823F2F04187B005ABFD3 /* HealthPulse */;
-			targetProxy = 94AFEF312F73D13100746BDE /* PBXContainerItemProxy */;
-		};
-		94AFEF342F73D13900746BDE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 944B823F2F04187B005ABFD3 /* HealthPulse */;
-			targetProxy = 94AFEF332F73D13900746BDE /* PBXContainerItemProxy */;
 		};
 		94F5E00D2F06A000005ABCFD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
