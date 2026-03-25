@@ -10,6 +10,7 @@ import Charts
 
 struct SleepView: View {
     @EnvironmentObject var healthKitService: HealthKitService
+    @EnvironmentObject var tabRouter: TabRouter
     @State private var summary: SleepSummary?
     @State private var history: [SleepEntry] = []
     @State private var analytics: SleepAnalytics?
@@ -99,6 +100,11 @@ struct SleepView: View {
             .task {
                 await loadData()
             }
+            .onChange(of: tabRouter.selectedTab) { _, newTab in
+                if newTab == .sleep {
+                    Task { await loadData() }
+                }
+            }
             .onChange(of: selectedPeriod) { _, newPeriod in
                 // Reload only history when timeframe changes
                 Task {
@@ -118,6 +124,7 @@ struct SleepView: View {
             isLoading = true
         }
         error = nil
+        APIService.shared.invalidateCache(matching: "/sleep")
 
         // Refresh HealthKit in parallel with backend calls
         async let hkRefresh: Void = healthKitService.refreshTodayData()

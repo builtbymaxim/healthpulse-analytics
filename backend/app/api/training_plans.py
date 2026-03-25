@@ -571,7 +571,7 @@ async def patch_plan_day_schedule(
     """Patch the exercise list for a single day without replacing the whole plan."""
     supabase = get_supabase_client()
     result = (
-        supabase.table("training_plans")
+        supabase.table("user_training_plans")
         .select("schedule")
         .eq("id", str(plan_id))
         .eq("user_id", str(current_user.id))
@@ -586,7 +586,7 @@ async def patch_plan_day_schedule(
     if day_key in schedule:
         schedule[day_key]["exercises"] = request.exercises
 
-    supabase.table("training_plans").update({"schedule": schedule}).eq(
+    supabase.table("user_training_plans").update({"schedule": schedule}).eq(
         "id", str(plan_id)
     ).eq("user_id", str(current_user.id)).execute()
 
