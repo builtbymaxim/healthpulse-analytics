@@ -73,7 +73,7 @@ HealthPulse is the **Actionable AI Companion** for serious athletes and health-o
 
 ### Explicitly out of v1.0
 - Android
-- Apple Watch native app
+- ~~Apple Watch native app~~ — Basic companion shipped in V1.1 (workout mirror + set completion). Standalone workouts, complications, and readiness glance deferred to V1.2.
 - OAuth integrations (Strava, Garmin, Oura, Whoop) — "Coming Soon" only
 - In-app purchases / paywall — all features unlocked for beta testers
 

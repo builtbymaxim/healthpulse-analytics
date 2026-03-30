@@ -647,6 +647,7 @@ class FoodCameraUIView: UIView, AVCapturePhotoCaptureDelegate {
 
         let previewLayer = AVCaptureVideoPreviewLayer(session: session)
         previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.frame = bounds
         layer.addSublayer(previewLayer)
         self.previewLayer = previewLayer
 

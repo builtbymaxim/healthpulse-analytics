@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-03-18
+> Last updated: 2026-03-26
 
 ## Overview
 
@@ -198,7 +198,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | Router | Prefix | Key Endpoints |
 |--------|--------|---------------|
 | `auth.py` | `/api/v1/auth` | POST `/login`, `/register`, `/refresh` |
-| `users.py` | `/api/v1/users` | GET/PUT `/me`, `/me/settings`, `/me/weight` |
+| `users.py` | `/api/v1/users` | GET/PUT `/me`, `/me/settings`, `/me/weight`; POST `/me/device-token` |
 | `metrics.py` | `/api/v1/metrics` | POST `/`, `/batch`; GET `/` |
 | `workouts.py` | `/api/v1/workouts` | POST/GET/DELETE `/`; GET `/sets` |
 | `exercises.py` | `/api/v1/exercises` | GET `/`, `/analytics/volume`, `/analytics/muscle-groups`; POST `/sets` |
@@ -223,6 +223,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `sleep_service.py` | Sleep metrics + scoring |
 | `wellness_calculator.py` | Wellness/recovery/readiness scoring |
 | `meal_plan_service.py` | Recipe library, meal plan templates, barcode lookup (Open Food Facts) |
+| `push_service.py` | APNs push notifications via PyAPNs2 |
 
 ### iOS Views
 
@@ -230,7 +231,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 |------|---------|
 | `ContentView` | Root tab navigation + greeting overlay |
 | `AuthView` | Login/signup |
-| `OnboardingView` | Profile setup wizard (15 steps incl. name, dietary profile, experience) |
+| `OnboardingView` | Profile setup wizard (11 steps incl. name, dietary profile, experience) |
 | `GreetingView` | Animated daily greeting splash on app open |
 | `TodayView` | Smart dashboard (500+ lines) |
 | `WorkoutTabView` | Workout hub (today's plan + ad-hoc + history) |
@@ -249,6 +250,12 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `MealPlanBrowseView` | Meal plan templates, detail + shopping list |
 | `BarcodeScannerView` | Camera barcode scan + Open Food Facts lookup |
 | `WeeklyMealPlanView` | 7-day meal planner grid + macro balance + calendar sync |
+| `FocusModeView` | Full-screen single-exercise workout focus |
+| `PreWorkoutOverviewView` | Exercise list preview before starting workout |
+| `WorkoutHistoryView` | Dedicated workout history browsing |
+| `UnifiedWorkoutDetailView` | Combined plan + freeform workout detail |
+| `LiveWorkoutBar` | Persistent bottom bar during active workout |
+| `FreeformFocusCard` | Ad-hoc exercise card in focus mode |
 | `ProfileView` | Settings, baseline config, notifications, about |
 | `LogView` | Daily check-in + metric logging |
 
@@ -263,6 +270,8 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 | `NotificationService` | Local notification scheduling + preferences |
 | `CalendarSyncService` | EventKit calendar sync + conflict checking |
 | `ActiveWorkoutManager` | Workout state persistence for background execution |
+| `WatchConnectivityService` | Bi-directional iPhone ↔ Watch communication |
+| `WorkoutSessionStore` | Watch-side workout state management |
 | `TabRouter` | Programmatic tab navigation |
 
 ### Database Tables (Supabase)
@@ -789,6 +798,82 @@ Results written to `audit-logs/`. Fix any high/critical findings before public l
 - **Detail sheet:** Tapping the card opens `NutritionAdherenceDetailSheet` (instead of navigating away to Nutrition tab) — per-day rows showing actual vs target kcal, progress bar, on/off-target icon, today row highlighted with border + tint, explanation of how adherence score is calculated
 - **`DayAdherence` model:** Extended with `caloriesActual: Double` and `caloriesTarget: Double` fields; `TodayViewModel.loadWeeklyNutrition()` populates them from `WeeklyNutritionDay` API response
 
+### V1.1 — Workout UX Overhaul, Push Notifications, Watch Companion & Performance
+
+**Release:** 17 commits, 103 files changed, +8,646 / -1,599 lines. All deployed to Railway (auto-deploy on push to main).
+
+#### Workout Execution Redesign
+- **Focus Mode UI:** Redesigned workout execution with `FocusModeView` (full-screen single-exercise focus), `FocusModeExerciseCard` (plan exercises), `FreeformFocusCard` (ad-hoc exercises)
+- **Barbell Weight Picker:** Visual plate selector with real plate images (7 plate assets: 1.25, 2.5, 5, 10, 15, 20, 25 kg)
+- **Weight Input Selector:** Toggle between scroll wheel, barbell picker, and manual text input
+- **Weight Scroll Wheel:** Redesigned UIPickerView-based weight picker for quick selection
+- **Live Workout Bar:** Persistent bottom bar during active workout (timer + exercise count + quick actions)
+- **Pre-Workout Overview:** Exercise list preview before starting a planned workout
+- **Workout Completion View:** Celebration screen with animated checkmark, stats summary, motivational messages
+- **WorkoutExecutionViewModel:** Extracted from WorkoutExecutionView (700→399 lines), manages all workout state + Live Activity updates
+- **Workout History View:** Dedicated workout history browsing with date filtering
+- **Unified Workout Detail View:** Combined plan + freeform workout detail with exercise breakdown
+
+#### APNs Push Notifications & Deep Linking
+- **AppDelegate:** APNs registration, device token forwarding to backend on launch
+- **Push Service (backend):** `push_service.py` with APNs HTTP/2 via PyAPNs2, sends workout reminders and partner notifications
+- **Device token endpoint:** `POST /users/me/device-token` — stores device tokens per user with Pydantic alias support (`deviceToken` + `device_token`)
+- **Deep linking:** Notification tap routes to specific tabs (workout, nutrition, sleep) via `TabRouter.navigateToRoute()`
+- **Device token migration:** `migrations/001_device_tokens.sql`
+
+#### Apple Watch Companion
+- **HealthPulseWatch target:** WatchOS app with workout logging capability
+- **WatchConnectivityService:** Bi-directional iPhone ↔ Watch communication via `WCSession`
+- **WorkoutSessionStore:** Watch-side workout state management (exercise list, set tracking)
+- **Watch workout view:** Basic strength logging on wrist (exercise picker, weight/reps input, set completion)
+
+#### Live Activity Rest Timer (Strength)
+- **StrengthActivityLiveActivity:** Rest timer displayed on lock screen + Dynamic Island during strength workouts
+- **StrengthWorkoutAttributes:** Shared attributes between app and widget extension (current exercise, set number, rest duration)
+
+#### Performance Optimization
+- **In-memory response cache:** `cachedRequest<T>` generic method in `APIService` with domain-specific TTLs:
+  - 5 min: nutrition, workouts, dashboard, sleep, profile
+  - 2 min: social (leaderboard, partners)
+  - 10 min: recipes, meal plan templates
+- **Event-driven cache invalidation:** `.foodLogged`, `.workoutCompleted`, `.weightLogged` NotificationCenter signals trigger targeted `invalidateCache(matching:)` calls in `TodayViewModel`
+- **Foreground cache clear:** Track `lastBackgroundTime` in `HealthPulseApp`; if backgrounded > 5 min, clear all caches + refresh HealthKit data
+- **Backend: 2 Uvicorn workers** (`Procfile --workers 2`) — doubles concurrent request capacity on Railway
+- **Backend: N+1 fix** — meal plan template item counts fetched in single `.in_()` query instead of per-template
+- **Backend: async I/O** — `asyncio.to_thread` wraps sync `httpx` calls to Open Food Facts in `meal_plans.py` endpoints
+- **Backend: unified workout pagination** — `.limit(fetch_limit)` applied to both sub-queries before Python merge
+- **Backend: recent foods** — fetch reduced from 200 → 30 rows for deduplication
+
+#### Persistence Fixes
+- **HealthKit auth persistence:** `checkAuthorization()` was checking share auth for read-only access (always `.notDetermined`). Fixed: persist `isAuthorized` to UserDefaults after successful grant + validate with lightweight step query on launch
+- **Calendar sync toggle persistence:** `savePreferences()` was only called in `onDisappear`. Fixed: `didSet { savePreferences() }` on `@Published var calendarSyncEnabled` and `defaultWorkoutTime` — saves immediately on toggle change
+
+#### UX Polish
+- **Onboarding overhaul:** 15 → 11 steps with streamlined flow and better transitions
+- **New app logo:** Replaced logo assets with new light + dark variants
+- **Food search resilience:** Circuit breaker `reset()` method, increased retries 2→3, diagnostic endpoints (`GET /food-search/circuit-status`, `POST /food-search/reset-circuit`)
+- **FoodLogView amount pill:** Fixed "100\ng" line break with `.fixedSize()` modifier
+- **Food search "No results" indicator:** Shows "No results — enter macros manually" when search returns empty
+- **Portion text input:** Replaced fixed gram buttons with free-text `TextField(.decimalPad)` in barcode + food scanner views
+- **Sleep HealthKit binding:** `SleepView` now reads from `HealthKitService` (Apple Watch data) with backend fallback; new `LastNightHKCard` component
+- **Nutrition adherence polish:** 2-letter day labels, today highlight, detail sheet on tap
+
+#### Backend Fixes
+- **Device token 422:** Pydantic `Field(alias="deviceToken")` + `ConfigDict(populate_by_name=True)` accepts both camelCase and snake_case
+- **Training plan schedule patch:** Fixed wrong table name in `PATCH` endpoint
+- **Sleep tab cache invalidation:** Added cache invalidation when navigating to sleep tab
+- **Barcode circuit breakers:** Split into separate breakers for search vs lookup, added `User-Agent` header, response caching
+- **Custom training plan:** New `POST /training-plans/custom` endpoint + builder UI
+- **Plan builder:** Safe day reassignment, onboarding plan editor + activation flow
+- **Schedule normalization:** Fixed `get_training_plan_details` to return `[String: String]`
+
+#### New Backend Tests
+- `test_nutrition_recent.py` — recent foods deduplication
+- `test_plan_schedule_patch.py` — schedule PATCH validation
+- `test_push_service.py` — push notification delivery
+- `test_sports_workout.py` — workout session CRUD
+- `test_workout_calendar.py` — calendar event generation
+
 ---
 
 ### Phase 13 — Experiment Tracks & Silent Correlation Feed
@@ -924,7 +1009,7 @@ their current trajectory and let them simulate the impact of behavioral changes 
 
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **Apple Watch App** | Surfaces "Now / Next / Tonight" commitments on wrist; quick set logging during workouts; real-time readiness score; rest timer; synthesis window notification. Highest-impact platform addition. | High |
+| **Apple Watch App (V1.2)** | V1.1 shipped basic companion (workout mirror + "Hit it!" set completion + rest timer). V1.2: standalone workout start on Watch, readiness/recovery score glance, "Now / Next / Tonight" commitments, HKWorkoutSession for calorie/HR tracking, complications, haptic alerts (rest timer end, workout reminders). | High |
 | **Home Screen Widgets** | WidgetKit: Daily Causal Story summary (readiness + one key action); calorie deficit/surplus ring; active experiment progress; workout streak. | Medium |
 | **iPad Layout** | Multi-column dashboard (causal story left / commitment actions right); side-by-side workout logging; expanded What-If Sandbox with larger chart canvas. | Medium |
 | **Strava Sync** | Bi-directional: import Strava runs into workout history; export HealthPulse sessions to Strava. Enriches training load data for Burnout Horizon forecasting. | Medium |
@@ -958,7 +1043,7 @@ healthpulse-analytics/
 │   │   │   ├── dashboard_service.py, prediction_service.py
 │   │   │   ├── nutrition_service.py, nutrition_calculator.py
 │   │   │   ├── exercise_service.py, sleep_service.py
-│   │   │   ├── wellness_calculator.py, meal_plan_service.py, data_generator.py
+│   │   │   ├── wellness_calculator.py, meal_plan_service.py, push_service.py, data_generator.py
 │   │   └── models/              # Pydantic models + DB config
 │   ├── requirements.txt
 │   ├── Procfile, railway.json
@@ -969,10 +1054,14 @@ healthpulse-analytics/
 │       ├── Views/               # All SwiftUI views (30+ files)
 │       │   ├── DashboardCards/  # Extracted dashboard card components
 │       │   └── Components/      # Reusable UI components (AppTheme, GlassCard, etc.)
-│       ├── ViewModels/          # TodayViewModel (extracted from TodayView)
-│       ├── Services/            # API, Auth, HealthKit, Keychain, TabRouter, etc.
+│       ├── ViewModels/          # TodayViewModel, WorkoutExecutionViewModel, CustomPlanBuilderViewModel
+│       ├── Services/            # API, Auth, HealthKit, Keychain, TabRouter, WatchConnectivity, etc.
 │       ├── Models/              # Codable models
 │       └── Info.plist           # Permissions + capabilities
+│   └── HealthPulseWatch/        # Apple Watch companion app
+│       ├── HealthPulseWatchApp.swift
+│       ├── WatchWorkoutStore.swift
+│       └── WorkoutView.swift
 ├── docs/
 │   ├── database-schema.sql
 │   ├── migration-exercises.sql
