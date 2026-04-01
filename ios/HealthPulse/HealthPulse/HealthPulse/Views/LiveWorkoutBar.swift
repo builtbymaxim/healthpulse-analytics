@@ -20,27 +20,39 @@ struct LiveWorkoutBar: View {
         }
     }
 
+    private var isResting: Bool { store.activeViewModel?.isResting ?? false }
+    private var restEndDate: Date? { store.activeViewModel?.restEndDate }
+
     private var content: some View {
         HStack(spacing: 12) {
-            // Recording-style blinking red dot
+            // Blinking dot — orange during rest, red during active set
             Circle()
-                .fill(Color.red)
+                .fill(isResting ? Color.orange : Color.red)
                 .frame(width: 10, height: 10)
                 .opacity(isBlinking ? 1.0 : 0.0)
                 .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isBlinking)
+                .animation(MotionTokens.entrance, value: isResting)
                 .onAppear { isBlinking = true }
 
-            // Current exercise or workout name
-            Text(currentExerciseName)
+            // "RESTING" during rest, exercise name otherwise
+            Text(isResting ? "RESTING" : currentExerciseName)
                 .font(.subheadline.weight(.medium))
+                .foregroundStyle(isResting ? .orange : .primary)
                 .lineLimit(1)
+                .animation(MotionTokens.entrance, value: isResting)
 
             Spacer()
 
-            // Live elapsed timer
-            Text(formattedTime)
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
+            // Rest countdown during rest, elapsed time otherwise
+            if isResting, let end = restEndDate {
+                Text(end, style: .timer)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.orange)
+            } else {
+                Text(formattedTime)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
 
             Image(systemName: "chevron.up")
                 .font(.caption.bold())
@@ -55,6 +67,9 @@ struct LiveWorkoutBar: View {
             withAnimation(MotionTokens.entrance) {
                 store.restore()
             }
+        }
+        .onChange(of: isResting) { _, nowResting in
+            if !nowResting { HapticsManager.shared.success() }
         }
     }
 

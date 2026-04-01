@@ -10,6 +10,7 @@ import Foundation
 import SwiftUI
 import Combine
 import ActivityKit
+import UserNotifications
 
 // MARK: - Offline State (private to this file)
 
@@ -53,7 +54,7 @@ class WorkoutExecutionViewModel: ObservableObject {
     private var timer: Timer?
     private let startTime = Date()
     private var strengthActivity: Activity<StrengthWorkoutAttributes>?
-    private var restEndDate: Date?
+    @Published private(set) var restEndDate: Date?
 
     init(workout: TodayWorkoutResponse, planId: UUID?) {
         self.workout = workout
@@ -265,6 +266,10 @@ class WorkoutExecutionViewModel: ObservableObject {
 
     // MARK: - Live Activity
 
+    private var activeExerciseIndex: Int {
+        exerciseLogs.firstIndex { !$0.isCompleted } ?? 0
+    }
+
     private var liveActivityState: StrengthWorkoutAttributes.ContentState {
         let activeExercise = exerciseLogs.first { !$0.isCompleted } ?? exerciseLogs.first
         let name = activeExercise?.name ?? (workout.workoutName ?? "Workout")
@@ -284,6 +289,7 @@ class WorkoutExecutionViewModel: ObservableObject {
         isResting = true
         restEndDate = Date().addingTimeInterval(TimeInterval(duration))
         updateLiveActivity()
+        scheduleRestEndNotification(in: duration)
     }
 
     func stopResting() {
@@ -291,6 +297,22 @@ class WorkoutExecutionViewModel: ObservableObject {
         isResting = false
         restEndDate = nil
         updateLiveActivity()
+        cancelRestEndNotification()
+    }
+
+    private func scheduleRestEndNotification(in seconds: Int) {
+        let nextExercise = exerciseLogs.first(where: { !$0.isCompleted })?.name ?? "next set"
+        let content = UNMutableNotificationContent()
+        content.title = "Time to go!"
+        content.body = "Rest complete — \(nextExercise) is ready."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
+        let request = UNNotificationRequest(identifier: "restTimer", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func cancelRestEndNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["restTimer"])
     }
 
     private func startLiveActivity() {
@@ -316,6 +338,7 @@ class WorkoutExecutionViewModel: ObservableObject {
         }
         WatchConnectivityService.shared.sendWorkoutState(
             exerciseName: state.currentExerciseName,
+            exerciseIndex: activeExerciseIndex,
             setNumber: state.currentSetNumber,
             totalSets: state.totalSets,
             isResting: state.isResting,

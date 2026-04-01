@@ -47,9 +47,9 @@ struct FocusModeExerciseCard: View {
         .onChange(of: showRestTimer) { _, isShowing in
             if isShowing {
                 viewModel.startResting(duration: defaultRestDuration)
-            } else {
-                viewModel.stopResting()
             }
+            // stopResting() is called via onComplete (skip or timer end), not on sheet dismiss,
+            // so that minimizing the workout preserves rest state in the mini-player.
         }
         .sheet(isPresented: $showRPEInfo) {
             RPEInfoSheet()

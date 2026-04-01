@@ -10,6 +10,7 @@ import SwiftUI
 
 struct WorkoutView: View {
     @EnvironmentObject var workoutStore: WatchWorkoutStore
+    @StateObject private var hkManager = WatchHealthKitManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,11 +37,22 @@ struct WorkoutView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            if let hr = hkManager.currentHeartRate {
+                HStack(spacing: 4) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption2)
+                    Text("\(Int(hr)) bpm")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Spacer()
 
             Button {
-                // Send hit-it to phone; indices not tracked on watch — phone handles mapping
-                workoutStore.hitIt(exerciseIndex: 0, setIndex: workoutStore.setNumber - 1)
+                workoutStore.hitIt(exerciseIndex: workoutStore.exerciseIndex, setIndex: workoutStore.setNumber - 1)
+                WatchHapticsManager.shared.setCompleted()
             } label: {
                 Label("Hit it!", systemImage: "bolt.fill")
                     .font(.headline)
@@ -73,6 +85,12 @@ struct WorkoutView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+
+            if hkManager.activeCalories > 0 {
+                Text("\(Int(hkManager.activeCalories)) kcal")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding()
     }

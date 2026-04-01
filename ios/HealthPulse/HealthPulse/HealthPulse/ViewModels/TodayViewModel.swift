@@ -266,6 +266,8 @@ class TodayViewModel: ObservableObject {
                 readinessScore = narrative.readinessScore
                 recommendedIntensity = narrative.readinessIntensity
             }
+            pushReadinessToWatch()
+            pushCommitmentsToWatch()
             return
         } catch {
             if isCancelledError(error) { return }
@@ -294,6 +296,7 @@ class TodayViewModel: ObservableObject {
                 greetingContext = ""
                 causalAnnotations = []
             }
+            pushReadinessToWatch()
         } catch {
             if isCancelledError(error) { return }
             print("Failed to load dashboard data: \(error)")
@@ -560,5 +563,20 @@ class TodayViewModel: ObservableObject {
 
     func refresh() async {
         await loadData()
+    }
+
+    // MARK: - Watch Sync
+
+    private func pushReadinessToWatch() {
+        WatchConnectivityService.shared.sendReadinessUpdate(
+            score: readinessScore,
+            intensity: recommendedIntensity,
+            narrative: readinessNarrative,
+            topFactor: causalAnnotations.first?.driverFactor ?? ""
+        )
+    }
+
+    private func pushCommitmentsToWatch() {
+        WatchConnectivityService.shared.sendCommitmentsUpdate(commitments)
     }
 }

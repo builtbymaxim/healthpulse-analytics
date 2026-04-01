@@ -8,23 +8,17 @@
 
 /* Begin PBXBuildFile section */
 		94AFEF242F73D04D00746BDE /* HealthPulseWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94AFEF1A2F73D04B00746BDE /* HealthPulseWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF352F73D16600746BDE /* WatchConnectivity.framework */; };
 		94AFEF3A2F73D17700746BDE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94AFEF2E2F73D11300746BDE /* WatchConnectivity.framework */; };
 		94F5E00B2F06A000005ABCFB /* RunningActivityWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		94F5E0132F06A000005ABD03 /* RunningActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */; };
 		AA000003000000000000AA01 /* StrengthWorkoutAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */; };
 		AA000003000000000000AA02 /* StrengthWorkoutAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */; };
+		AA000004000000000000AA01 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004000000000000AA00 /* WatchMessage.swift */; };
+		AA000004000000000000AA02 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004000000000000AA00 /* WatchMessage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		94AFEF222F73D04D00746BDE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 94AFEF192F73D04B00746BDE;
-			remoteInfo = "HealthPulseWatch Watch App";
-		};
 		94F5E00C2F06A000005ABCFC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 944B82382F04187B005ABFD3 /* Project object */;
@@ -87,6 +81,7 @@
 		94F5E0012F06A000005ABCF1 /* RunningActivityWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunningActivityWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningActivityAttributes.swift; sourceTree = "<group>"; };
 		AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrengthWorkoutAttributes.swift; sourceTree = "<group>"; };
+		AA000004000000000000AA00 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -135,7 +130,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				94AFEF372F73D17200746BDE /* WatchConnectivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -193,6 +187,7 @@
 			children = (
 				94F5E0112F06A000005ABD01 /* RunningActivityAttributes.swift */,
 				AA000003000000000000AA00 /* StrengthWorkoutAttributes.swift */,
+				AA000004000000000000AA00 /* WatchMessage.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -216,7 +211,6 @@
 			);
 			dependencies = (
 				94F5E00D2F06A000005ABCFD /* PBXTargetDependency */,
-				94AFEF232F73D04D00746BDE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				944B82422F04187B005ABFD3 /* HealthPulse */,
@@ -375,6 +369,7 @@
 			files = (
 				94F5E0122F06A000005ABD02 /* RunningActivityAttributes.swift in Sources */,
 				AA000003000000000000AA01 /* StrengthWorkoutAttributes.swift in Sources */,
+				AA000004000000000000AA01 /* WatchMessage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -382,6 +377,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000004000000000000AA02 /* WatchMessage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -397,11 +393,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		94AFEF232F73D04D00746BDE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 94AFEF192F73D04B00746BDE /* HealthPulseWatch Watch App */;
-			targetProxy = 94AFEF222F73D04D00746BDE /* PBXContainerItemProxy */;
-		};
 		94F5E00D2F06A000005ABCFD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 94F5E0062F06A000005ABCF6 /* RunningActivityWidgetExtension */;
@@ -540,7 +531,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = HealthPulse/HealthPulse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -561,7 +552,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -581,7 +572,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = HealthPulse/HealthPulse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -602,7 +593,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.maxim.HealthPulse;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -620,12 +611,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "HealthPulseWatch Watch App/HealthPulseWatch.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthPulseWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthPulse tracks your heart rate and calories during workouts.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthPulse saves your workout data to Apple Health.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.maxim.HealthPulse;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -653,12 +647,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "HealthPulseWatch Watch App/HealthPulseWatch.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthPulseWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthPulse tracks your heart rate and calories during workouts.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthPulse saves your workout data to Apple Health.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.maxim.HealthPulse;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -687,7 +684,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningActivityWidget/Info.plist;
@@ -716,7 +713,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = GLU69QBKBN;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunningActivityWidget/Info.plist;

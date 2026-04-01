@@ -9,6 +9,7 @@
 //    Name: HealthPulseWatch
 //    Add all files in this directory to the new target.
 //    Enable WatchConnectivity in Signing & Capabilities.
+//    Add WatchMessage.swift (Shared/) to this target's membership.
 //
 
 import SwiftUI
@@ -19,16 +20,39 @@ struct HealthPulseWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environmentObject(workoutStore)
         }
     }
 }
 
-struct ContentView: View {
+// MARK: - Root Navigation
+
+struct RootView: View {
     @EnvironmentObject var workoutStore: WatchWorkoutStore
+    @State private var selectedTab = 0
 
     var body: some View {
+        TabView(selection: $selectedTab) {
+            ReadinessGlanceView()
+                .environmentObject(workoutStore)
+                .tag(0)
+
+            CommitmentsView()
+                .environmentObject(workoutStore)
+                .tag(1)
+
+            workoutTab
+                .tag(2)
+        }
+        .tabViewStyle(.verticalPage)
+        .onChange(of: workoutStore.isActive) { _, isActive in
+            if isActive { selectedTab = 2 }
+        }
+    }
+
+    @ViewBuilder
+    private var workoutTab: some View {
         if workoutStore.isActive {
             WorkoutView()
                 .environmentObject(workoutStore)
@@ -37,6 +61,8 @@ struct ContentView: View {
         }
     }
 }
+
+// MARK: - Idle View
 
 struct IdleView: View {
     var body: some View {
@@ -52,5 +78,6 @@ struct IdleView: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
+        .containerBackground(.black, for: .navigation)
     }
 }
