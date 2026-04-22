@@ -1,7 +1,7 @@
 """ML predictions and insights endpoints."""
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from datetime import datetime, date
 from uuid import UUID, uuid4
@@ -328,15 +328,23 @@ async def trigger_analysis(
 
 @router.get("/dashboard/narrative")
 async def get_narrative_dashboard(
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Get dashboard with causal narrative, commitments, and prioritized card order."""
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, Response
     service = get_dashboard_service()
-    data = await service.get_narrative_dashboard(current_user.id)
+    data, etag = await service.get_narrative_dashboard(current_user.id)
+
+    if request.headers.get("If-None-Match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+
     return JSONResponse(
         content=data.model_dump(mode="json"),
-        headers={"Cache-Control": "private, max-age=120, stale-while-revalidate=300"},
+        headers={
+            "Cache-Control": "private, max-age=120, stale-while-revalidate=300",
+            "ETag": etag,
+        },
     )
 
 

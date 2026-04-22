@@ -7,8 +7,11 @@ and nutrition_service into a single composite response to reduce API calls.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 from datetime import datetime, date, timedelta, timezone
+from typing import Any
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -168,6 +171,10 @@ class NarrativeDashboardResponse(BaseModel):
 class DashboardService:
     """Service for aggregating dashboard data."""
 
+    # In-process TTL cache: key=(user_id_str, date_str) → (payload_dict, etag, expires_at)
+    _narrative_cache: dict[tuple[str, str], tuple[dict[str, Any], str, datetime]] = {}
+    _NARRATIVE_TTL_SECS = 60
+
     def __init__(self):
         self.supabase = get_supabase_client()
         self.prediction_service = get_prediction_service()
@@ -237,8 +244,24 @@ class DashboardService:
             weekly_summary=weekly,
         )
 
-    async def get_narrative_dashboard(self, user_id: UUID) -> NarrativeDashboardResponse:
-        """Get dashboard data with causal narrative and commitment slots."""
+    async def get_narrative_dashboard(
+        self, user_id: UUID
+    ) -> tuple[NarrativeDashboardResponse, str]:
+        """Get dashboard data with causal narrative and commitment slots.
+
+        Returns (response, etag). The ETag changes when the payload content
+        changes, allowing the HTTP layer to return 304 Not Modified.
+        """
+        cache_key = (str(user_id), date.today().isoformat())
+        now = datetime.now(timezone.utc)
+
+        cached = self._narrative_cache.get(cache_key)
+        if cached is not None:
+            payload, etag, expires_at = cached
+            if now < expires_at:
+                logger.debug("Narrative dashboard cache hit for user %s", user_id)
+                return NarrativeDashboardResponse(**payload), etag
+
         logger.info("Building narrative dashboard for user %s", user_id)
         # Clear per-request caches
         self._plan_schedule_cache = {}
@@ -249,8 +272,9 @@ class DashboardService:
         # 2. Build causal annotations
         causal = self._build_causal_annotations(base)
 
-        # 3. Fetch today's planned workout from training plan
+        # 3. Fetch today's planned workout then build dependent data
         today_workout = await self._get_todays_planned_workout(user_id)
+        daily_actions = await self._build_daily_actions(user_id, today_workout)
 
         # 4. Build commitment slots (Now/Next/Tonight) — training-plan-aware
         commitments = self._build_commitments(base, today_workout)
@@ -262,10 +286,7 @@ class DashboardService:
         greeting_context = self._get_greeting_context(base)
         narrative = self._build_readiness_narrative(base, causal)
 
-        # 7. Build daily action items from real user data
-        daily_actions = await self._build_daily_actions(user_id, today_workout)
-
-        return NarrativeDashboardResponse(
+        result = NarrativeDashboardResponse(
             enhanced_recovery=base.enhanced_recovery,
             readiness_score=base.readiness_score,
             readiness_intensity=base.readiness_intensity,
@@ -279,6 +300,18 @@ class DashboardService:
             readiness_narrative=narrative,
             daily_actions=daily_actions,
         )
+
+        payload = result.model_dump(mode="json")
+        etag = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()[:16]
+        self._narrative_cache[cache_key] = (
+            payload,
+            etag,
+            now + timedelta(seconds=self._NARRATIVE_TTL_SECS),
+        )
+
+        return result, etag
 
     def _build_causal_annotations(self, dashboard: DashboardResponse) -> list[CausalAnnotation]:
         """Find the primary driver for each key metric."""

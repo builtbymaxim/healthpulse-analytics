@@ -128,14 +128,18 @@ struct ThemedBackground: View {
                     .blur(radius: 120)
                     .frame(width: 300, height: 300)
                     .offset(x: 150 + driftX, y: -200 + driftY)
+                    .allowsHitTesting(false)
 
                 Circle()
                     .fill(AppTheme.primary.opacity(effectiveGlow * 0.5))
                     .blur(radius: 100)
                     .frame(width: 200, height: 200)
                     .offset(x: -150 - driftX, y: 400 + driftY)
+                    .allowsHitTesting(false)
             }
         }
+        // Clip overflow from offset glow orbs so they can't widen the scroll container.
+        .clipped()
         .onAppear {
             withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
                 driftX = 15

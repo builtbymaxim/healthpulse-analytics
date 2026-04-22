@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-03-31
+> Last updated: 2026-04-22
 
 ## Overview
 
@@ -35,7 +35,7 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 
 ### Phase 2.5 — Training Plans & Workout Integration
 - Exercise library (100+ exercises across chest, back, shoulders, arms, legs, core)
-- Training plan templates: Full Body Strength, Upper/Lower, PPL, Home Bodyweight, Couch to 5K, Hybrid
+- Training plan templates: Full Body Strength, Upper/Lower, PPL, Home Bodyweight (4 templates; Couch to 5K and Hybrid planned for V1.3+)
 - Workout execution view with set-by-set logging (weight, reps, RPE)
 - Personal record (PR) detection and celebration; rest timer with haptic feedback
 - Exercise input types (weight+reps, reps-only, time-only, distance+time)
@@ -92,6 +92,28 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - In-memory response cache with event-driven invalidation; 2 Uvicorn workers
 - Onboarding 15→11 steps, new logo + app icon, food search improvements
 - All production database migrations applied (7 tables); JWT TTL fixed to 7 days
+
+### V1.2 — Watch Readiness, Recovery Metrics & Sleep Analysis
+- Watch readiness glance: score ring, intensity chip, narrative line, top causal factor
+- Watch commitments display: Now / Next / Tonight slots from iPhone
+- Watch health tracking: HKWorkoutSession, live heart rate, active calories, haptic feedback (rest-end, set-complete, workout start/stop)
+- Rest timer alarm: UNUserNotificationCenter notification on Watch
+- iPhone mini-player: rest state displayed during active workout
+- Sleep analysis overhaul: legacy sleep identifier support (Oura/Whoop/older watchOS `.asleep`/`.inBed`), 72-hour lookback, stage breakdown (deep/REM/core/awake)
+
+### V1.2.1 — Patch: Performance, Cache Fixes & Watch Build Blocker
+- **Client caching:** Stale-while-revalidate pattern in APIService with disk-backed cache (Application Support/api_cache/)
+  - `/predictions/dashboard*`: 120s fresh / 600s stale
+  - `/nutrition/summary*`: 60s fresh / 900s stale
+  - `/training-plans/today`: 300s fresh / 3600s stale
+  - Cold start: UI renders from last-known snapshot on disk
+- **Backend caching:** ETag + 60s in-process TTL cache on `/dashboard/narrative` endpoint
+- **Nutrition refresh bug fix:** Mutations (logFood, updateFood, deleteFood, logSleep, logWorkout) now invalidate cache at source — all callers benefit without per-site changes
+- **Sleep empty-state:** 3 distinct states (permission denied → link to Health app, permission granted but no data → "Log manually", never tracked → "Log your first night")
+- **SleepView tab switch:** removed forced refetch on every tab visit — SWR layer manages freshness
+- **Dashboard horizontal drift:** ThemedBackground glow circles have `.clipped()` to prevent scroll container expansion
+- **Watch AppIcon build blocker:** Contents.json fix (`"platform": "watchos"` removed) unblocks simulator rebuild
+- **Watch workout connectivity:** Bug fixes for message delivery (1) startTimer now calls updateLiveActivity immediately, (2) sendMessage falls back to transferUserInfo when Watch screen is off
 
 ---
 
@@ -189,9 +211,55 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 > Strategic pivot: HealthPulse is evolving from a passive data tracker into an **Actionable AI Companion** — a system that synthesizes every data stream into a daily causal story and surfaces empathetic, personalized guidance at exactly the right moment.
 
+### V1.3 — Watch Dashboard, Charts & HealthKit Expansion
+
+#### Watch Companion Dashboard (non-workout tabs)
+- 6-tab layout: Readiness → Nutrition → Sleep → Health Metrics → Commitments → Workout
+- **NutritionGlanceView:** calorie progress ring, macro bars (protein/carbs/fat)
+- **SleepGlanceView:** sleep hours (large), stage breakdown bars (deep/REM/core/awake)
+- **HealthMetricsView:** steps progress ring, resting heart rate, HRV with 7-day trend arrow
+- `WatchConnectivityService.pushDailySnapshot()` delivers updated data from iPhone to Watch after dashboard load, food log, or Watch `requestRefresh`
+
+#### iPhone Charts & Detail Sheets
+- **StepDetailView** (new sheet): hourly/daily/monthly bar chart (tappable dashboard card entry point)
+  - `HKStatisticsCollectionQuery` with hourly/daily bucketing
+  - Today: 24 bars (00:00–23:00), 7/30 day: daily bars, goal line overlay
+  - Secondary entry: TrendsView `steps` chip (currently broken—wired up here)
+- **HRVDetailView** (new sheet): trend line with healthy-zone band (40–100 ms)
+  - `HKSampleQuery` historical fetch (no limit, sorted ascending)
+  - 7/14/30 day picker, annotation on minimum values
+  - Secondary entry: TrendsView `hrv` chip (wired up)
+
+#### HealthKit Expansion
+- **New authorized + fetched:**
+  - `vo2Max` — fitness level classification; input to readiness scoring
+  - `respiratoryRate` — recovery indicator during sleep
+  - `oxygenSaturation` (SpO2) — illness/recovery detection
+  - `basalEnergyBurned` — better TDEE than formula-based BMR
+  - `heartRateRecovery` — post-exercise HR drop, fitness quality metric
+  - `.heartRate` (historical) — HR trends; zone analysis
+  - `.distanceWalkingRunning` — companion to steps
+  - `.bodyMass` — complement to WeightTrackingView
+- All integrated into `HealthKitService` with `@Published` properties, `fetch*()` methods, called from `refreshTodayData()`
+- VO2 Max integrated into backend `wellness_calculator.py` for readiness/recovery scoring
+
+#### Other V1.3 Items (from previous phase decisions)
+- Sport pill grid: 2-row horizontal with Football/Basketball/Tennis + Other pill (1-tap access)
+- Cycling → GPS tracker: route Cycling pill to RunningWorkoutView with `.cycling` mode (labeling, pace unit, km/h)
+- "Manage Plan" CTA on top workout card → direct jump to plan editor
+- Calories burned: Dashboard shows HealthKit `activeEnergyBurned` for today; workout history rows show per-session `calories_burned`
+- Theme toggle in ProfileView: "Appearance: System / Light / Dark" → `@AppStorage("preferredColorScheme")`
+- Light-mode QA pass: GlassCard opacity/shadow, WCAG AA contrast, chart colors, pill/chip accents, empty-state illustrations
+- Weekly Weigh-In Prompt: UNUserNotificationCenter (Mon + Thu 08:00), in-app card on Today tab, auto-cancel for week after weight logged
+- Plan-matching uses onboarding data: `modality` + `days_per_week` + `experience_level` + `fitness_goal`
+
+#### Testing
+- XCTest unit target (iPhone, `HealthPulseTests`) for pure-Swift tests: WatchMessage encode/decode roundtrip, sendMessage reachability fallback, step bucketing, HRV sorting
+- Watch-side UAT on paired simulator (no unit test target for watchOS)
+
 ---
 
-### Phase 13 — Experiment Tracks & Silent Correlation Feed
+### Phase 13 — Experiment Tracks & Silent Correlation Feed (V1.4+)
 
 #### 13A — Silent Correlation Feed
 - Passive surfacing: correlations appear as quiet, non-interruptive cards at the bottom of the Insights tab
@@ -205,7 +273,14 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 ---
 
-### Phase 14 — Burnout Horizon & What-If Sandbox
+### V2.0 — Localization & International Rollout
+
+- Multi-language support: Spanish (es), French (fr), German (de) — fitness app market strongholds in Europe
+- SwiftUI string extraction: `String(localized:)` / `LocalizedStringKey` for new UI (no retrofitting existing strings until feature stability reached)
+- **Blocking issue:** AI-generated narrative text in backend requires language parameter through entire `dashboard_service.py` pipeline + multi-language prompt engineering + per-language QA — deferred until V1.3 feature set is frozen
+- RTL support (Arabic/Hebrew) deferred to post-V2.0
+
+### Phase 14 — Burnout Horizon & What-If Sandbox (V2.1+)
 
 #### 14A — Burnout Horizon
 - 14-day readiness forecast curve with confidence band; burnout risk indicator when readiness < 50% for 3+ days
@@ -219,7 +294,7 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 ---
 
-### Phase 15 — Android App
+### Phase 15 — Android App (V2.1+)
 
 - Kotlin / Jetpack Compose, feature parity with iOS (auth, dashboard, workouts, nutrition, sleep, training plans)
 - Health Connect integration, Google Calendar, Material Design 3 / Material You theming
@@ -269,8 +344,8 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 | Feature | Description | Complexity |
 |---------|-------------|------------|
-| **Apple Watch App (V1.2)** | V1.1 shipped basic companion (workout mirror + "Hit it!" set completion + rest timer). V1.2: rest timer alarm (UNNotification) + rest state in iPhone mini-player; Watch readiness glance, commitments display, HKWorkoutSession calorie/HR tracking, haptic alerts. Standalone workout start on Watch, complications deferred to V1.3. | High |
-| **Weekly Weigh-In Prompt (V1.2)** | Periodic reminder (1–2×/week) for users to log their weight. Delivered as a UNUserNotificationCenter local notification (Mon + Thu mornings) and as an in-app sheet/card on the Today tab. Weight trend connects to readiness score and goal progress. Notification cancelled for the week once weight is logged. | Low |
+| **Apple Watch App** | V1.1: workout mirror + "Hit it!" set completion + rest timer (Live Activity). V1.2: readiness glance, commitments display, HKWorkoutSession HR/calories, rest timer alarm, haptics. V1.2.1: connectivity fixes (startTimer pushes state immediately, message fallback on screen-off). V1.3: full dashboard (nutrition/sleep/health metrics, 6-tab layout). Standalone workout start on Watch + complications deferred to V1.4. | High |
+| **Weekly Weigh-In Prompt** | Periodic reminder (Mon + Thu 08:00) to log weight via UNUserNotificationCenter + in-app card on Today tab. Cancels for week after weight logged. V1.3 feature. | Low |
 | **Exercise Auto-Detection (V2.0)** | CoreML Activity Classification trained on Watch accelerometer + gyroscope data. Requires ~500+ labeled reps/exercise, CreateML training, on-device inference. Deferred — data collection effort + accuracy risks for serious athletes. | Very High |
 | **Home Screen Widgets** | WidgetKit: readiness summary, calorie ring, workout streak. | Medium |
 | **iPad Layout** | Multi-column dashboard, side-by-side workout logging, expanded What-If Sandbox. | Medium |

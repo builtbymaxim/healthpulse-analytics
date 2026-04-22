@@ -83,15 +83,114 @@ class APIService {
 
     // MARK: - Response Cache
 
-    private var cache: [String: (data: Data, expiry: Date)] = [:]
+    private struct CacheEntry {
+        let data: Data
+        let freshUntil: Date
+        let staleUntil: Date
+    }
 
-    /// Returns cached response if fresh, otherwise falls through to network and caches the result.
-    private func cachedRequest<T: Decodable>(endpoint: String, ttl: TimeInterval = 300) async throws -> T {
-        let key = endpoint
-        if let hit = cache[key], hit.expiry > Date() {
-            return try decoder.decode(T.self, from: hit.data)
+    private struct DiskEnvelope: Codable {
+        let key: String
+        let freshUntil: Date
+        let staleUntil: Date
+        let data: Data
+    }
+
+    private var cache: [String: CacheEntry] = [:]
+
+    private static let diskCacheDir: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("api_cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private func diskURL(for key: String) -> URL {
+        let hash = SHA256.hash(data: Data(key.utf8)).compactMap { String(format: "%02x", $0) }.joined()
+        return Self.diskCacheDir.appendingPathComponent("\(hash).cache")
+    }
+
+    private func readDisk(for key: String) -> CacheEntry? {
+        guard let raw = try? Data(contentsOf: diskURL(for: key)) else { return nil }
+        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+        guard let env = try? d.decode(DiskEnvelope.self, from: raw), env.key == key else { return nil }
+        return CacheEntry(data: env.data, freshUntil: env.freshUntil, staleUntil: env.staleUntil)
+    }
+
+    private func writeDisk(key: String, entry: CacheEntry) {
+        let env = DiskEnvelope(key: key, freshUntil: entry.freshUntil, staleUntil: entry.staleUntil, data: entry.data)
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601
+        if let raw = try? e.encode(env) {
+            try? raw.write(to: diskURL(for: key), options: .atomic)
         }
-        // Cache miss — fetch from network
+    }
+
+    // Per-endpoint (fresh, stale) windows. `ttl` override sets fresh; stale = max(ttl*3, ttl+300).
+    private func swrWindows(endpoint: String, ttlOverride: TimeInterval?) -> (fresh: TimeInterval, stale: TimeInterval) {
+        if let ttl = ttlOverride { return (ttl, max(ttl * 3, ttl + 300)) }
+        if endpoint.contains("/predictions/dashboard") { return (120, 600) }
+        if endpoint.contains("/nutrition/summary") { return (60, 900) }
+        if endpoint.contains("/training-plans/today") { return (300, 3600) }
+        return (300, 900)
+    }
+
+    /// Returns cached response immediately if fresh or stale (triggering a background revalidate
+    /// for stale hits), or blocks on the network for a full miss.
+    private func cachedRequest<T: Decodable>(endpoint: String, ttl: TimeInterval? = nil) async throws -> T {
+        let now = Date()
+        let (freshTTL, staleTTL) = swrWindows(endpoint: endpoint, ttlOverride: ttl)
+
+        // 1. Check in-memory cache
+        if let hit = cache[endpoint] {
+            if hit.freshUntil > now {
+                return try decoder.decode(T.self, from: hit.data)
+            }
+            if hit.staleUntil > now {
+                Task { await self.refreshCache(endpoint: endpoint, freshTTL: freshTTL, staleTTL: staleTTL) }
+                return try decoder.decode(T.self, from: hit.data)
+            }
+        }
+
+        // 2. Check disk cache (cold-start path)
+        if let disk = readDisk(for: endpoint) {
+            if disk.freshUntil > now {
+                cache[endpoint] = disk
+                return try decoder.decode(T.self, from: disk.data)
+            }
+            if disk.staleUntil > now {
+                cache[endpoint] = disk
+                Task { await self.refreshCache(endpoint: endpoint, freshTTL: freshTTL, staleTTL: staleTTL) }
+                return try decoder.decode(T.self, from: disk.data)
+            }
+        }
+
+        // 3. Full miss — block on network
+        return try await revalidate(endpoint: endpoint, freshTTL: freshTTL, staleTTL: staleTTL)
+    }
+
+    /// Non-generic background revalidation — fetches fresh data and updates the cache only.
+    private func refreshCache(endpoint: String, freshTTL: TimeInterval, staleTTL: TimeInterval) async {
+        guard NetworkMonitor.shared.isCurrentlyConnected,
+              let url = URL(string: "\(baseURL)\(endpoint)") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        guard let (data, response) = try? await session.data(for: req),
+              let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else { return }
+        let now = Date()
+        let entry = CacheEntry(
+            data: data,
+            freshUntil: now.addingTimeInterval(freshTTL),
+            staleUntil: now.addingTimeInterval(staleTTL)
+        )
+        cache[endpoint] = entry
+        writeDisk(key: endpoint, entry: entry)
+    }
+
+    @discardableResult
+    private func revalidate<T: Decodable>(endpoint: String, freshTTL: TimeInterval, staleTTL: TimeInterval) async throws -> T {
         guard NetworkMonitor.shared.isCurrentlyConnected else { throw APIError.offline }
         guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw APIError.invalidURL }
 
@@ -107,15 +206,43 @@ class APIService {
 
         switch http.statusCode {
         case 200...299:
-            cache[key] = (data: data, expiry: Date().addingTimeInterval(ttl))
+            let now = Date()
+            let entry = CacheEntry(
+                data: data,
+                freshUntil: now.addingTimeInterval(freshTTL),
+                staleUntil: now.addingTimeInterval(staleTTL)
+            )
+            cache[endpoint] = entry
+            writeDisk(key: endpoint, entry: entry)
             return try decoder.decode(T.self, from: data)
+        case 304:
+            // Server says not modified — extend freshness of whatever we have
+            if let existing = cache[endpoint] ?? readDisk(for: endpoint) {
+                let now = Date()
+                let refreshed = CacheEntry(
+                    data: existing.data,
+                    freshUntil: now.addingTimeInterval(freshTTL),
+                    staleUntil: now.addingTimeInterval(staleTTL)
+                )
+                cache[endpoint] = refreshed
+                writeDisk(key: endpoint, entry: refreshed)
+                return try decoder.decode(T.self, from: existing.data)
+            }
+            throw APIError.invalidResponse
         case 401:
             if await refreshAccessToken() {
                 var retry = req
                 if let newToken = authToken { retry.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization") }
                 let (retryData, retryResp) = try await session.data(for: retry)
                 if let retryHttp = retryResp as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) {
-                    cache[key] = (data: retryData, expiry: Date().addingTimeInterval(ttl))
+                    let now = Date()
+                    let entry = CacheEntry(
+                        data: retryData,
+                        freshUntil: now.addingTimeInterval(freshTTL),
+                        staleUntil: now.addingTimeInterval(staleTTL)
+                    )
+                    cache[endpoint] = entry
+                    writeDisk(key: endpoint, entry: entry)
                     return try decoder.decode(T.self, from: retryData)
                 }
             }
@@ -129,12 +256,23 @@ class APIService {
     }
 
     /// Remove all cached responses whose key contains the given substring.
-    /// Pass "" to clear all.
-    func invalidateCache(matching prefix: String) {
-        if prefix.isEmpty {
+    /// Pass "" to clear all. Invalidates both memory and disk.
+    func invalidateCache(matching substring: String) {
+        if substring.isEmpty {
             cache.removeAll()
         } else {
-            cache = cache.filter { !$0.key.contains(prefix) }
+            cache = cache.filter { !$0.key.contains(substring) }
+        }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: Self.diskCacheDir, includingPropertiesForKeys: nil
+        ) else { return }
+        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+        for file in files {
+            guard let raw = try? Data(contentsOf: file),
+                  let env = try? d.decode(DiskEnvelope.self, from: raw) else { continue }
+            if substring.isEmpty || env.key.contains(substring) {
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 
@@ -843,7 +981,9 @@ class APIService {
     }
 
     func logFood(_ entry: FoodEntryCreate) async throws -> FoodEntry {
-        try await request(endpoint: "/nutrition/food", method: "POST", body: entry)
+        let result: FoodEntry = try await request(endpoint: "/nutrition/food", method: "POST", body: entry)
+        invalidateCache(matching: "/nutrition")
+        return result
     }
 
     func getFoodEntries(date: Date? = nil) async throws -> [FoodEntry] {
@@ -857,11 +997,15 @@ class APIService {
     }
 
     func updateFood(entryId: UUID, update: FoodEntryUpdate) async throws -> FoodEntry {
-        try await request(endpoint: "/nutrition/food/\(entryId)", method: "PUT", body: update)
+        let result: FoodEntry = try await request(endpoint: "/nutrition/food/\(entryId)", method: "PUT", body: update)
+        invalidateCache(matching: "/nutrition")
+        return result
     }
 
     func deleteFood(entryId: UUID) async throws -> EmptyResponse {
-        try await request(endpoint: "/nutrition/food/\(entryId)", method: "DELETE")
+        let result: EmptyResponse = try await request(endpoint: "/nutrition/food/\(entryId)", method: "DELETE")
+        invalidateCache(matching: "/nutrition")
+        return result
     }
 
     func getDailyNutritionSummary(date: Date? = nil) async throws -> DailyNutritionSummary {
@@ -904,7 +1048,9 @@ class APIService {
     }
 
     func logSleep(_ request: SleepLogRequest) async throws -> EmptyResponse {
-        try await self.request(endpoint: "/sleep/log", method: "POST", body: request)
+        let result: EmptyResponse = try await self.request(endpoint: "/sleep/log", method: "POST", body: request)
+        invalidateCache(matching: "/sleep")
+        return result
     }
 
     // MARK: - Training Plans

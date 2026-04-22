@@ -177,9 +177,9 @@ class HealthKitService: ObservableObject {
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return }
 
         let now = Date()
-        // 36-hour lookback captures sleep sessions that started ~10pm the previous day
-        // and crossed midnight — a common Apple Watch recording pattern.
-        let windowStart = now.addingTimeInterval(-36 * 3600)
+        // 72-hour lookback: 36h captures typical overnight recording, doubled to catch
+        // sporadic trackers who skip nights (Oura/Whoop/AutoSleep users).
+        let windowStart = now.addingTimeInterval(-72 * 3600)
 
         let predicate = HKQuery.predicateForSamples(
             withStart: windowStart,
@@ -209,6 +209,10 @@ class HealthKitService: ObservableObject {
             var remSleep: TimeInterval = 0
             var coreSleep: TimeInterval = 0
             var awakeDuration: TimeInterval = 0
+            // Legacy fallback: older watchOS + third-party apps (Oura, Whoop, AutoSleep)
+            // emit .asleep (generic) or .inBed instead of the iOS 16+ stage identifiers.
+            var legacyAsleep: TimeInterval = 0
+            var inBed: TimeInterval = 0
 
             for sample in samples {
                 let duration = sample.endDate.timeIntervalSince(sample.startDate)
@@ -221,23 +225,44 @@ class HealthKitService: ObservableObject {
                     coreSleep += duration
                 case HKCategoryValueSleepAnalysis.awake.rawValue:
                     awakeDuration += duration
+                case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
+                    legacyAsleep += duration
+                case HKCategoryValueSleepAnalysis.inBed.rawValue:
+                    inBed += duration
                 default:
                     break
                 }
             }
 
-            let totalSleep = deepSleep + remSleep + coreSleep
+            let stagedSleep = deepSleep + remSleep + coreSleep
+            // If no stage-level data, fall back to legacy generic asleep, then inBed as last resort.
+            let totalSleep = stagedSleep > 0 ? stagedSleep : (legacyAsleep > 0 ? legacyAsleep : inBed)
             let totalHours = totalSleep / 3600
 
             await MainActor.run {
                 lastSleepHours = totalHours > 0 ? totalHours : nil
-                sleepStageHours = totalHours > 0 ? SleepStageHours(
-                    total: totalHours,
-                    deep: deepSleep / 3600,
-                    rem: remSleep / 3600,
-                    core: coreSleep / 3600,
-                    awake: awakeDuration / 3600
-                ) : nil
+                if totalHours > 0 {
+                    if stagedSleep > 0 {
+                        sleepStageHours = SleepStageHours(
+                            total: totalHours,
+                            deep: deepSleep / 3600,
+                            rem: remSleep / 3600,
+                            core: coreSleep / 3600,
+                            awake: awakeDuration / 3600
+                        )
+                    } else {
+                        // Legacy data has no stage breakdown — surface total only.
+                        sleepStageHours = SleepStageHours(
+                            total: totalHours,
+                            deep: 0,
+                            rem: 0,
+                            core: totalHours,
+                            awake: 0
+                        )
+                    }
+                } else {
+                    sleepStageHours = nil
+                }
             }
         } catch {
             print("Failed to fetch sleep: \(error)")

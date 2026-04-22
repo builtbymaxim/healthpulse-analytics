@@ -10,7 +10,7 @@ import Charts
 
 struct SleepView: View {
     @EnvironmentObject var healthKitService: HealthKitService
-    @EnvironmentObject var tabRouter: TabRouter
+    @Environment(\.openURL) private var openURL
     @State private var summary: SleepSummary?
     @State private var history: [SleepEntry] = []
     @State private var analytics: SleepAnalytics?
@@ -38,14 +38,7 @@ struct SleepView: View {
                     } else if summary == nil && history.isEmpty
                                 && healthKitService.lastSleepHours == nil
                                 && healthKitService.sleepStageHours == nil {
-                        // No sleep data from HealthKit or backend yet
-                        EmptyStateView(
-                            icon: "moon.zzz",
-                            title: "No Sleep Data Yet",
-                            message: "Log your first night's sleep to start tracking your rest patterns.",
-                            actionTitle: "Log Sleep",
-                            action: { showingLogSheet = true }
-                        )
+                        sleepEmptyState
                     } else {
                         // Last Night + Sleep Stages — prefer HealthKit, fall back to backend
                         if healthKitService.sleepStageHours != nil || healthKitService.lastSleepHours != nil {
@@ -100,11 +93,6 @@ struct SleepView: View {
             .task {
                 await loadData()
             }
-            .onChange(of: tabRouter.selectedTab) { _, newTab in
-                if newTab == .sleep {
-                    Task { await loadData() }
-                }
-            }
             .onChange(of: selectedPeriod) { _, newPeriod in
                 // Reload only history when timeframe changes
                 Task {
@@ -115,6 +103,39 @@ struct SleepView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var sleepEmptyState: some View {
+        if !healthKitService.isAuthorized {
+            EmptyStateView(
+                icon: "moon.zzz",
+                title: "Sleep Access Needed",
+                message: "Enable sleep tracking in the Health app to see your rest data here.",
+                actionTitle: "Open Health",
+                action: {
+                    if let url = URL(string: "x-apple-health://") {
+                        openURL(url)
+                    }
+                }
+            )
+        } else if !history.isEmpty {
+            EmptyStateView(
+                icon: "moon.zzz",
+                title: "No Recent Sleep Data",
+                message: "No sleep detected in the last 3 days. Make sure your Apple Watch is charged before bed.",
+                actionTitle: "Log Manually",
+                action: { showingLogSheet = true }
+            )
+        } else {
+            EmptyStateView(
+                icon: "moon.zzz",
+                title: "No Sleep Data Yet",
+                message: "Log your first night's sleep to start tracking your rest patterns.",
+                actionTitle: "Log Sleep",
+                action: { showingLogSheet = true }
+            )
         }
     }
 

@@ -86,8 +86,11 @@ class WatchConnectivityService: NSObject, ObservableObject {
     // MARK: - Private send helpers
 
     private func sendMessage(_ message: WatchMessage) {
-        guard WCSession.default.isReachable else { return }
-        WCSession.default.sendMessage(message.encode(), replyHandler: nil, errorHandler: nil)
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message.encode(), replyHandler: nil, errorHandler: nil)
+        } else {
+            WCSession.default.transferUserInfo(message.encode())
+        }
     }
 
     private func transferUserInfo(_ message: WatchMessage) {

@@ -108,6 +108,7 @@ class WorkoutExecutionViewModel: ObservableObject {
                 self.elapsedTime = Date().timeIntervalSince(self.startTime)
             }
         }
+        updateLiveActivity()
     }
 
     func stopTimer() {

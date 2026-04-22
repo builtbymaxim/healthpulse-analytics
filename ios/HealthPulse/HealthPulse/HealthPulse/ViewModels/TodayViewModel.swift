@@ -151,11 +151,9 @@ class TodayViewModel: ObservableObject {
         notificationObservers.append(nc.addObserver(forName: .foodLogged, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, !isLoadInProgress else { return }
-                APIService.shared.invalidateCache(matching: "/nutrition")
-                APIService.shared.invalidateCache(matching: "/predictions")
-                async let n: () = loadNutrition()
-                async let d: () = loadDashboardData()
-                _ = await (n, d)
+                // Cache already invalidated at the mutation site in APIService.
+                // Only reload nutrition totals — the narrative dashboard revalidates on its own SWR TTL.
+                await loadNutrition()
             }
         })
         notificationObservers.append(nc.addObserver(forName: .workoutCompleted, object: nil, queue: .main) { [weak self] _ in
