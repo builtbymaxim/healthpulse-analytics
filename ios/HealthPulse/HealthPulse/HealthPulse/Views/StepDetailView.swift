@@ -21,9 +21,9 @@ struct StepDetailView: View {
                 VStack(spacing: 24) {
                     // HEADER — total/avg stats
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(selectedPeriod == .today ? "Today" : periodLabel)
+                        Text(periodLabel)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.textSecondary)
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Total")
@@ -35,7 +35,7 @@ struct StepDetailView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 4) {
-                                Text("Average")
+                                Text(selectedPeriod == .today ? "Hourly Avg" : "Daily Avg")
                                     .font(.caption)
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Text(Int(averageSteps).formatted())
@@ -78,52 +78,19 @@ struct StepDetailView: View {
                     }
 
                     // Goal progress
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Daily Goal")
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Spacer()
-                            Text("\(Int(totalSteps)) / 10,000")
-                                .font(.caption.bold())
-                                .foregroundStyle(AppTheme.textPrimary)
-                        }
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(AppTheme.surface1)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(AppTheme.primary)
-                                    .frame(width: geo.size.width * CGFloat(min(totalSteps / 10000, 1)))
-                            }
-                        }
-                        .frame(height: 8)
+                    if selectedPeriod == .today {
+                        goalProgressView(label: "Daily Goal", current: totalSteps, goal: 10_000)
+                    } else {
+                        goalProgressView(label: "Avg vs Goal", current: averageSteps, goal: 10_000)
                     }
-                    .padding()
-                    .background(AppTheme.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
 
-                    // Stats grid
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        StatCard(
-                            title: "Best Day",
-                            value: String(format: "%.0f", bestDaySteps),
-                            subtitle: bestDayLabel
-                        )
-                        StatCard(
-                            title: "Trend",
-                            value: trendArrow,
-                            subtitle: "vs. prior period"
-                        )
-                        StatCard(
-                            title: "Goal %",
-                            value: String(format: "%.0f%%", min(totalSteps / 10000 * 100, 100))
-                        )
-                        StatCard(
-                            title: "Frequency",
-                            value: String(format: "%.0f", Double(daysWithSteps))
-                        )
+                    // Stats grid (period-specific)
+                    Group {
+                        if selectedPeriod == .today {
+                            todayStatsGrid
+                        } else {
+                            periodStatsGrid
+                        }
                     }
                     .padding(.horizontal)
 
@@ -154,27 +121,20 @@ struct StepDetailView: View {
                 x: .value("Date", point.date, unit: bucketUnit),
                 y: .value("Steps", point.value)
             )
-            .foregroundStyle(isSelectedPoint(point) ? AppTheme.accent : AppTheme.primary)
+            .foregroundStyle(
+                isSelectedPoint(point) ? AppTheme.accent
+                : (selectedPeriod != .today && point.value >= 10_000) ? AppTheme.primary
+                : AppTheme.primary.opacity(0.45)
+            )
             .cornerRadius(4)
-            .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
-                if isSelectedPoint(point) {
-                    Text(Int(point.value).formatted())
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppTheme.surface2)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
         }
         .chartXSelection(value: $selectedDate)
         .chartPlotStyle { plotArea in
             plotArea.background(AppTheme.surface1)
         }
         .chartXAxis {
-            AxisMarks(values: .stride(by: bucketUnit)) { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            AxisMarks(values: xAxisValues()) { _ in
+                AxisValueLabel(format: xAxisFormat())
                     .foregroundStyle(AppTheme.textSecondary)
             }
         }
@@ -182,6 +142,20 @@ struct StepDetailView: View {
             AxisMarks(position: .trailing) { value in
                 AxisValueLabel()
                     .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let selected = selectedPoint {
+                VStack {
+                    Text(Int(selected.value).formatted())
+                        .font(.caption.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.surface2)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .padding(.top, 8)
             }
         }
     }
@@ -192,9 +166,122 @@ struct StepDetailView: View {
 
     private var periodLabel: String {
         switch selectedPeriod {
+        case .today: return "Today"
         case .sevenDays: return "Last 7 Days"
         case .thirtyDays: return "Last 30 Days"
-        default: return ""
+        }
+    }
+
+    private func xAxisValues() -> [Date] {
+        guard !stepData.isEmpty else { return [] }
+
+        switch selectedPeriod {
+        case .today:
+            // Every 4 hours
+            let calendar = Calendar.current
+            var values: [Date] = []
+            for hour in stride(from: 0, to: 24, by: 4) {
+                if let date = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) {
+                    values.append(date)
+                }
+            }
+            return values
+        case .sevenDays:
+            // Every day
+            return stepData.map { $0.date }
+        case .thirtyDays:
+            // Every 7 days
+            return stepData.enumerated().compactMap { i, point in
+                i % 7 == 0 ? point.date : nil
+            }
+        }
+    }
+
+    private func xAxisFormat() -> Date.FormatStyle {
+        switch selectedPeriod {
+        case .today:
+            return .dateTime.hour(.defaultDigits(amPM: .omitted))
+        case .sevenDays:
+            return .dateTime.weekday(.abbreviated)
+        case .thirtyDays:
+            return .dateTime.month(.abbreviated).day()
+        }
+    }
+
+    @ViewBuilder
+    private func goalProgressView(label: String, current: Double, goal: Double) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Text(String(format: "%.0f / %.0f", current, goal))
+                    .font(.caption.bold())
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.surface1)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.primary)
+                        .frame(width: geo.size.width * CGFloat(min(current / goal, 1)))
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding()
+        .background(AppTheme.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private var todayStatsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatCard(
+                title: "Peak Hour",
+                value: String(format: "%.0f", peakHourSteps),
+                subtitle: peakHourLabel
+            )
+            StatCard(
+                title: "Active Hours",
+                value: String(activeHours),
+                subtitle: "hours >100 steps"
+            )
+            StatCard(
+                title: "Hourly Avg",
+                value: String(format: "%.0f", averageSteps)
+            )
+            StatCard(
+                title: "Goal %",
+                value: String(format: "%.0f%%", min(totalSteps / 10_000 * 100, 100))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var periodStatsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatCard(
+                title: "Best Day",
+                value: String(format: "%.0f", bestDaySteps),
+                subtitle: bestDayLabel
+            )
+            StatCard(
+                title: "Hit Goal",
+                value: "\(daysHittingGoal) / \(periodLength)",
+                subtitle: "days ≥10k"
+            )
+            StatCard(
+                title: "Daily Avg",
+                value: String(format: "%.0f", averageSteps)
+            )
+            StatCard(
+                title: "Trend",
+                value: trendArrow
+            )
         }
     }
 
@@ -210,17 +297,38 @@ struct StepDetailView: View {
         stepData.map { $0.value }.max() ?? 0
     }
 
+    private var peakHourSteps: Double {
+        stepData.map { $0.value }.max() ?? 0
+    }
+
+    private var activeHours: Int {
+        stepData.filter { $0.value > 100 }.count
+    }
+
+    private var daysHittingGoal: Int {
+        stepData.filter { $0.value >= 10_000 }.count
+    }
+
+    private var periodLength: Int {
+        stepData.count
+    }
+
     private var bestDayLabel: String {
         if let best = stepData.max(by: { $0.value < $1.value }) {
             let formatter = DateFormatter()
-            formatter.dateFormat = selectedPeriod == .today ? "HH:mm" : "MMM d"
+            formatter.dateFormat = selectedPeriod == .today ? "HH:mm" : "EEE"
             return formatter.string(from: best.date)
         }
         return "—"
     }
 
-    private var daysWithSteps: Int {
-        stepData.filter { $0.value > 0 }.count
+    private var peakHourLabel: String {
+        if let peak = stepData.max(by: { $0.value < $1.value }) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:00"
+            return formatter.string(from: peak.date)
+        }
+        return "—"
     }
 
     private var trendArrow: String {
@@ -232,11 +340,20 @@ struct StepDetailView: View {
         return "→"
     }
 
-    private func isSelectedPoint(_ point: HealthKitService.ChartDataPoint) -> Bool {
-        guard let selectedDate else { return false }
+    private var selectedPoint: HealthKitService.ChartDataPoint? {
+        guard let selectedDate else { return nil }
         let calendar = Calendar.current
-        return calendar.isDate(point.date, inSameDayAs: selectedDate) ||
-               (selectedPeriod == .today && calendar.component(.hour, from: point.date) == calendar.component(.hour, from: selectedDate))
+        return stepData.first { point in
+            if selectedPeriod == .today {
+                return calendar.component(.hour, from: point.date) == calendar.component(.hour, from: selectedDate)
+            } else {
+                return calendar.isDate(point.date, inSameDayAs: selectedDate)
+            }
+        }
+    }
+
+    private func isSelectedPoint(_ point: HealthKitService.ChartDataPoint) -> Bool {
+        selectedPoint?.id == point.id
     }
 
     private func loadStepData() async {

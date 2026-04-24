@@ -10,7 +10,6 @@ import Charts
 struct HRVDetailView: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedDays = 7
-    @State private var hrvSamples: [Double] = []
     @State private var isLoading = false
     @State private var selectedDate: Date?
     @State private var chartData: [HealthKitService.ChartDataPoint] = []
@@ -25,10 +24,10 @@ struct HRVDetailView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Last \(selectedDays) Days")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.textSecondary)
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Current")
+                                Text("Latest")
                                     .font(.caption)
                                     .foregroundStyle(AppTheme.textSecondary)
                                 Text("\(Int(currentHRV))ms")
@@ -93,8 +92,7 @@ struct HRVDetailView: View {
                         )
                         StatCard(
                             title: "Trend",
-                            value: trendArrow,
-                            subtitle: "vs. prior period"
+                            value: trendArrow
                         )
                         StatCard(
                             title: "Status",
@@ -108,7 +106,7 @@ struct HRVDetailView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Circle()
-                                .fill(AppTheme.primary.opacity(0.3))
+                                .fill(Color.indigo)
                                 .frame(width: 12, height: 12)
                             Text("Healthy Zone: 40–100 ms")
                                 .font(.caption)
@@ -143,42 +141,34 @@ struct HRVDetailView: View {
 
     private var hrvChart: some View {
         Chart(chartData) { point in
-            // Healthy zone band behind the line
+            // Healthy zone band — indigo, clearly separate from emerald data
             RectangleMark(yStart: .value("Low", 40), yEnd: .value("High", 100))
-                .foregroundStyle(AppTheme.primary.opacity(0.10))
+                .foregroundStyle(Color.indigo.opacity(0.12))
                 .zIndex(0)
 
-            // Line and area
+            // Zone boundaries — dashed lines
+            RuleMark(y: .value("Upper", 100))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .foregroundStyle(Color.indigo.opacity(0.5))
+                .zIndex(0)
+
+            RuleMark(y: .value("Lower", 40))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .foregroundStyle(Color.indigo.opacity(0.5))
+                .zIndex(0)
+
+            // Thin connecting line (guide, behind dots)
             LineMark(x: .value("Date", point.date), y: .value("HRV", point.value))
-                .foregroundStyle(AppTheme.primary)
+                .foregroundStyle(AppTheme.primary.opacity(0.4))
                 .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
                 .zIndex(1)
 
-            AreaMark(x: .value("Date", point.date), y: .value("HRV", point.value))
-                .foregroundStyle(AppTheme.primary.opacity(0.18).gradient)
-                .interpolationMethod(.catmullRom)
-                .zIndex(0)
-
-            // Selected point annotation
-            if isSelectedPoint(point) {
-                PointMark(x: .value("Date", point.date), y: .value("HRV", point.value))
-                    .foregroundStyle(AppTheme.accent)
-                    .symbolSize(120)
-                    .annotation(position: .top) {
-                        VStack(spacing: 4) {
-                            Text(String(format: "%.0f ms", point.value))
-                                .font(.caption.bold())
-                            Text(dateLabel(point.date))
-                                .font(.caption2)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppTheme.surface2)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .zIndex(2)
-                    }
-            }
+            // Prominent dots (hero element, tappable)
+            PointMark(x: .value("Date", point.date), y: .value("HRV", point.value))
+                .foregroundStyle(AppTheme.primary)
+                .symbolSize(isSelectedPoint(point) ? 140 : 80)
+                .zIndex(2)
         }
         .chartXSelection(value: $selectedDate)
         .chartYScale(domain: 0...max(120, (chartData.map { $0.value }.max() ?? 100) * 1.1))
@@ -195,6 +185,25 @@ struct HRVDetailView: View {
             AxisMarks(position: .trailing) { value in
                 AxisValueLabel()
                     .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let selected = selectedPoint {
+                VStack(spacing: 4) {
+                    Text(String(format: "%.0f ms", selected.value))
+                        .font(.caption.bold())
+                    Text(dateLabel(selected.date))
+                        .font(.caption2)
+                    Text(hrvStatus.label)
+                        .font(.caption)
+                        .foregroundStyle(hrvStatus.color)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.surface2)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(.top, 8)
             }
         }
     }
@@ -235,10 +244,16 @@ struct HRVDetailView: View {
         return "→"
     }
 
-    private func isSelectedPoint(_ point: HealthKitService.ChartDataPoint) -> Bool {
-        guard let selectedDate else { return false }
+    private var selectedPoint: HealthKitService.ChartDataPoint? {
+        guard let selectedDate else { return nil }
         let calendar = Calendar.current
-        return calendar.isDate(point.date, inSameDayAs: selectedDate)
+        return chartData.first { point in
+            calendar.isDate(point.date, inSameDayAs: selectedDate)
+        }
+    }
+
+    private func isSelectedPoint(_ point: HealthKitService.ChartDataPoint) -> Bool {
+        selectedPoint?.id == point.id
     }
 
     private func dateLabel(_ date: Date) -> String {
@@ -251,40 +266,7 @@ struct HRVDetailView: View {
         isLoading = true
         let data = await HealthKitService.shared.fetchHRVHistory(days: selectedDays)
         chartData = data
-        hrvSamples = data.map { $0.value }
         isLoading = false
-    }
-}
-
-struct HRVStatCard: View {
-    let title: String
-    let value: String
-    let subtitle: String?
-
-    init(title: String, value: String, subtitle: String? = nil) {
-        self.title = title
-        self.value = value
-        self.subtitle = subtitle
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(AppTheme.textSecondary)
-            Text(value)
-                .font(.title3.bold())
-                .foregroundStyle(AppTheme.textPrimary)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.surface2)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
