@@ -4,13 +4,6 @@
 //
 //  Entry point for the Apple Watch companion app.
 //
-//  SETUP: Add this directory as a new watchOS App target in Xcode:
-//    File > New > Target > watchOS > Watch App
-//    Name: HealthPulseWatch
-//    Add all files in this directory to the new target.
-//    Enable WatchConnectivity in Signing & Capabilities.
-//    Add WatchMessage.swift (Shared/) to this target's membership.
-//
 
 import SwiftUI
 
@@ -38,16 +31,28 @@ struct RootView: View {
                 .environmentObject(workoutStore)
                 .tag(0)
 
-            CommitmentsView()
+            NutritionGlanceView()
                 .environmentObject(workoutStore)
                 .tag(1)
 
-            workoutTab
+            SleepGlanceView()
+                .environmentObject(workoutStore)
                 .tag(2)
+
+            HealthMetricsView()
+                .environmentObject(workoutStore)
+                .tag(3)
+
+            CommitmentsView()
+                .environmentObject(workoutStore)
+                .tag(4)
+
+            workoutTab
+                .tag(5)
         }
         .tabViewStyle(.verticalPage)
         .onChange(of: workoutStore.isActive) { _, isActive in
-            if isActive { selectedTab = 2 }
+            if isActive { selectedTab = 5 }
         }
     }
 

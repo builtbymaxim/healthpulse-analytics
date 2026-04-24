@@ -22,6 +22,7 @@ enum WatchMessage: Codable {
     // iPhone -> Watch (background via transferUserInfo)
     case readinessUpdate(WatchReadinessData)
     case commitmentsUpdate([WatchCommitment])
+    case dailySnapshotUpdate(WatchDailySnapshot)
 
     // Watch -> iPhone (real-time via sendMessage)
     case hitIt(exerciseIndex: Int, setIndex: Int)
@@ -70,4 +71,30 @@ struct WatchCommitment: Codable, Identifiable {
     let subtitle: String
     let icon: String
     let loadModifier: String?
+}
+
+struct WatchDailySnapshot: Codable {
+    let calories: Double
+    let calorieGoal: Double
+    let protein: Double
+    let proteinGoal: Double
+    let carbs: Double
+    let carbsGoal: Double
+    let fat: Double
+    let fatGoal: Double
+    let sleepHours: Double?
+    let sleepDeep: Double?
+    let sleepREM: Double?
+    let sleepCore: Double?
+    let steps: Int
+    let stepGoal: Int
+    let restingHR: Double?
+    let hrv: Double?
+    let hrvTrend: Double?
+    let isTrainingDay: Bool
+    let workoutName: String?
+    let workoutStreak: Int
+    let recoveryScore: Double
+    let vo2Max: Double?
+    let respiratoryRate: Double?
 }

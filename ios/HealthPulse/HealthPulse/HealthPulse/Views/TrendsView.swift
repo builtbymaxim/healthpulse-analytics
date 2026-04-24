@@ -13,8 +13,10 @@ struct TrendsView: View {
     @State private var selectedPeriod = 7
     @State private var wellnessHistory: [WellnessScore] = []
     @State private var isLoading = false
+    @State private var showStepDetail = false
+    @State private var showHRVDetail = false
 
-    let metrics = ["wellness", "recovery", "readiness", "steps", "sleep"]
+    let metrics = ["wellness", "recovery", "readiness", "steps", "hrv", "sleep"]
     let periods = [7, 14, 30]
 
     var body: some View {
@@ -26,7 +28,13 @@ struct TrendsView: View {
                         HStack(spacing: 12) {
                             ForEach(metrics, id: \.self) { metric in
                                 Button {
-                                    selectedMetric = metric
+                                    if metric == "steps" {
+                                        showStepDetail = true
+                                    } else if metric == "hrv" {
+                                        showHRVDetail = true
+                                    } else {
+                                        selectedMetric = metric
+                                    }
                                 } label: {
                                     Text(metric.capitalized)
                                         .padding(.horizontal, 16)
@@ -91,6 +99,14 @@ struct TrendsView: View {
             }
             .refreshable {
                 await loadData()
+            }
+            .sheet(isPresented: $showStepDetail) {
+                StepDetailView()
+                    .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showHRVDetail) {
+                HRVDetailView()
+                    .presentationDetents([.large])
             }
         }
     }

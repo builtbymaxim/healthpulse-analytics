@@ -29,6 +29,14 @@ class HealthKitService: ObservableObject {
     @Published var lastSleepHours: Double?
     @Published var sleepStageHours: SleepStageHours?
 
+    // Additional health data
+    @Published var bodyMass: Double?
+    @Published var todayDistance: Double = 0
+    @Published var vo2Max: Double?
+    @Published var respiratoryRate: Double?
+    @Published var oxygenSaturation: Double?
+    @Published var basalEnergyBurned: Double?
+
     private let healthStore = HKHealthStore()
 
     private let readTypes: Set<HKObjectType> = {
@@ -44,7 +52,11 @@ class HealthKitService: ObservableObject {
             .bodyMass,
             .bodyFatPercentage,
             .distanceWalkingRunning,
-            .distanceCycling
+            .distanceCycling,
+            .vo2Max,
+            .respiratoryRate,
+            .oxygenSaturation,
+            .basalEnergyBurned
         ]
 
         for type in quantityTypes {
@@ -134,6 +146,12 @@ class HealthKitService: ObservableObject {
             group.addTask { await self.fetchRestingHeartRate() }
             group.addTask { await self.fetchHRV() }
             group.addTask { await self.fetchLastSleep() }
+            group.addTask { await self.fetchBodyMass() }
+            group.addTask { await self.fetchTodayDistance() }
+            group.addTask { await self.fetchVO2Max() }
+            group.addTask { await self.fetchRespiratoryRate() }
+            group.addTask { await self.fetchOxygenSaturation() }
+            group.addTask { await self.fetchBasalEnergyBurned() }
         }
     }
 
@@ -269,6 +287,55 @@ class HealthKitService: ObservableObject {
         }
     }
 
+    private func fetchBodyMass() async {
+        guard let massType = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return }
+        let mass = await fetchLatestSample(for: massType, unit: HKUnit.gramUnit(with: .kilo))
+        await MainActor.run {
+            bodyMass = mass
+        }
+    }
+
+    private func fetchTodayDistance() async {
+        guard let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) else { return }
+        let distance = await fetchTodaySum(for: distanceType, unit: .meter())
+        await MainActor.run {
+            todayDistance = distance / 1000
+        }
+    }
+
+    private func fetchVO2Max() async {
+        guard let vo2Type = HKQuantityType.quantityType(forIdentifier: .vo2Max) else { return }
+        let unit = HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo))
+        let value = await fetchLatestSample(for: vo2Type, unit: unit)
+        await MainActor.run {
+            vo2Max = value
+        }
+    }
+
+    private func fetchRespiratoryRate() async {
+        guard let rrType = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
+        let value = await fetchLatestSample(for: rrType, unit: HKUnit.count().unitDivided(by: .minute()))
+        await MainActor.run {
+            respiratoryRate = value
+        }
+    }
+
+    private func fetchOxygenSaturation() async {
+        guard let spO2Type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
+        let value = await fetchLatestSample(for: spO2Type, unit: HKUnit.percent())
+        await MainActor.run {
+            oxygenSaturation = value
+        }
+    }
+
+    private func fetchBasalEnergyBurned() async {
+        guard let basalType = HKQuantityType.quantityType(forIdentifier: .basalEnergyBurned) else { return }
+        let energy = await fetchTodaySum(for: basalType, unit: .kilocalorie())
+        await MainActor.run {
+            basalEnergyBurned = energy
+        }
+    }
+
     // MARK: - Helpers
 
     private func fetchTodaySum(for type: HKQuantityType, unit: HKUnit) async -> Double {
@@ -330,6 +397,156 @@ class HealthKitService: ObservableObject {
         } catch {
             print("Failed to fetch latest sample for \(type): \(error)")
             return nil
+        }
+    }
+
+    // MARK: - Historical Data (for charts)
+
+    enum ChartPeriod {
+        case today
+        case sevenDays
+        case thirtyDays
+    }
+
+    struct ChartDataPoint: Identifiable, Codable {
+        let id = UUID()
+        let date: Date
+        let value: Double
+    }
+
+    func fetchStepHistory(period: ChartPeriod) async -> [ChartDataPoint] {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return [] }
+
+        let now = Date()
+        let calendar = Calendar.current
+        let interval: TimeInterval
+        let anchorDate: Date
+
+        switch period {
+        case .today:
+            interval = 3600
+            anchorDate = calendar.startOfDay(for: now)
+        case .sevenDays:
+            interval = 86400
+            let oneWeekAgo = now.addingTimeInterval(-7 * 86400)
+            anchorDate = calendar.startOfDay(for: oneWeekAgo)
+        case .thirtyDays:
+            interval = 86400
+            let thirtyDaysAgo = now.addingTimeInterval(-30 * 86400)
+            anchorDate = calendar.startOfDay(for: thirtyDaysAgo)
+        }
+
+        var comps = DateComponents()
+        if interval == 3600 {
+            comps.hour = 1
+        } else {
+            comps.day = 1
+        }
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: anchorDate, end: now, options: .strictStartDate),
+                options: .cumulativeSum,
+                anchorDate: anchorDate,
+                intervalComponents: comps
+            )
+            query.initialResultsHandler = { query, results, error in
+                guard error == nil, let results = results else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var dataPoints: [ChartDataPoint] = []
+                results.enumerateStatistics(from: anchorDate, to: now) { statistics, _ in
+                    let steps = statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                    dataPoints.append(ChartDataPoint(date: statistics.startDate, value: steps))
+                }
+                continuation.resume(returning: dataPoints)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func fetchHRVHistory(days: Int) async -> [ChartDataPoint] {
+        guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else { return [] }
+
+        let now = Date()
+        let lookbackStart = now.addingTimeInterval(-TimeInterval(days) * 86400)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: hrvType,
+                predicate: HKQuery.predicateForSamples(withStart: lookbackStart, end: now, options: .strictStartDate),
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                guard error == nil, let samples = samples as? [HKQuantitySample] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let dataPoints = samples.map { sample in
+                    ChartDataPoint(date: sample.startDate, value: sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli)))
+                }
+                continuation.resume(returning: dataPoints)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    func fetchDistanceHistory(period: ChartPeriod) async -> [ChartDataPoint] {
+        guard let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) else { return [] }
+
+        let now = Date()
+        let calendar = Calendar.current
+        let interval: TimeInterval
+        let anchorDate: Date
+
+        switch period {
+        case .today:
+            interval = 3600
+            anchorDate = calendar.startOfDay(for: now)
+        case .sevenDays:
+            interval = 86400
+            let oneWeekAgo = now.addingTimeInterval(-7 * 86400)
+            anchorDate = calendar.startOfDay(for: oneWeekAgo)
+        case .thirtyDays:
+            interval = 86400
+            let thirtyDaysAgo = now.addingTimeInterval(-30 * 86400)
+            anchorDate = calendar.startOfDay(for: thirtyDaysAgo)
+        }
+
+        var comps = DateComponents()
+        if interval == 3600 {
+            comps.hour = 1
+        } else {
+            comps.day = 1
+        }
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: distanceType,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: anchorDate, end: now, options: .strictStartDate),
+                options: .cumulativeSum,
+                anchorDate: anchorDate,
+                intervalComponents: comps
+            )
+            query.initialResultsHandler = { query, results, error in
+                guard error == nil, let results = results else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var dataPoints: [ChartDataPoint] = []
+                results.enumerateStatistics(from: anchorDate, to: now) { statistics, _ in
+                    let meters = statistics.sumQuantity()?.doubleValue(for: .meter()) ?? 0
+                    dataPoints.append(ChartDataPoint(date: statistics.startDate, value: meters / 1000))
+                }
+                continuation.resume(returning: dataPoints)
+            }
+            healthStore.execute(query)
         }
     }
 }

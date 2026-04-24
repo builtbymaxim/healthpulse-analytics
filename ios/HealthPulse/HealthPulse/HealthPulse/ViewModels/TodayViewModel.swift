@@ -215,6 +215,9 @@ class TodayViewModel: ObservableObject {
         loadError = nil
         if !hasLoadedOnce { isLoading = true }
 
+        // Fire HealthKit concurrently — resolves locally in <1s, doesn't gate UI reveal
+        Task { await HealthKitService.shared.refreshTodayData() }
+
         // Load profile in parallel with other independent sources
         async let profileTask: () = loadUserProfile()
         async let workoutTask: () = loadTodaysWorkout()
@@ -266,6 +269,7 @@ class TodayViewModel: ObservableObject {
             }
             pushReadinessToWatch()
             pushCommitmentsToWatch()
+            pushDailySnapshot()
             return
         } catch {
             if isCancelledError(error) { return }
@@ -295,6 +299,7 @@ class TodayViewModel: ObservableObject {
                 causalAnnotations = []
             }
             pushReadinessToWatch()
+            pushDailySnapshot()
         } catch {
             if isCancelledError(error) { return }
             print("Failed to load dashboard data: \(error)")
@@ -362,8 +367,12 @@ class TodayViewModel: ObservableObject {
     }
 
     private func loadNutrition() async {
+        // Fire both nutrition API calls in parallel
+        async let summaryFetch = APIService.shared.getDailyNutritionSummary()
+        async let readinessFetch = APIService.shared.getReadinessTargets()
+
         do {
-            let summary = try await APIService.shared.getDailyNutritionSummary()
+            let summary = try await summaryFetch
             todayCalories = summary.totalCalories
             todayProtein = summary.totalProteinG
             todayCarbs = summary.totalCarbsG
@@ -382,12 +391,14 @@ class TodayViewModel: ObservableObject {
 
         // Load readiness targets (graceful fallback — if it fails, NutritionProgressCard still shows)
         do {
-            readinessTargets = try await APIService.shared.getReadinessTargets()
+            readinessTargets = try await readinessFetch
         } catch {
             if isCancelledError(error) { return }
             print("Readiness targets unavailable: \(error)")
             readinessTargets = nil
         }
+
+        pushDailySnapshot()
     }
 
     private func loadWeeklyNutrition() async {
@@ -441,7 +452,11 @@ class TodayViewModel: ObservableObject {
 
     private func loadSleepPatterns() async {
         do {
-            let history = try await APIService.shared.getSleepHistory(days: 7)
+            // Fire both API calls in parallel — analytics is checked but not always needed
+            async let historyFetch = APIService.shared.getSleepHistory(days: 7)
+            async let analyticsFetch = APIService.shared.getSleepAnalytics(days: 7)
+
+            let history = try await historyFetch
             hasLoggedSleep = !history.isEmpty
 
             guard !history.isEmpty else {
@@ -452,7 +467,7 @@ class TodayViewModel: ObservableObject {
                 return
             }
 
-            let analytics = try await APIService.shared.getSleepAnalytics(days: 7)
+            let analytics = try await analyticsFetch
 
             // Batch all sleep state at once — hasSleepData last to prevent 0.0h flash
             avgSleepHours = analytics.avgDurationHours
@@ -576,5 +591,35 @@ class TodayViewModel: ObservableObject {
 
     private func pushCommitmentsToWatch() {
         WatchConnectivityService.shared.sendCommitmentsUpdate(commitments)
+    }
+
+    private func pushDailySnapshot() {
+        let healthKit = HealthKitService.shared
+        let snapshot = WatchDailySnapshot(
+            calories: todayCalories,
+            calorieGoal: calorieGoal,
+            protein: todayProtein,
+            proteinGoal: proteinGoal,
+            carbs: todayCarbs,
+            carbsGoal: carbsGoal,
+            fat: todayFat,
+            fatGoal: fatGoal,
+            sleepHours: healthKit.lastSleepHours,
+            sleepDeep: healthKit.sleepStageHours?.deep,
+            sleepREM: healthKit.sleepStageHours?.rem,
+            sleepCore: healthKit.sleepStageHours?.core,
+            steps: healthKit.todaySteps,
+            stepGoal: 10000,
+            restingHR: healthKit.restingHeartRate,
+            hrv: healthKit.hrv,
+            hrvTrend: nil,
+            isTrainingDay: todaysWorkout?.hasPlan ?? false,
+            workoutName: todaysWorkout?.workoutName,
+            workoutStreak: workoutStreak,
+            recoveryScore: recoveryScore,
+            vo2Max: healthKit.vo2Max,
+            respiratoryRate: healthKit.respiratoryRate
+        )
+        WatchConnectivityService.shared.pushDailySnapshot(snapshot)
     }
 }

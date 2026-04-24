@@ -83,6 +83,10 @@ class WatchConnectivityService: NSObject, ObservableObject {
         transferUserInfo(.commitmentsUpdate(watchCommitments))
     }
 
+    func pushDailySnapshot(_ snapshot: WatchDailySnapshot) {
+        transferUserInfo(.dailySnapshotUpdate(snapshot))
+    }
+
     // MARK: - Private send helpers
 
     private func sendMessage(_ message: WatchMessage) {

@@ -37,6 +37,10 @@ class WatchWorkoutStore: NSObject, ObservableObject {
 
     @Published var commitments: [WatchCommitment] = []
 
+    // MARK: - Daily Snapshot (nutrition, sleep, health metrics)
+
+    @Published var snapshot: WatchDailySnapshot? = nil
+
     // MARK: - Init
 
     override init() {
@@ -108,6 +112,9 @@ class WatchWorkoutStore: NSObject, ObservableObject {
 
         case .commitmentsUpdate(let list):
             commitments = list
+
+        case .dailySnapshotUpdate(let snap):
+            snapshot = snap
 
         default:
             break

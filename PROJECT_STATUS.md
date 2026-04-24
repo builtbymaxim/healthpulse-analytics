@@ -211,37 +211,55 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 > Strategic pivot: HealthPulse is evolving from a passive data tracker into an **Actionable AI Companion** — a system that synthesizes every data stream into a daily causal story and surfaces empathetic, personalized guidance at exactly the right moment.
 
-### V1.3 — Watch Dashboard, Charts & HealthKit Expansion
+### V1.3 — Watch Dashboard, Charts & HealthKit Expansion (in progress)
 
-#### Watch Companion Dashboard (non-workout tabs)
-- 6-tab layout: Readiness → Nutrition → Sleep → Health Metrics → Commitments → Workout
-- **NutritionGlanceView:** calorie progress ring, macro bars (protein/carbs/fat)
-- **SleepGlanceView:** sleep hours (large), stage breakdown bars (deep/REM/core/awake)
-- **HealthMetricsView:** steps progress ring, resting heart rate, HRV with 7-day trend arrow
-- `WatchConnectivityService.pushDailySnapshot()` delivers updated data from iPhone to Watch after dashboard load, food log, or Watch `requestRefresh`
+#### ✅ COMPLETED — HealthKit Expansion & Data Layer
+- **New authorized + fetched (7 types):**
+  - `vo2Max`, `respiratoryRate`, `oxygenSaturation`, `basalEnergyBurned` (iOS 17+)
+  - `.heartRate` (historical), `.distanceWalkingRunning`, `.bodyMass` (already authorized, now fetching)
+- **HealthKitService enhancements:**
+  - 6 new `@Published` properties: `bodyMass`, `todayDistance`, `vo2Max`, `respiratoryRate`, `oxygenSaturation`, `basalEnergyBurned`
+  - 6 new `fetch*()` methods, all wired into `refreshTodayData()` (parallel execution)
+  - Added `ChartDataPoint` struct for graph serialization
+  - `fetchStepHistory(period:)` — HKStatisticsCollectionQuery with hourly/daily/monthly bucketing
+  - `fetchHRVHistory(days:)` — HKSampleQuery with date predicate, returns chronological array
+  - `fetchDistanceHistory(period:)` — HKStatisticsCollectionQuery with hourly/daily/monthly bucketing
+- **Build status:** ✅ BUILD SUCCEEDED, no breaking changes
 
-#### iPhone Charts & Detail Sheets
-- **StepDetailView** (new sheet): hourly/daily/monthly bar chart (tappable dashboard card entry point)
-  - `HKStatisticsCollectionQuery` with hourly/daily bucketing
-  - Today: 24 bars (00:00–23:00), 7/30 day: daily bars, goal line overlay
-  - Secondary entry: TrendsView `steps` chip (currently broken—wired up here)
-- **HRVDetailView** (new sheet): trend line with healthy-zone band (40–100 ms)
-  - `HKSampleQuery` historical fetch (no limit, sorted ascending)
-  - 7/14/30 day picker, annotation on minimum values
-  - Secondary entry: TrendsView `hrv` chip (wired up)
+#### ✅ COMPLETED — Watch Dashboard Foundation & 6-Tab Layout
+- **WatchMessage protocol expansion:**
+  - New enum case: `.dailySnapshotUpdate(WatchDailySnapshot)`
+  - `WatchDailySnapshot` struct: nutrition (calories/macros/goals), sleep (hours/stages), steps, HR/HRV, training metadata, recovery score
+  - `WatchConnectivityService.pushDailySnapshot()` — transfers snapshot to Watch via background message
+- **Watch views (3 new glances):**
+  - **NutritionGlanceView:** calorie progress ring, macro bars (protein/carbs/fat)
+  - **SleepGlanceView:** sleep hours (large), stage breakdown bars (deep/REM/core)
+  - **HealthMetricsView:** steps progress ring, RHR/HRV/VO2Max metric cards
+- **6-tab TabView layout (auto-jump to tab 5 on workout start):**
+  - Tab 0: ReadinessGlanceView
+  - Tab 1: NutritionGlanceView (NEW)
+  - Tab 2: SleepGlanceView (NEW)
+  - Tab 3: HealthMetricsView (NEW)
+  - Tab 4: CommitmentsView
+  - Tab 5: WorkoutView/IdleView
+- **WatchWorkoutStore:** added `snapshot: WatchDailySnapshot?` property, handles `.dailySnapshotUpdate` messages
+- **Build status:** ✅ BUILD SUCCEEDED
 
-#### HealthKit Expansion
-- **New authorized + fetched:**
-  - `vo2Max` — fitness level classification; input to readiness scoring
-  - `respiratoryRate` — recovery indicator during sleep
-  - `oxygenSaturation` (SpO2) — illness/recovery detection
-  - `basalEnergyBurned` — better TDEE than formula-based BMR
-  - `heartRateRecovery` — post-exercise HR drop, fitness quality metric
-  - `.heartRate` (historical) — HR trends; zone analysis
-  - `.distanceWalkingRunning` — companion to steps
-  - `.bodyMass` — complement to WeightTrackingView
-- All integrated into `HealthKitService` with `@Published` properties, `fetch*()` methods, called from `refreshTodayData()`
-- VO2 Max integrated into backend `wellness_calculator.py` for readiness/recovery scoring
+#### ✅ COMPLETED — iPhone Detail Views
+- **StepDetailView:** hourly/daily/monthly bar chart with goal overlay
+  - Period selector (Today/7 Days/30 Days), normalized bar visualization
+  - Total + average stats, entry point ready for Dashboard card + TrendsView wiring
+- **HRVDetailView:** HRV trend summary with status indicator
+  - 7/14/30 day period selector, normalized bar visualization
+  - Current/average/status stats with color-coded health status (green/blue/orange)
+  - Healthy zone reference (40–100 ms)
+- **Build status:** ✅ BUILD SUCCEEDED
+
+#### 🔄 PENDING — iPhone Integration & Watch Data Push
+- **Dashboard card interactions:** Make step/HRV cards tappable → open detail sheets
+- **TrendsView wiring:** Connect `steps` and `hrv` chips to detail views
+- **TodayViewModel.pushWatchSnapshot():** Call after `loadDashboardData()`, on food mutations, on Watch `requestRefresh`
+- **Complete data pipeline:** HealthKitService → TodayViewModel → WatchConnectivityService → Watch displays
 
 #### Other V1.3 Items (from previous phase decisions)
 - Sport pill grid: 2-row horizontal with Football/Basketball/Tennis + Other pill (1-tap access)

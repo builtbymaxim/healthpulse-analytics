@@ -15,6 +15,8 @@ struct TodayView: View {
     @State private var showTrainingPlanSetup = false
     @State private var showPRCelebration = false
     @State private var showNutritionDetail = false
+    @State private var showStepDetail = false
+    @State private var showHRVDetail = false
     @State private var achievedPRs: [PRInfo] = []
 
     var body: some View {
@@ -90,6 +92,14 @@ struct TodayView: View {
             }
             .sheet(isPresented: $tabRouter.showMonthlyReview) {
                 ReviewView(period: .monthly)
+                    .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showStepDetail) {
+                StepDetailView()
+                    .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showHRVDetail) {
+                HRVDetailView()
                     .presentationDetents([.large])
             }
         }
@@ -326,6 +336,10 @@ struct TodayView: View {
                     label: "Steps",
                     color: .green
                 )
+                .onTapGesture {
+                    HapticsManager.shared.light()
+                    showStepDetail = true
+                }
                 if let sleep = healthKitService.lastSleepHours {
                     QuickStatCard(
                         icon: "moon.zzz.fill",
@@ -345,6 +359,10 @@ struct TodayView: View {
                         label: "RHR",
                         color: .red
                     )
+                    .onTapGesture {
+                        HapticsManager.shared.light()
+                        showHRVDetail = true
+                    }
                 }
             }
             .padding(.horizontal)
