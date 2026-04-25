@@ -251,7 +251,7 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
 
 > Strategic pivot: HealthPulse is evolving from a passive data tracker into an **Actionable AI Companion** — a system that synthesizes every data stream into a daily causal story and surfaces empathetic, personalized guidance at exactly the right moment.
 
-### V1.3 — Watch Dashboard, Charts & HealthKit Expansion (in progress)
+### V1.3 — Watch Dashboard, Charts & HealthKit Expansion (✅ shipped)
 
 #### ✅ COMPLETED — HealthKit Expansion & Data Layer
 - **New authorized + fetched (7 types):**
@@ -295,25 +295,44 @@ All tables have RLS enabled. User data is private; exercise library and plan tem
   - Healthy zone reference (40–100 ms)
 - **Build status:** ✅ BUILD SUCCEEDED
 
-#### 🔄 PENDING — iPhone Integration & Watch Data Push
-- **Dashboard card interactions:** Make step/HRV cards tappable → open detail sheets
-- **TrendsView wiring:** Connect `steps` and `hrv` chips to detail views
-- **TodayViewModel.pushWatchSnapshot():** Call after `loadDashboardData()`, on food mutations, on Watch `requestRefresh`
-- **Complete data pipeline:** HealthKitService → TodayViewModel → WatchConnectivityService → Watch displays
+#### ✅ COMPLETED — iPhone Integration & Watch Data Push
+- **Dashboard card interactions:** Step/HRV cards tappable, sheets bound at `TodayView.swift:339-342, 362-365` (sheet bindings 97-104)
+- **TrendsView wiring:** `steps` and `hrv` chips open detail sheets at `TrendsView.swift:31-34, 103-110`
+- **TodayViewModel.pushDailySnapshot():** Wired at `TodayViewModel.swift:275, 305, 404, 599-627` (after narrative load, after fallback dashboard, after nutrition mutations)
+- **Complete data pipeline:** HealthKitService → TodayViewModel → WatchConnectivityService → Watch glance views (NutritionGlanceView, SleepGlanceView, HealthMetricsView)
 
-#### Other V1.3 Items (from previous phase decisions)
-- Sport pill grid: 2-row horizontal with Football/Basketball/Tennis + Other pill (1-tap access)
-- Cycling → GPS tracker: route Cycling pill to RunningWorkoutView with `.cycling` mode (labeling, pace unit, km/h)
-- "Manage Plan" CTA on top workout card → direct jump to plan editor
-- Calories burned: Dashboard shows HealthKit `activeEnergyBurned` for today; workout history rows show per-session `calories_burned`
-- Theme toggle in ProfileView: "Appearance: System / Light / Dark" → `@AppStorage("preferredColorScheme")`
-- Light-mode QA pass: GlassCard opacity/shadow, WCAG AA contrast, chart colors, pill/chip accents, empty-state illustrations
-- Weekly Weigh-In Prompt: UNUserNotificationCenter (Mon + Thu 08:00), in-app card on Today tab, auto-cancel for week after weight logged
-- Plan-matching uses onboarding data: `modality` + `days_per_week` + `experience_level` + `fitness_goal`
+#### ✅ COMPLETED — V1.3 Patch 6: HealthKit → Supabase Sync (architectural fix)
+- **Root cause:** HealthKit data was fetched live but never persisted to Supabase, so backend recovery/readiness/wellness scores defaulted to 50 and Sleep tab showed "Unable to Load"
+- **Fix:** Fire-and-forget background sync on app launch — pushes last 7 days of HealthKit data to `/metrics/batch`, throttled to once per 30 min via UserDefaults; runs after `refreshTodayData()` so `@Published` properties are populated
+- **APIService.MetricBatchItem:** added `timestamp: Date` field with ISO 8601 encoding so historical data lands on its correct date
+- **UAT verified (2026-04-25):** `health_metrics` table populated with `apple_health` rows (steps: 24, hrv: 154, resting_hr: 3, sleep_duration/deep_sleep/rem_sleep: 3 each)
 
-#### Testing
-- XCTest unit target (iPhone, `HealthPulseTests`) for pure-Swift tests: WatchMessage encode/decode roundtrip, sendMessage reachability fallback, step bucketing, HRV sorting
-- Watch-side UAT on paired simulator (no unit test target for watchOS)
+#### ✅ COMPLETED — V1.3 Patch 7: Stability Closeout
+- **Force-unwrap crash risk fixed:** `chunk.last!.date` → `chunk.last?.date` in StepDetailView and HRVDetailView `displayData` bucketing
+- **Version bumped to 1.3 / build 3** in `project.pbxproj` (all targets)
+- **Deferred items moved to V1.4** below — net-new features that violate CLAUDE.md TestFlight focus
+
+#### Build verification
+```bash
+xcodebuild -project ios/HealthPulse/HealthPulse/HealthPulse.xcodeproj \
+  -scheme HealthPulse \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+```
+Expected: `BUILD SUCCEEDED`. Use this exact command in future iOS work to avoid token waste from verbose build output.
+
+---
+
+### V1.4 — Polish, Theme & Plan Matching (next milestone)
+
+Items deferred from V1.3 because each is a net-new feature, not a stability blocker:
+
+- **Sport pill grid:** Football / Basketball / Tennis + "Other" sheet on Workouts tab
+- **Cycling → GPS tracker:** route Cycling pill to RunningWorkoutView in `.cycling` mode (km/h instead of min/km)
+- **Theme toggle:** Profile → Appearance → System / Light / Dark via `@AppStorage("preferredColorScheme")`
+- **Light-mode QA pass:** depends on theme toggle — audit primary/accent contrast, GlassCard, chart colors
+- **Weekly Weigh-In Prompt:** UNUserNotificationCenter Mon + Thu 08:00, auto-cancel after weight logged
+- **Plan-matching using onboarding data:** backend `POST /training-plans/suggest` driven by `modality + days_per_week + experience_level + fitness_goal`
+- **XCTest unit target:** `HealthPulseTests` covering WatchMessage encode/decode roundtrip, ChartDataPoint bucketing math, MetricBatchItem timestamp encoding
 
 ---
 

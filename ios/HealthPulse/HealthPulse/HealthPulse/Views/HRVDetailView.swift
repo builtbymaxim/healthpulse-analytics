@@ -233,9 +233,9 @@ struct HRVDetailView: View {
         let bucketSize = 5
         return stride(from: 0, to: chartData.count, by: bucketSize).compactMap { start in
             let chunk = Array(chartData[start..<min(start + bucketSize, chartData.count)])
-            guard !chunk.isEmpty else { return nil }
+            guard let lastDate = chunk.last?.date else { return nil }
             let avg = chunk.map { $0.value }.reduce(0, +) / Double(chunk.count)
-            return HealthKitService.ChartDataPoint(date: chunk.last!.date, value: avg)
+            return HealthKitService.ChartDataPoint(date: lastDate, value: avg)
         }
     }
 
