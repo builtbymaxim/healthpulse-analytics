@@ -215,8 +215,11 @@ class TodayViewModel: ObservableObject {
         loadError = nil
         if !hasLoadedOnce { isLoading = true }
 
-        // Fire HealthKit concurrently — resolves locally in <1s, doesn't gate UI reveal
-        Task { await HealthKitService.shared.refreshTodayData() }
+        // Fire HealthKit refresh + sync concurrently — doesn't gate UI reveal
+        Task {
+            await HealthKitService.shared.refreshTodayData()
+            await HealthKitService.shared.syncHealthKitToBackend()
+        }
 
         // Load profile in parallel with other independent sources
         async let profileTask: () = loadUserProfile()

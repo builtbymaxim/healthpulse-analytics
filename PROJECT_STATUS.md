@@ -1,6 +1,6 @@
 # HealthPulse Analytics — Project Status
 
-> Last updated: 2026-04-22
+> Last updated: 2026-04-25
 
 ## Overview
 
@@ -114,6 +114,46 @@ HealthPulse is a personal fitness and wellness companion app. It combines an iOS
 - **Dashboard horizontal drift:** ThemedBackground glow circles have `.clipped()` to prevent scroll container expansion
 - **Watch AppIcon build blocker:** Contents.json fix (`"platform": "watchos"` removed) unblocks simulator rebuild
 - **Watch workout connectivity:** Bug fixes for message delivery (1) startTimer now calls updateLiveActivity immediately, (2) sendMessage falls back to transferUserInfo when Watch screen is off
+
+### V1.3 Patch 6 — HealthKit → Supabase Sync Fix
+
+#### 🔍 Root Cause Discovery: Architecture Gap
+- **Problem:** Sleep tab shows "Unable to Load" despite HealthKit data (steps, HRV, sleep) being available locally on iPhone
+- **Root cause:** HealthKit data is fetched live in `HealthKitService` but **never synced to Supabase `health_metrics` table**
+- **Impact:** Backend scoring endpoints (`/predictions/recovery`, `/predictions/readiness`, `/predictions/dashboard`) calculate wellness/recovery/readiness scores using Supabase table queries — if the table is empty, scores default to 50 (neutral). Sleep tab fails because `GET /sleep/history` queries only the `health_metrics` table, not live HealthKit
+- **Critical insight:** Recovery/readiness/wellness scores **depend entirely on Supabase data**, not live HealthKit reads. Cold-launch users see default scores until they manually log data or health data is synced to backend
+
+#### ✅ Solution: Fire-and-Forget HealthKit Sync
+- **Added `syncHealthKitToBackend()` method to `HealthKitService`:**
+  - Throttled via `UserDefaults` to prevent excessive backend hits (30-min minimum between syncs)
+  - Fetches last 7 days of steps, HRV via existing query methods
+  - Fetches today's resting HR, sleep duration, sleep stages from `@Published` properties
+  - Assembles into `[APIService.MetricBatchItem]` with `source: "apple_health"` and correct Date timestamps
+  - Posts to `/metrics/batch` endpoint via `APIService.shared.logMetricsBatch(_:)`
+  - Updates UserDefaults sync timestamp on success
+  - **Non-blocking:** Runs in background Task after `refreshTodayData()` completes; never gates UI reveal
+  - **No loading time impact:** Parallel execution, dashboard loads while sync runs in background
+
+- **Modified `APIService.MetricBatchItem` struct:**
+  - Added `timestamp: Date` field (previously missing, causing all metrics to use server-side `utcnow()`)
+  - Added `CodingKeys` enum to map `timestamp` correctly in JSON encoding
+
+- **Updated `TodayViewModel.loadData()`:**
+  - Changed Task from `Task { await HealthKitService.shared.refreshTodayData() }` to:
+    ```swift
+    Task {
+        await HealthKitService.shared.refreshTodayData()
+        await HealthKitService.shared.syncHealthKitToBackend()
+    }
+    ```
+  - Both calls fire-and-forget; sync waits for HealthKit properties to populate, then fires without blocking UI
+
+- **Backend verified:** `/api/v1/metrics` endpoint already has `MetricSource.APPLE_HEALTH` enum value and all required `MetricType` values (steps, hrv, resting_hr, sleep_duration, deep_sleep, rem_sleep)
+
+#### 🧪 Build Verification
+- **Command:** `xcodebuild -project ios/HealthPulse/HealthPulse/HealthPulse.xcodeproj -scheme HealthPulse -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`
+- **Expected output:** `BUILD SUCCEEDED`
+- **Status:** ✅ BUILD SUCCEEDED (2026-04-25)
 
 ---
 

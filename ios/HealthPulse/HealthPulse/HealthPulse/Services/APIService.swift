@@ -641,10 +641,11 @@ class APIService {
         let value: Double
         let unit: String?
         let source: String
+        let timestamp: Date
 
         enum CodingKeys: String, CodingKey {
             case metricType = "metric_type"
-            case value, unit, source
+            case value, unit, source, timestamp
         }
     }
 

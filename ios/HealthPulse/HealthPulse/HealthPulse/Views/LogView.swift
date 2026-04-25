@@ -110,10 +110,10 @@ struct DailyCheckinView: View {
         Task {
             do {
                 let metrics: [APIService.MetricBatchItem] = [
-                    .init(metricType: "energy_level", value: energy, unit: nil, source: "manual"),
-                    .init(metricType: "sleep", value: sleepHours, unit: "hours", source: "manual"),
-                    .init(metricType: "sleep_quality", value: sleepQuality, unit: nil, source: "manual"),
-                    .init(metricType: "soreness", value: soreness, unit: nil, source: "manual"),
+                    .init(metricType: "energy_level", value: energy, unit: nil, source: "manual", timestamp: Date()),
+                    .init(metricType: "sleep", value: sleepHours, unit: "hours", source: "manual", timestamp: Date()),
+                    .init(metricType: "sleep_quality", value: sleepQuality, unit: nil, source: "manual", timestamp: Date()),
+                    .init(metricType: "soreness", value: soreness, unit: nil, source: "manual", timestamp: Date()),
                 ]
                 try await APIService.shared.logMetricsBatch(metrics)
                 await MainActor.run {

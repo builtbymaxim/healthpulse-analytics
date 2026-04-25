@@ -14,6 +14,7 @@ struct StepDetailView: View {
     @State private var stepData: [HealthKitService.ChartDataPoint] = []
     @State private var isLoading = false
     @State private var selectedDate: Date?
+    @State private var chartScale: Double = 0
 
     var body: some View {
         NavigationStack {
@@ -116,7 +117,7 @@ struct StepDetailView: View {
     }
 
     private var stepChart: some View {
-        Chart(stepData) { point in
+        Chart(displayData) { point in
             BarMark(
                 x: .value("Date", point.date, unit: bucketUnit),
                 y: .value("Steps", point.value)
@@ -127,6 +128,7 @@ struct StepDetailView: View {
                 : AppTheme.primary.opacity(0.45)
             )
             .cornerRadius(4)
+            .opacity(chartScale)
         }
         .chartXSelection(value: $selectedDate)
         .chartPlotStyle { plotArea in
@@ -146,8 +148,13 @@ struct StepDetailView: View {
         }
         .overlay(alignment: .top) {
             if let selected = selectedPoint {
-                VStack {
-                    Text(Int(selected.value).formatted())
+                VStack(spacing: 2) {
+                    if selectedPeriod == .thirtyDays, let start = bucketStartDate(for: selected) {
+                        Text("Avg \(dateFormatted(start, format: "dd.MM"))–\(dateFormatted(selected.date, format: "dd.MM"))")
+                            .font(.caption2)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Text(selectedPeriod == .thirtyDays ? "~\(Int(selected.value).formatted())" : Int(selected.value).formatted())
                         .font(.caption.bold())
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -157,6 +164,22 @@ struct StepDetailView: View {
                 }
                 .padding(.top, 8)
             }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(0.15)) {
+                chartScale = 1.0
+            }
+        }
+    }
+
+    private var displayData: [HealthKitService.ChartDataPoint] {
+        guard selectedPeriod == .thirtyDays, stepData.count > 10 else { return stepData }
+        let bucketSize = 5
+        return stride(from: 0, to: stepData.count, by: bucketSize).compactMap { start in
+            let chunk = Array(stepData[start..<min(start + bucketSize, stepData.count)])
+            guard !chunk.isEmpty else { return nil }
+            let avg = chunk.map { $0.value }.reduce(0, +) / Double(chunk.count)
+            return HealthKitService.ChartDataPoint(date: chunk.last!.date, value: avg)
         }
     }
 
@@ -343,13 +366,20 @@ struct StepDetailView: View {
     private var selectedPoint: HealthKitService.ChartDataPoint? {
         guard let selectedDate else { return nil }
         let calendar = Calendar.current
-        return stepData.first { point in
+        return displayData.first { point in
             if selectedPeriod == .today {
                 return calendar.component(.hour, from: point.date) == calendar.component(.hour, from: selectedDate)
             } else {
                 return calendar.isDate(point.date, inSameDayAs: selectedDate)
             }
         }
+    }
+
+    private func bucketStartDate(for point: HealthKitService.ChartDataPoint) -> Date? {
+        guard selectedPeriod == .thirtyDays else { return nil }
+        guard let idx = displayData.firstIndex(where: { $0.id == point.id }) else { return nil }
+        let startIdx = idx * 5
+        return startIdx < stepData.count ? stepData[startIdx].date : nil
     }
 
     private func isSelectedPoint(_ point: HealthKitService.ChartDataPoint) -> Bool {
@@ -359,7 +389,14 @@ struct StepDetailView: View {
     private func loadStepData() async {
         isLoading = true
         stepData = await healthKit.fetchStepHistory(period: selectedPeriod)
+        chartScale = 0
         isLoading = false
+    }
+
+    private func dateFormatted(_ date: Date, format: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        return formatter.string(from: date)
     }
 }
 

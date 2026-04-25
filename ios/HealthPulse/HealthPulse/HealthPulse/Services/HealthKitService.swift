@@ -468,11 +468,18 @@ class HealthKitService: ObservableObject {
         }
     }
 
-    func fetchHRVHistory(days: Int) async -> [ChartDataPoint] {
+    func fetchHRVHistory(period: ChartPeriod) async -> [ChartDataPoint] {
         guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else { return [] }
 
         let now = Date()
-        let lookbackStart = now.addingTimeInterval(-TimeInterval(days) * 86400)
+        let calendar = Calendar.current
+        let lookbackStart: Date
+        switch period {
+        case .today:       lookbackStart = calendar.startOfDay(for: now)
+        case .sevenDays:   lookbackStart = now.addingTimeInterval(-7 * 86400)
+        case .thirtyDays:  lookbackStart = now.addingTimeInterval(-30 * 86400)
+        }
+
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         return await withCheckedContinuation { continuation in
@@ -548,5 +555,41 @@ class HealthKitService: ObservableObject {
             }
             healthStore.execute(query)
         }
+    }
+
+    func syncHealthKitToBackend() async {
+        let lastSync = UserDefaults.standard.double(forKey: "healthKitLastSync")
+        let throttle: TimeInterval = 30 * 60
+        guard Date().timeIntervalSince1970 - lastSync > throttle else { return }
+
+        var items: [APIService.MetricBatchItem] = []
+        let now = Date()
+
+        let steps = await fetchStepHistory(period: .sevenDays)
+        items += steps.map { APIService.MetricBatchItem(metricType: "steps", value: $0.value, unit: "count", source: "apple_health", timestamp: $0.date) }
+
+        let hrv = await fetchHRVHistory(period: .sevenDays)
+        items += hrv.map { APIService.MetricBatchItem(metricType: "hrv", value: $0.value, unit: "ms", source: "apple_health", timestamp: $0.date) }
+
+        if let rhr = restingHeartRate {
+            items.append(APIService.MetricBatchItem(metricType: "resting_hr", value: rhr, unit: "bpm", source: "apple_health", timestamp: now))
+        }
+
+        if let sleep = lastSleepHours, sleep > 0 {
+            items.append(APIService.MetricBatchItem(metricType: "sleep_duration", value: sleep, unit: "hours", source: "apple_health", timestamp: now))
+        }
+
+        if let stages = sleepStageHours {
+            if stages.deep > 0 {
+                items.append(APIService.MetricBatchItem(metricType: "deep_sleep", value: stages.deep, unit: "hours", source: "apple_health", timestamp: now))
+            }
+            if stages.rem > 0 {
+                items.append(APIService.MetricBatchItem(metricType: "rem_sleep", value: stages.rem, unit: "hours", source: "apple_health", timestamp: now))
+            }
+        }
+
+        guard !items.isEmpty else { return }
+        _ = try? await APIService.shared.logMetricsBatch(items)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "healthKitLastSync")
     }
 }
